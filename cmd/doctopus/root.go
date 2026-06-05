@@ -33,6 +33,7 @@ func newRootCommand() *cobra.Command {
 		outputDir     string
 		quiet         bool
 		verbose       bool
+		roots         []string
 	)
 
 	var noColor bool
@@ -97,6 +98,11 @@ func newRootCommand() *cobra.Command {
 	root.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress non-essential output")
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable detailed logging")
 	root.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable ANSI color (also honored: NO_COLOR env, non-TTY output)")
+	root.PersistentFlags().StringSliceVar(&roots, "root", nil,
+		"reachability root glob(s), matched against document paths; repeatable and/or "+
+			"comma-separated. Added to the autodetected roots (README.md/index.md/type:index). "+
+			"Globs use path.Match: a single `*` does NOT cross `/`, and `**` is not supported "+
+			"(e.g. `docs/*.md`, not `docs/**`)")
 
 	root.AddCommand(
 		newCheckCommand(),
@@ -126,6 +132,9 @@ func configFromFlags(cmd *cobra.Command, args []string) application.Config {
 	cfg.OutputDir, _ = flags.GetString("out")
 	cfg.Quiet, _ = flags.GetBool("quiet")
 	cfg.Verbose, _ = flags.GetBool("verbose")
+	if r, err := flags.GetStringSlice("root"); err == nil && len(r) > 0 {
+		cfg.Roots = r
+	}
 	return cfg
 }
 

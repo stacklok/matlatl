@@ -501,6 +501,95 @@ func TestIntegration_DirectoryLinks(t *testing.T) {
 	}
 }
 
+// TestIntegration_RootFlagChangesReachability proves the persistent --root flag
+// (ADR 0007) feeds graphmodel.ResolveRootSet: a corpus with NO autodetected root
+// (no README.md/index.md, no type:index) has indeterminate reachability, so its
+// linked-but-rootless docs are not "unreachable". Designating an entry point with
+// --root makes the rest reachable — the graph.json reachability/unreachable shape
+// changes accordingly.
+func TestIntegration_RootFlagChangesReachability(t *testing.T) {
+	dir := t.TempDir()
+	// entry.md → target.md → leaf.md. No README/index/type:index anywhere, so
+	// without --root the root set is empty (reachability indeterminate).
+	writeFile := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile("entry.md", "# Entry\n\nSee [target](target.md).\n")
+	writeFile("target.md", "# Target\n\nSee [leaf](leaf.md).\n")
+	writeFile("leaf.md", "# Leaf\n\nThe end.\n")
+
+	graphJSON := func(extraArgs ...string) struct {
+		Reachability struct {
+			Indeterminate bool `json:"indeterminate"`
+		} `json:"reachability"`
+		RootSet     []string `json:"rootSet"`
+		Unreachable []string `json:"unreachable"`
+	} {
+		outDir := t.TempDir()
+		args := append([]string{"graph", dir, "--format", "json", "--out", outDir}, extraArgs...)
+		var out, errOut bytes.Buffer
+		if code := runArgs(context.Background(), args, &out, &errOut); code != platform.ExitOK {
+			t.Fatalf("graph json code = %v (stderr=%q)", code, errOut.String())
+		}
+		b, err := os.ReadFile(filepath.Join(outDir, "graph.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			Reachability struct {
+				Indeterminate bool `json:"indeterminate"`
+			} `json:"reachability"`
+			RootSet     []string `json:"rootSet"`
+			Unreachable []string `json:"unreachable"`
+		}
+		if err := json.Unmarshal(b, &doc); err != nil {
+			t.Fatalf("graph.json parse: %v", err)
+		}
+		return doc
+	}
+
+	// No --root: indeterminate, empty root set.
+	bare := graphJSON()
+	if !bare.Reachability.Indeterminate {
+		t.Fatalf("without --root, reachability should be indeterminate; got %+v", bare)
+	}
+	if len(bare.RootSet) != 0 {
+		t.Errorf("without --root, root set should be empty; got %v", bare.RootSet)
+	}
+
+	// --root entry.md: entry is now a root, reachability is determinate, and
+	// target.md + leaf.md are reachable (so NOT unreachable).
+	rooted := graphJSON("--root", "entry.md")
+	if rooted.Reachability.Indeterminate {
+		t.Fatalf("with --root entry.md, reachability should be determinate; got %+v", rooted)
+	}
+	if len(rooted.RootSet) != 1 || rooted.RootSet[0] != "entry.md" {
+		t.Errorf("with --root entry.md, root set = %v, want [entry.md]", rooted.RootSet)
+	}
+	for _, d := range rooted.Unreachable {
+		if d == "target.md" || d == "leaf.md" {
+			t.Errorf("with --root entry.md, %q should be reachable, not unreachable (unreachable=%v)", d, rooted.Unreachable)
+		}
+	}
+	// And a --root that only designates the leaf leaves entry/target unreachable,
+	// proving the glob actually drives the BFS start set.
+	leafOnly := graphJSON("--root", "leaf.md")
+	if leafOnly.Reachability.Indeterminate {
+		t.Fatalf("with --root leaf.md, reachability should be determinate")
+	}
+	foundUnreachable := false
+	for _, d := range leafOnly.Unreachable {
+		if d == "entry.md" || d == "target.md" {
+			foundUnreachable = true
+		}
+	}
+	if !foundUnreachable {
+		t.Errorf("with --root leaf.md, entry/target should be unreachable; got unreachable=%v", leafOnly.Unreachable)
+	}
+}
+
 // TestIntegration_EmitRequiresOut: `emit` without --out is a usage error.
 func TestIntegration_EmitRequiresOut(t *testing.T) {
 	var out, errOut bytes.Buffer
