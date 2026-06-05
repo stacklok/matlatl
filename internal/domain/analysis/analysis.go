@@ -1,6 +1,6 @@
 // Package analysis holds the pure-domain result model: findings, their
 // severity and kind, and the immutable AnalysisReport every emitter renders
-// from. It depends only on the standard library and the sibling corpus package
+// from. It depends only on the standard library and the leaf identity package
 // (for DocumentID); it imports nothing from application or infrastructure
 // (ADR 0004).
 package analysis
@@ -9,7 +9,7 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
+	"github.com/stacklok/doctopus/internal/domain/identity"
 )
 
 // Severity classifies the weight of a finding. The ordering (Info < Warning <
@@ -89,7 +89,7 @@ func (k FindingKind) Valid() bool {
 
 // Location pins a finding to a source position.
 type Location struct {
-	Document corpus.DocumentID
+	Document identity.DocumentID
 	// Line is the 1-based source line, or 0 if not line-specific.
 	Line int
 }

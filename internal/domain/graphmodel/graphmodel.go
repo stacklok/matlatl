@@ -2,16 +2,27 @@
 // graph over documents and sections, and the hierarchy tree. In the skeleton
 // these are type stubs only; the real graph algorithms (and the wrapper around
 // dominikbraun/graph) land in a later phase. This package depends only on the
-// standard library and the sibling reference package — never on the third-party
-// graph library, application, or infrastructure (ADR 0004).
+// standard library and the sibling identity/reference packages — never on the
+// third-party graph library, application, or infrastructure (ADR 0004).
 package graphmodel
 
-import "github.com/stacklok/doctopus/internal/domain/reference"
+import (
+	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/doctopus/internal/domain/reference"
+)
 
-// NodeID identifies a vertex in the reference graph. For a document node it is
-// the DocumentID string; for a section node it is the DocumentID plus an anchor
-// fragment. The exact section encoding is fixed in Phase 3.
+// NodeID identifies a vertex in the reference graph. For a Document-kind node
+// the NodeID is exactly the DocumentID string (use NodeIDForDocument to build
+// it); for a Section-kind node it is the DocumentID plus an anchor fragment.
+// The exact section encoding is fixed in Phase 3.
 type NodeID string
+
+// NodeIDForDocument returns the NodeID of a document vertex. By construction it
+// is the DocumentID's string, so a Document-kind NodeID round-trips to its
+// DocumentID.
+func NodeIDForDocument(id identity.DocumentID) NodeID {
+	return NodeID(id.String())
+}
 
 // String returns the identifier as a plain string.
 func (n NodeID) String() string { return string(n) }

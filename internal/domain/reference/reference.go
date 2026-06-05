@@ -2,16 +2,15 @@
 // documents (and sections), their type, their resolution target, and their
 // health classification.
 //
-// This package is pure domain (standard library only). It is the lower layer in
-// the domain: corpus depends on reference (a Document holds []RawReference), so
-// reference must NOT import corpus — that would be an import cycle. The single
-// authoritative DocumentID type (with its validating constructor and
-// root-containment check) therefore lives in the corpus package; reference
-// carries document identities as plain strings (the underlying type of
-// corpus.DocumentID). Callers convert with string(id) when building edges and
-// corpus.DocumentID(s) when consuming them. The resolver logic itself lands in
-// a later phase; this file defines the type spine only.
+// This package is pure domain (standard library only, plus the leaf identity
+// package). It is a lower layer than corpus: corpus depends on reference (a
+// Document holds []RawReference). The authoritative DocumentID type lives in the
+// even-lower identity package, which both reference and corpus import without
+// any cycle. The resolver logic itself lands in a later phase; this file defines
+// the type spine only.
 package reference
+
+import "github.com/stacklok/doctopus/internal/domain/identity"
 
 // LinkType classifies the syntactic origin of a reference edge.
 type LinkType int
@@ -77,9 +76,9 @@ const (
 	NonNote
 	// Ambiguous means the raw target matched more than one candidate document.
 	Ambiguous
-	// ExternalHealth means the reference points off-corpus (not checked unless
+	// HealthExternal means the reference points off-corpus (not checked unless
 	// --check-external is enabled).
-	ExternalHealth
+	HealthExternal
 	// Ignored means the reference was deliberately excluded from analysis.
 	Ignored
 )
@@ -99,7 +98,7 @@ func (h LinkHealth) String() string {
 		return "non-note"
 	case Ambiguous:
 		return "ambiguous"
-	case ExternalHealth:
+	case HealthExternal:
 		return "external"
 	case Ignored:
 		return "ignored"
@@ -191,9 +190,8 @@ func (p ResolutionPolicy) Valid() bool {
 // resolution. It captures everything the resolver needs and nothing it
 // computes.
 type RawReference struct {
-	// Origin is the document the reference was found in, as a DocumentID string
-	// (see the package doc for why this is not a corpus.DocumentID).
-	Origin string
+	// Origin is the document the reference was found in.
+	Origin identity.DocumentID
 	// RawTarget is the link target text as written (e.g. "../other.md").
 	RawTarget string
 	// Fragment is the anchor portion without the leading '#', if any.
@@ -210,9 +208,8 @@ type ResolvedTarget struct {
 	// Kind tags which fields are meaningful.
 	Kind TargetKind
 	// DocumentID is set when Kind is TargetDocument, TargetSection or
-	// TargetAsset. Carried as a string for the no-import-cycle reason described
-	// in the package doc.
-	DocumentID string
+	// TargetAsset.
+	DocumentID identity.DocumentID
 	// Anchor is the resolved section slug, set when Kind is TargetSection.
 	Anchor string
 }

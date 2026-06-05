@@ -10,22 +10,22 @@ import (
 // resolution and analysis read from. It is built up during the pipeline and
 // then treated as read-only. It is not safe for concurrent mutation.
 //
-// The indices (HeadingInventory, AliasTable) are kept unexported and are never
-// handed out by reference: callers populate them through Add* methods and query
-// them through read-only accessors. This preserves the "built once, read-only
+// The indices (headingInventory, aliasTable) are unexported and never handed
+// out by reference: callers populate them through Add* methods and query them
+// through read-only accessors. This preserves the "built once, read-only
 // thereafter" invariant and avoids baking in a data-race shape for later phases.
 type Corpus struct {
 	docs     map[DocumentID]*Document
-	headings HeadingInventory
-	aliases  AliasTable
+	headings headingInventory
+	aliases  aliasTable
 }
 
 // NewCorpus returns an empty Corpus with initialized indices.
 func NewCorpus() *Corpus {
 	return &Corpus{
 		docs:     make(map[DocumentID]*Document),
-		headings: NewHeadingInventory(),
-		aliases:  NewAliasTable(),
+		headings: newHeadingInventory(),
+		aliases:  newAliasTable(),
 	}
 }
 
@@ -43,7 +43,38 @@ func (c *Corpus) Add(doc *Document) error {
 		return fmt.Errorf("corpus: duplicate document ID %q", doc.ID)
 	}
 	c.docs[doc.ID] = doc
+	c.indexHeadings(doc)
+	c.indexAliases(doc)
 	return nil
+}
+
+// indexHeadings records every section slug of doc into the heading inventory,
+// keeping the inventory consistent with the documents in the corpus (ADR 0006).
+func (c *Corpus) indexHeadings(doc *Document) {
+	if doc.Root == nil {
+		return
+	}
+	var walk func(s *Section)
+	walk = func(s *Section) {
+		if s.Slug != "" {
+			c.headings.add(doc.ID, s.Slug)
+		}
+		for _, child := range s.Children {
+			walk(child)
+		}
+	}
+	walk(doc.Root)
+}
+
+// indexAliases records each front-matter alias of doc into the alias table, so
+// the P2 resolver can map wikilink aliases to candidate documents (ADR 0001).
+func (c *Corpus) indexAliases(doc *Document) {
+	for _, alias := range doc.FrontMatter.Aliases {
+		if alias == "" {
+			continue
+		}
+		c.aliases.add(alias, doc.ID)
+	}
 }
 
 // Get returns the document with the given ID and whether it was found.
@@ -68,24 +99,28 @@ func (c *Corpus) Documents() []*Document {
 // Len returns the number of documents in the corpus.
 func (c *Corpus) Len() int { return len(c.docs) }
 
+// HeadingCount returns the total number of heading slugs indexed across all
+// documents.
+func (c *Corpus) HeadingCount() int { return c.headings.count() }
+
 // AddHeading records that document id contains a heading with the given canonical
 // slug (ADR 0006). This is a build-phase mutation routed through the Corpus so
 // the underlying index is never exposed.
 func (c *Corpus) AddHeading(id DocumentID, slug string) {
-	c.headings.Add(id, slug)
+	c.headings.add(id, slug)
 }
 
 // HasHeading reports whether document id contains a heading with the given slug.
 // It is the read-only query used by anchor resolution.
 func (c *Corpus) HasHeading(id DocumentID, slug string) bool {
-	return c.headings.Has(id, slug)
+	return c.headings.has(id, slug)
 }
 
 // AddAlias records that document id is reachable via the given alias. This is a
 // build-phase mutation routed through the Corpus so the underlying index is
 // never exposed.
 func (c *Corpus) AddAlias(alias string, id DocumentID) {
-	c.aliases.Add(alias, id)
+	c.aliases.add(alias, id)
 }
 
 // LookupAlias returns the candidate documents for an alias, sorted by
@@ -93,5 +128,5 @@ func (c *Corpus) AddAlias(alias string, id DocumentID) {
 // slice (mutating it does not affect the corpus) and is empty if the alias is
 // unknown.
 func (c *Corpus) LookupAlias(alias string) []DocumentID {
-	return c.aliases.Lookup(alias)
+	return c.aliases.lookup(alias)
 }

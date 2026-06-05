@@ -3,79 +3,22 @@
 // that holds them along with the indices (HeadingInventory, AliasTable) that
 // downstream resolution and analysis read from.
 //
-// This package depends only on the standard library and the sibling reference
-// package (it imports nothing from application, infrastructure, cobra, or
-// goldmark). See ADR 0004.
+// This package depends only on the standard library and the sibling identity
+// and reference packages (it imports nothing from application, infrastructure,
+// cobra, or goldmark). See ADR 0004.
 package corpus
 
 import (
-	"fmt"
-	"path"
-	"path/filepath"
-	"strings"
 	"time"
 
+	"github.com/stacklok/doctopus/internal/domain/identity"
 	"github.com/stacklok/doctopus/internal/domain/reference"
 )
 
-// DocumentID is a document's identity: its canonical repository-relative path,
-// cleaned and slash-separated, relative to the scan root (see ADR 0001). It is
-// never a basename — duplicate basenames in different directories are distinct
-// identities. The underlying type is string and matches the string identities
-// carried in the reference package.
-type DocumentID string
-
-// NewDocumentID derives a canonical DocumentID for path, interpreted relative
-// to root. Both root and path may be absolute or relative; the result is always
-// a cleaned, forward-slash, root-relative path. It returns an error if path
-// escapes root (e.g. via ".." or an absolute path outside root), enforcing the
-// root-containment boundary of ADR 0003 at the identity layer.
-func NewDocumentID(root, p string) (DocumentID, error) {
-	if p == "" {
-		return "", fmt.Errorf("corpus: empty document path")
-	}
-	// Normalize to the OS separator for the relative computation, then convert
-	// the result to slashes for the canonical identity.
-	cleanRoot := filepath.Clean(root)
-	if cleanRoot == "" {
-		cleanRoot = "."
-	}
-
-	var abs string
-	if filepath.IsAbs(p) {
-		abs = filepath.Clean(p)
-	} else {
-		abs = filepath.Join(cleanRoot, p)
-	}
-
-	rel, err := filepath.Rel(cleanRoot, abs)
-	if err != nil {
-		return "", fmt.Errorf("corpus: cannot relativize %q against root %q: %w", p, root, err)
-	}
-	// filepath.Rel already returns a cleaned path; ToSlash only swaps
-	// separators, so no further path.Clean is needed here.
-	rel = filepath.ToSlash(rel)
-
-	if rel == ".." || strings.HasPrefix(rel, "../") {
-		return "", fmt.Errorf("corpus: path %q escapes root %q", p, root)
-	}
-	if rel == "." || rel == "" {
-		return "", fmt.Errorf("corpus: path %q resolves to the root itself", p)
-	}
-
-	return DocumentID(rel), nil
-}
-
-// String returns the identifier as a plain string.
-func (id DocumentID) String() string { return string(id) }
-
-// Dir returns the slash-separated directory portion of the identity, or "." for
-// a top-level document.
-func (id DocumentID) Dir() string { return path.Dir(string(id)) }
-
-// Base returns the final path element of the identity. It is a resolution hint
-// only and is never used as identity (see ADR 0001).
-func (id DocumentID) Base() string { return path.Base(string(id)) }
+// DocumentID is the canonical document identity (ADR 0001). It is re-exported
+// from the identity package as a convenience alias so existing corpus call
+// sites keep working; the validating constructor lives in identity.
+type DocumentID = identity.DocumentID
 
 // FrontMatter holds the typed YAML/TOML front-matter fields doctopus
 // understands, plus any unrecognized keys in Extra. A zero FrontMatter is a
@@ -98,6 +41,11 @@ type FrontMatter struct {
 // at the synthetic document root (Level 0). It is a graph vertex in later
 // phases (ADR 0004). This is a pure data type; slug computation lives in the
 // infrastructure parser (ADR 0006).
+//
+// Concurrency: the section tree (including the Parent back-pointers) is built by
+// a single goroutine in the parser and is never mutated after the Document is
+// handed to the corpus. It is therefore safe to hand off and read concurrently;
+// callers must not mutate it post-construction.
 type Section struct {
 	// Level is the heading level (1-6); the synthetic root uses 0.
 	Level int
@@ -105,7 +53,8 @@ type Section struct {
 	Text string
 	// Slug is the canonical anchor slug for the heading (ADR 0006).
 	Slug string
-	// Parent is the enclosing section, or nil for the root.
+	// Parent is the enclosing section, or nil for the root. It is a back-pointer
+	// set once during single-goroutine construction (see the type note above).
 	Parent *Section
 	// Children are the directly nested sections, in document order.
 	Children []*Section
@@ -120,11 +69,11 @@ type Section struct {
 // immutable thereafter.
 type Document struct {
 	// ID is the canonical identity (ADR 0001).
-	ID DocumentID
+	ID identity.DocumentID
 	// FrontMatter holds the document's parsed front matter.
 	FrontMatter FrontMatter
 	// Root is the synthetic root of the section tree (Level 0). May be nil for
-	// a document with no headings in the skeleton.
+	// a document with no headings.
 	Root *Section
 	// RawReferences are the outbound link edges extracted from the document,
 	// before resolution.

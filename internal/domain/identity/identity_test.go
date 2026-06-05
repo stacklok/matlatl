@@ -1,4 +1,4 @@
-package corpus
+package identity
 
 import "testing"
 

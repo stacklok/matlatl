@@ -32,7 +32,7 @@ func TestLinkType_StringValid(t *testing.T) {
 func TestLinkHealth_StringValid(t *testing.T) {
 	all := []LinkHealth{
 		Unresolved, Valid, Broken, BrokenAnchor, NonNote, Ambiguous,
-		ExternalHealth, Ignored,
+		HealthExternal, Ignored,
 	}
 	if Unresolved != 0 {
 		t.Error("Unresolved must be the zero value")

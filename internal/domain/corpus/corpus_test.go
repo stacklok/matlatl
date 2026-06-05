@@ -95,3 +95,65 @@ func TestCorpus_Aliases(t *testing.T) {
 		t.Error("LookupAlias result is not isolated from caller mutation")
 	}
 }
+
+// section is a small helper to build a section tree for indexing tests.
+func section(level int, slug string, children ...*Section) *Section {
+	return &Section{Level: level, Slug: slug, Children: children}
+}
+
+func TestCorpus_AddIndexesHeadings(t *testing.T) {
+	c := NewCorpus()
+	doc := &Document{
+		ID: "a.md",
+		Root: section(0, "",
+			section(1, "intro",
+				section(2, "details"),
+			),
+			section(1, "usage"),
+		),
+	}
+	if err := c.Add(doc); err != nil {
+		t.Fatal(err)
+	}
+	// Add must auto-index every non-empty slug in the section tree.
+	for _, slug := range []string{"intro", "details", "usage"} {
+		if !c.HasHeading("a.md", slug) {
+			t.Errorf("HasHeading(a.md, %q) = false; Add did not auto-index it", slug)
+		}
+	}
+	if c.HeadingCount() != 3 {
+		t.Errorf("HeadingCount() = %d, want 3", c.HeadingCount())
+	}
+}
+
+func TestCorpus_AddIndexesAliases(t *testing.T) {
+	c := NewCorpus()
+	doc := &Document{
+		ID:          "guide.md",
+		FrontMatter: FrontMatter{Aliases: []string{"guide", "handbook", ""}},
+	}
+	if err := c.Add(doc); err != nil {
+		t.Fatal(err)
+	}
+	// Front-matter aliases must be indexed so the P2 resolver can use them; the
+	// empty alias is ignored.
+	if got := c.LookupAlias("guide"); len(got) != 1 || got[0] != "guide.md" {
+		t.Errorf("LookupAlias(guide) = %v, want [guide.md]", got)
+	}
+	if got := c.LookupAlias("handbook"); len(got) != 1 || got[0] != "guide.md" {
+		t.Errorf("LookupAlias(handbook) = %v, want [guide.md]", got)
+	}
+	if c.LookupAlias("") != nil {
+		t.Error("empty alias should not be indexed")
+	}
+}
+
+func TestCorpus_AddNilRootNoPanic(t *testing.T) {
+	c := NewCorpus()
+	if err := c.Add(&Document{ID: "a.md"}); err != nil { // Root == nil
+		t.Fatalf("Add with nil Root: %v", err)
+	}
+	if c.HeadingCount() != 0 {
+		t.Errorf("HeadingCount() = %d, want 0", c.HeadingCount())
+	}
+}
