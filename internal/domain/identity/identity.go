@@ -60,6 +60,32 @@ func NewDocumentID(root, p string) (DocumentID, error) {
 	return DocumentID(rel), nil
 }
 
+// MarkdownExts are the recognized markdown file extensions (lowercase, with
+// leading dot). It is the single source of truth shared by the scanner
+// (discovery) and the resolver (note vs. asset classification).
+var MarkdownExts = []string{".md", ".markdown"}
+
+// IsMarkdownPath reports whether p has a recognized markdown extension. The
+// comparison is case-insensitive.
+func IsMarkdownPath(p string) bool {
+	lower := strings.ToLower(p)
+	for _, ext := range MarkdownExts {
+		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	return false
+}
+
+// EscapesRoot reports whether a cleaned, slash-separated, root-relative path
+// escapes its root — i.e. it is "..", begins with "../", or is empty/".". It is
+// the single root-containment predicate shared across the codebase (ADR 0003);
+// OS-separator callers convert with filepath.ToSlash first. Note: it expects an
+// already-cleaned path (e.g. from path.Clean or filepath.Rel+ToSlash).
+func EscapesRoot(slashRel string) bool {
+	return slashRel == "" || slashRel == "." || slashRel == ".." || strings.HasPrefix(slashRel, "../")
+}
+
 // String returns the identifier as a plain string.
 func (id DocumentID) String() string { return string(id) }
 

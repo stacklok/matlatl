@@ -10,6 +10,13 @@ import (
 // resolution and analysis read from. It is built up during the pipeline and
 // then treated as read-only. It is not safe for concurrent mutation.
 //
+// Lifecycle / concurrency contract: the Corpus is mutated only during the
+// single-threaded parse-and-merge stage (Add). At the phase boundary it is
+// FROZEN — no further Add calls — after which the read-only accessors (Get,
+// Documents, HasDocument, HasHeading, LookupAlias, …) are safe for concurrent
+// readers. Resolution in P2 runs single-threaded over the frozen Corpus by
+// design; any future fan-out must read, never mutate, a frozen Corpus.
+//
 // The indices (headingInventory, aliasTable) are unexported and never handed
 // out by reference: callers populate them through Add* methods and query them
 // through read-only accessors. This preserves the "built once, read-only
@@ -81,6 +88,24 @@ func (c *Corpus) indexAliases(doc *Document) {
 func (c *Corpus) Get(id DocumentID) (*Document, bool) {
 	doc, ok := c.docs[id]
 	return doc, ok
+}
+
+// HasDocument reports whether id is a known markdown document in the corpus. It
+// (together with DocumentIDs, HasHeading and LookupAlias) lets *Corpus satisfy
+// the reference.Catalog read-only interface used by the link resolver.
+func (c *Corpus) HasDocument(id DocumentID) bool {
+	_, ok := c.docs[id]
+	return ok
+}
+
+// DocumentIDs returns all known document identities, sorted for determinism.
+func (c *Corpus) DocumentIDs() []DocumentID {
+	out := make([]DocumentID, 0, len(c.docs))
+	for id := range c.docs {
+		out = append(out, id)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Documents returns all documents sorted by DocumentID. Sorting makes

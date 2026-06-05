@@ -27,7 +27,8 @@ const (
 	// Transclusion is an embedded note, e.g. ![[target]].
 	Transclusion
 	// FrontmatterRelated is an edge derived from front-matter fields such as
-	// parent/related.
+	// parent/related. Produced in P3 (graph/hierarchy build); the resolver
+	// already routes it through relative-style resolution.
 	FrontmatterRelated
 	// External is a link to an off-corpus resource (http/https/mailto/etc.).
 	External
@@ -215,12 +216,14 @@ type ResolvedTarget struct {
 }
 
 // Reference is a fully classified edge: the raw edge, its resolved target, and
-// its health. Built once during resolution and treated as immutable.
-//
-// TODO(P2): the LinkResolver that populates Target and Health lives in this
-// package in a later phase.
+// its health. Built once by the Resolver (see resolver.go) and treated as
+// immutable.
 type Reference struct {
 	RawReference
 	Target ResolvedTarget
 	Health LinkHealth
+	// Candidates is populated only when Health is Ambiguous: the set of
+	// documents the target matched, sorted by DocumentID for deterministic
+	// reporting.
+	Candidates []identity.DocumentID
 }
