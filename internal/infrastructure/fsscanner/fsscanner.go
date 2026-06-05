@@ -36,9 +36,6 @@ const (
 // defaultIgnoredDirs are directory names skipped wholesale during the walk.
 var defaultIgnoredDirs = []string{".git", "node_modules", "vendor"}
 
-// markdownExts are the recognized markdown extensions (matched case-insensitively).
-var markdownExts = []string{".md", ".markdown"}
-
 // Config tunes a Scanner. The zero value is not valid; use New, which fills in
 // safe defaults for any unset field.
 type Config struct {
@@ -149,7 +146,7 @@ func (s *Scanner) Scan(ctx context.Context, root string) (application.ScanResult
 			return nil
 		}
 
-		if !isMarkdown(d.Name()) {
+		if !identity.IsMarkdownPath(d.Name()) {
 			return nil
 		}
 
@@ -283,13 +280,6 @@ func (s *Scanner) symlinkNotice(realRoot, path string) application.Notice {
 	}
 }
 
-// isMarkdown reports whether name has a recognized markdown extension
-// (case-insensitive).
-func isMarkdown(name string) bool {
-	ext := strings.ToLower(filepath.Ext(name))
-	return slices.Contains(markdownExts, ext)
-}
-
 // relForMatch returns the slash-separated path of p relative to root, for
 // gitignore matching. The second result is false if p is not under root.
 func relForMatch(root, p string) (string, bool) {
@@ -298,7 +288,7 @@ func relForMatch(root, p string) (string, bool) {
 		return "", false
 	}
 	rel = filepath.ToSlash(rel)
-	if rel == "." || strings.HasPrefix(rel, "../") {
+	if identity.EscapesRoot(rel) {
 		return "", false
 	}
 	return rel, true

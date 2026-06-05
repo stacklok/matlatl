@@ -220,6 +220,10 @@ func TestScan_SymlinkedDirectoryNotTraversed(t *testing.T) {
 	if got := ids(res); len(got) != 1 || got[0] != "real.md" {
 		t.Errorf("ids = %v, want only [real.md]", got)
 	}
+	// ADR 0003 "reported" half: the skipped directory symlink is noticed.
+	if !hasNotice(res, application.NoticeSkippedSymlink) {
+		t.Error("expected a skipped-symlink notice for the directory symlink")
+	}
 }
 
 func TestScan_NonexistentRootErrors(t *testing.T) {
