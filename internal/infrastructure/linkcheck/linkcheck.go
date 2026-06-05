@@ -28,7 +28,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -63,8 +63,11 @@ type Config struct {
 	Concurrency int
 	// Timeout is the per-request timeout (default 5s).
 	Timeout time.Duration
-	// MaxRedirects caps redirect hops; each hop is re-checked by the guard
-	// (default 5).
+	// MaxRedirects caps redirect hops; each hop is re-checked by the SSRF guard.
+	// Zero-value semantics: 0 means "use the default of 5" (so the safe-by-default
+	// zero Config still follows a sensible number of hops); a negative value
+	// (e.g. -1) means "follow NO redirects" (the cap becomes 0 hops, so any
+	// redirect is refused). See New, which normalizes these.
 	MaxRedirects int
 	// PerHostInterval is the minimum spacing between requests to the same host
 	// (rate limit; default 200ms). Zero disables rate limiting.
@@ -200,7 +203,7 @@ func (c *Checker) Check(ctx context.Context, urls []string) map[string]applicati
 		seen[u] = struct{}{}
 		uniq = append(uniq, u)
 	}
-	sort.Strings(uniq)
+	slices.Sort(uniq)
 
 	out := make(map[string]application.ExternalResult, len(uniq))
 	var mu sync.Mutex

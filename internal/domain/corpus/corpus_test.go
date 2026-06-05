@@ -65,7 +65,9 @@ func TestCorpus_Get(t *testing.T) {
 
 func TestCorpus_Headings(t *testing.T) {
 	c := NewCorpus()
-	c.AddHeading("a.md", "intro")
+	if err := c.AddHeading("a.md", "intro"); err != nil {
+		t.Fatalf("AddHeading: unexpected error %v", err)
+	}
 	if !c.HasHeading("a.md", "intro") {
 		t.Error("HasHeading(a.md, intro) = false, want true")
 	}
@@ -79,8 +81,12 @@ func TestCorpus_Headings(t *testing.T) {
 
 func TestCorpus_Aliases(t *testing.T) {
 	c := NewCorpus()
-	c.AddAlias("foo", "x/foo.md")
-	c.AddAlias("foo", "y/foo.md")
+	if err := c.AddAlias("foo", "x/foo.md"); err != nil {
+		t.Fatalf("AddAlias: unexpected error %v", err)
+	}
+	if err := c.AddAlias("foo", "y/foo.md"); err != nil {
+		t.Fatalf("AddAlias: unexpected error %v", err)
+	}
 	got := c.LookupAlias("foo")
 	if len(got) != 2 {
 		t.Fatalf("LookupAlias(foo) len = %d, want 2", len(got))
@@ -184,21 +190,18 @@ func TestCorpus_FreezeRejectsMutation(t *testing.T) {
 	}
 	// Freeze is idempotent.
 	c.Freeze()
-	// Test-only mutators panic on a frozen corpus (programming-error contract).
+	// Every mutator returns ErrFrozen on a frozen corpus (consistent contract:
+	// Add, AddHeading and AddAlias all return the error rather than splitting on
+	// panic vs. return).
 	for _, mut := range []struct {
 		name string
-		fn   func()
+		fn   func() error
 	}{
-		{"AddHeading", func() { c.AddHeading("a.md", "x") }},
-		{"AddAlias", func() { c.AddAlias("y", "a.md") }},
+		{"AddHeading", func() error { return c.AddHeading("a.md", "x") }},
+		{"AddAlias", func() error { return c.AddAlias("y", "a.md") }},
 	} {
-		func() {
-			defer func() {
-				if recover() == nil {
-					t.Errorf("%s on frozen corpus did not panic", mut.name)
-				}
-			}()
-			mut.fn()
-		}()
+		if err := mut.fn(); !errors.Is(err, ErrFrozen) {
+			t.Errorf("%s on frozen corpus: err = %v, want ErrFrozen", mut.name, err)
+		}
 	}
 }

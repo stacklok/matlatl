@@ -188,8 +188,18 @@ func TestBodyReader_RejectsTraversal(t *testing.T) {
 		"../../../etc/passwd",
 		"/etc/passwd",
 	} {
-		if _, err := r.Read(id); err == nil {
+		_, err := r.Read(id)
+		if err == nil {
 			t.Errorf("Read(%q) should be rejected as escaping the root", id)
+			continue
+		}
+		// The rejection must come from the containment guard, not an incidental
+		// "file does not exist" off disk: assert the containment message. This
+		// catches the absolute-path bug where filepath.Join silently treated
+		// "/etc/passwd" as relative and the read only failed because the path
+		// happened not to exist.
+		if !strings.Contains(err.Error(), "escapes") {
+			t.Errorf("Read(%q) error = %q, want a containment ('escapes') error", id, err)
 		}
 	}
 }

@@ -296,15 +296,15 @@ func Build(v emit.View) Document {
 
 	doc.Edges = edgesFrom(m.Graph)
 	doc.Sections = sectionsFrom(v)
-	doc.Orphans = idStrings(v.Orphans)
-	doc.Unreachable = idStrings(v.Unreachable)
+	doc.Orphans = identity.IDStrings(v.Orphans)
+	doc.Unreachable = identity.IDStrings(v.Unreachable)
 	doc.BrokenLinks = brokenLinks(v.BrokenLinks)
 	doc.BrokenAnchors = brokenAnchors(v.BrokenAnchors)
 	doc.Ambiguous = ambiguous(v.Ambiguous)
 	doc.Components = Components{WCC: components(m.WCC), SCC: components(m.SCC)}
 	doc.HITS = HITS{TopHubs: ranked(v.TopHubs), TopAuthorities: ranked(v.TopAuthorities)}
 	doc.Gaps = gaps(v.Gaps)
-	doc.RootSet = idStrings(m.RootSet.Roots)
+	doc.RootSet = identity.IDStrings(m.RootSet.Roots)
 	doc.Reachability = Reachability{Indeterminate: m.Orphans.Indeterminate}
 
 	doc.Summary = Summary{
@@ -341,15 +341,6 @@ func idSet(ids []identity.DocumentID) map[identity.DocumentID]struct{} {
 		set[id] = struct{}{}
 	}
 	return set
-}
-
-func idStrings(ids []identity.DocumentID) []string {
-	out := make([]string, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, id.String())
-	}
-	slices.Sort(out)
-	return out
 }
 
 // edgesFrom returns the document-projection navigational edges in sorted (From,
@@ -458,7 +449,7 @@ func ambiguous(findings []analysis.Finding) []Ambiguous {
 func components(comps graphmodel.Components) []Component {
 	out := make([]Component, 0, len(comps))
 	for _, c := range comps { // already sorted by ID
-		out = append(out, Component{ID: c.ID.String(), Members: idStrings(c.Members)})
+		out = append(out, Component{ID: c.ID.String(), Members: identity.IDStrings(c.Members)})
 	}
 	return out
 }

@@ -51,7 +51,7 @@ func Markdown(v emit.View) []byte {
 		// The category label is an attacker-influenced directory name and is
 		// rendered as a Markdown heading, so it gets the same flowing-text escaping
 		// the report uses (a hostile category must not render as live markdown).
-		fmt.Fprintf(&b, "## %s\n\n", emit.EscapeMarkdownText(categoryLabel(cat)))
+		fmt.Fprintf(&b, "## %s\n\n", emit.EscapeMarkdownText(emit.CategoryLabel(cat)))
 		b.WriteString("| Document | Description | Modified |\n| --- | --- | --- |\n")
 		for _, d := range byCat[cat] {
 			fmt.Fprintf(&b, "| `%s` | %s | %s |\n",
@@ -62,13 +62,6 @@ func Markdown(v emit.View) []byte {
 		b.WriteString("\n")
 	}
 	return []byte(b.String())
-}
-
-func categoryLabel(cat string) string {
-	if cat == "." || cat == "" {
-		return "(root)"
-	}
-	return cat
 }
 
 // formatModTime renders a mod-time as a stable RFC3339 UTC date-time, or "-" for

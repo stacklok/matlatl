@@ -166,6 +166,42 @@ func TestSSRF_RedirectToInternalBlocked(t *testing.T) {
 	}
 }
 
+// TestRedirectCap_RefusesAfterMaxHops pins the ADR-0003 "cap redirects"
+// requirement: a server that redirects in an endless loop (each hop to a
+// permitted host) must be refused once the configured MaxRedirects is exceeded,
+// rather than followed forever. We set MaxRedirects=2 and assert the request
+// fails with a redirect-cap error (and counts the hops the server saw).
+func TestRedirectCap_RefusesAfterMaxHops(t *testing.T) {
+	var hops int32
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&hops, 1)
+		// Always redirect back to ourselves -> an infinite loop unless capped.
+		http.Redirect(w, &http.Request{}, srv.URL+"/again", http.StatusFound)
+	}))
+	defer srv.Close()
+
+	host := mustHost(t, srv.URL)
+	const maxRedirects = 2
+	c := New(Config{PerHostInterval: 0, MaxRedirects: maxRedirects, Allow: []string{host}},
+		WithResolver(&fakeResolver{m: map[string][]net.IP{}}))
+
+	out := c.Check(context.Background(), []string{srv.URL + "/start"})
+	r := out[srv.URL+"/start"]
+	if r.OK {
+		t.Fatalf("looping redirect returned OK; want a redirect-cap failure")
+	}
+	if !strings.Contains(strings.ToLower(r.Err), "redirect") {
+		t.Errorf("expected a redirect-cap error, got Err=%q", r.Err)
+	}
+	// The client stops once `len(via) >= maxRedirects`, so the server sees at most
+	// maxRedirects+1 requests (the initial + the capped redirects). It must NOT
+	// have followed the loop indefinitely.
+	if got := atomic.LoadInt32(&hops); got > maxRedirects+1 {
+		t.Errorf("server saw %d hops, want <= %d (redirect cap not enforced)", got, maxRedirects+1)
+	}
+}
+
 // TestCheck_Dedup: the same URL passed twice yields one entry; resolver is not
 // hammered more than necessary.
 func TestCheck_Dedup(t *testing.T) {

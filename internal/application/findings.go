@@ -15,6 +15,14 @@ import (
 // orphans and unreachable documents are warnings that fail only under --strict.
 // KnowledgeGap (Info) never affects the exit code. A clean repo or an empty
 // corpus returns ExitOK (0).
+//
+// DeadLinkCount is DELIBERATELY excluded from the exit contract, even under
+// --strict (ADR 0005): external link checking is opt-in (--check-external) and
+// non-deterministic (network state, transient timeouts, rate limits), so gating
+// CI on it would make a green build flaky. DeadLink findings are reported (in
+// findings.json/JUnit and the human report) but never change the exit code; CI
+// that wants to fail on dead external links should consume findings.json
+// explicitly. This is why r.DeadLinkCount is intentionally not read here.
 func (r Result) CheckExitCode(strict bool) platform.ExitCode {
 	if r.BrokenLinkCount > 0 || r.BrokenAnchorCount > 0 {
 		return platform.ExitFindings

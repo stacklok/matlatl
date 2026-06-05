@@ -91,13 +91,3 @@ func findSection(root *corpus.Section, slug string) *corpus.Section {
 	walk(root)
 	return found
 }
-
-// idStrings turns DocumentIDs into a non-nil sorted string slice.
-func idStrings(ids []identity.DocumentID) []string {
-	out := make([]string, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, id.String())
-	}
-	slices.Sort(out)
-	return out
-}

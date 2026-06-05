@@ -161,13 +161,14 @@ func (c *Corpus) HeadingCount() int { return c.headings.count() }
 // Test-only seam: the production path populates the heading inventory directly
 // from a Document's section tree inside Add; this exported entry point exists so
 // tests can build a heading inventory without a full Document and is not called
-// from non-test code. It panics if the corpus is frozen (a programming error:
-// the only legitimate callers run before Freeze).
-func (c *Corpus) AddHeading(id DocumentID, slug string) {
+// from non-test code. It returns ErrFrozen if the corpus is frozen, matching
+// Add's frozen contract (consistency over a deliberate panic/return split).
+func (c *Corpus) AddHeading(id DocumentID, slug string) error {
 	if c.frozen {
-		panic(ErrFrozen)
+		return ErrFrozen
 	}
 	c.headings.add(id, slug)
+	return nil
 }
 
 // HasHeading reports whether document id contains a heading with the given slug.
@@ -183,13 +184,14 @@ func (c *Corpus) HasHeading(id DocumentID, slug string) bool {
 // Test-only seam: the production path populates the alias table directly from a
 // Document's front-matter aliases inside Add; this exported entry point exists
 // so tests can seed aliases without a full Document and is not called from
-// non-test code. It panics if the corpus is frozen (a programming error: the
-// only legitimate callers run before Freeze).
-func (c *Corpus) AddAlias(alias string, id DocumentID) {
+// non-test code. It returns ErrFrozen if the corpus is frozen, matching Add's
+// frozen contract (consistency over a deliberate panic/return split).
+func (c *Corpus) AddAlias(alias string, id DocumentID) error {
 	if c.frozen {
-		panic(ErrFrozen)
+		return ErrFrozen
 	}
 	c.aliases.add(alias, id)
+	return nil
 }
 
 // LookupAlias returns the candidate documents for an alias, sorted by

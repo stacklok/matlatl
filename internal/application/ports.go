@@ -104,10 +104,10 @@ type DocumentParser interface {
 
 // DocumentParserFactory mints DocumentParsers. A single DocumentParser is not
 // guaranteed goroutine-safe (its underlying goldmark parser carries per-call
-// mutable state), so the parse stage obtains parsers through this factory:
-// today it uses one parser single-threaded; in P6 fan-out parsing it can call
-// Clone per worker for an independent parser without any layering change.
-// Production implementation: internal/infrastructure/mdparser.
+// mutable state), so the parse stage obtains parsers through this factory: the
+// single-worker fast path uses one parser, and the fan-out path calls Clone per
+// worker for an independent parser. Production implementation:
+// internal/infrastructure/mdparser.
 type DocumentParserFactory interface {
 	// New returns a freshly configured DocumentParser.
 	New() DocumentParser

@@ -60,9 +60,15 @@ func newRootCommand() *cobra.Command {
 			}
 
 			pipeline := buildPipeline(cfg, logSink)
-			code, res, err := pipeline.Run(cmd.Context())
+			// The default command is DISPLAY-ONLY: it always exits 0 on a
+			// successful run regardless of findings. `doctopus check` is the CI
+			// gate (it applies the ADR 0005 exit contract via Result.CheckExitCode);
+			// `doctopus .` just renders the human report. Pipeline.Run returns
+			// (ExitOK, _, nil) on success, so the only non-nil error here is a
+			// genuine runtime/usage failure, which we propagate with its code.
+			_, res, err := pipeline.Run(cmd.Context())
 			if err != nil {
-				return exitCodeError{code: code, err: err}
+				return exitCodeError{code: platform.ExitRuntime, err: err}
 			}
 
 			view := emit.BuildView(res)
@@ -75,10 +81,6 @@ func newRootCommand() *cobra.Command {
 				Quiet: cfg.Quiet,
 			}); terr != nil {
 				return exitCodeError{code: platform.ExitRuntime, err: terr}
-			}
-
-			if code != platform.ExitOK {
-				return exitCodeError{code: code, err: fmt.Errorf("findings present")}
 			}
 			return nil
 		},

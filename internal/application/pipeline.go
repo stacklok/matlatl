@@ -29,9 +29,12 @@ import (
 // (e.g. check writes findings.json/JUnit), so the pipeline stays
 // emitter-agnostic.
 //
-// Concurrency (P6 note): parsing is single-threaded and documents are merged
-// into the Corpus sequentially. This sequential merge is the seam where fan-out
-// parsing will plug in later (per-worker parser, single-threaded merge).
+// Concurrency: parsing fans out across a bounded worker pool (each worker owns
+// an independent parser via DocumentParserFactory.Clone, since goldmark parsers
+// are not safe to share), and the parsed documents are merged into the Corpus on
+// this single goroutine in DocumentID-sorted order. That sequential merge is
+// what keeps the corpus, heading inventory and every downstream artifact
+// byte-identical to the single-threaded path at any worker count.
 type Pipeline struct {
 	cfg       Config
 	scanner   FileScanner
@@ -41,13 +44,14 @@ type Pipeline struct {
 }
 
 // NewPipeline constructs a Pipeline from a config, its ports, and a log sink.
-// The parser is obtained from a DocumentParserFactory (the P6 fan-out seam: one
-// parser today, one-per-worker later). A nil log sink discards output.
+// Parsers are obtained from a DocumentParserFactory: the single-worker fast path
+// uses one parser, and the fan-out path mints one per worker via Clone. A nil
+// log sink discards output.
 //
 // Emit (stage 6) is the command layer's job, so the pipeline takes no artifact
-// writer: it returns a frozen Result the caller renders/writes. The
-// ArtifactWriter port will be wired back in P6 when the pipeline owns real write
-// paths.
+// writer: it returns a frozen Result the caller renders/writes (e.g. `check`
+// writes findings.json/JUnit). The ArtifactWriter port stays on the command
+// layer for that reason.
 func NewPipeline(cfg Config, scanner FileScanner, parserFac DocumentParserFactory, log io.Writer) *Pipeline {
 	if log == nil {
 		log = io.Discard

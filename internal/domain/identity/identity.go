@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -115,13 +116,35 @@ func EscapesRoot(slashRel string) bool {
 // body reader, the artifact writer) so they cannot diverge on the guard (ADR
 // 0003). It is a pure path computation — it performs no I/O and (like the
 // scanner's separate symlink resolution) does not itself resolve symlinks.
+//
+// An ABSOLUTE relPath is always rejected: filepath.Join(absRoot, "/etc/passwd")
+// silently treats the absolute path as a relative component and would otherwise
+// report it as contained. Callers pass root-relative paths; an absolute one is a
+// containment violation by definition.
 func Contains(absRoot, relPath string) (string, bool) {
+	if filepath.IsAbs(relPath) {
+		return "", false
+	}
 	full := filepath.Join(absRoot, filepath.FromSlash(relPath))
 	rel, err := filepath.Rel(absRoot, full)
 	if err != nil || EscapesRoot(filepath.ToSlash(rel)) {
 		return "", false
 	}
 	return full, true
+}
+
+// IDStrings turns a slice of DocumentIDs into a non-nil, sorted slice of plain
+// strings. It is the ONE shared helper used by every emitter that projects an ID
+// list into JSON/MCP output (graph.json, the MCP server) so the two cannot drift
+// on nil-vs-empty or sort order. The result is always non-nil (an empty input
+// yields an empty, allocated slice) so JSON renders `[]` rather than `null`.
+func IDStrings(ids []DocumentID) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, id.String())
+	}
+	slices.Sort(out)
+	return out
 }
 
 // String returns the identifier as a plain string.

@@ -170,6 +170,11 @@ func TestCheckExitCode(t *testing.T) {
 		// ADR 0005: knowledge gaps are Info — they NEVER fail, even under --strict.
 		{"gap non-strict", Result{KnowledgeGapCount: 5}, false, platform.ExitOK},
 		{"gap strict", Result{KnowledgeGapCount: 5}, true, platform.ExitOK},
+		// ADR 0005: opt-in external dead-link findings are non-deterministic and
+		// are deliberately kept OUT of the exit contract — they NEVER fail the
+		// build, even under --strict.
+		{"dead-link non-strict", Result{DeadLinkCount: 7}, false, platform.ExitOK},
+		{"dead-link strict", Result{DeadLinkCount: 7}, true, platform.ExitOK},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

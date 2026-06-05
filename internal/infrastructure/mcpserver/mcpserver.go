@@ -186,8 +186,8 @@ func (a *Analysis) handleWhatLinksTo(_ context.Context, req mcp.CallToolRequest)
 }
 
 func (a *Analysis) handleListOrphans(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	orphans := idStrings(a.view.Orphans)
-	unreachable := idStrings(a.view.Unreachable)
+	orphans := identity.IDStrings(a.view.Orphans)
+	unreachable := identity.IDStrings(a.view.Unreachable)
 	return mcp.NewToolResultStructured(map[string]any{
 		"isolated":                  orphans,
 		"unreachable":               unreachable,

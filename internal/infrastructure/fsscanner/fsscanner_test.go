@@ -338,3 +338,50 @@ func TestScan_SymlinkedOutputDirExcluded(t *testing.T) {
 		t.Errorf("ids = %v, want [keep.md]", got)
 	}
 }
+
+// TestScan_OversizedIgnoreFileSkippedGracefully is the ADR-0003 invariant-3
+// regression test for the ignore-file OOM vector: .doctopusignore is read before
+// the WalkDir loop and therefore is NOT covered by MaxFileSizeBytes. A hostile,
+// multi-GB ignore file must be skipped (os.Stat-gated at maxIgnoreBytes) without
+// reading it into memory, and the scan must still complete and discover the
+// markdown. We write an ignore file just over the cap; the scan must succeed,
+// ignore no rules from the oversized file, and find keep.md.
+func TestScan_OversizedIgnoreFileSkippedGracefully(t *testing.T) {
+	root := t.TempDir()
+	// An oversized ignore file: > maxIgnoreBytes. If the rule "keep.md" inside it
+	// were honored, keep.md would be excluded — so finding keep.md proves the
+	// oversized file was skipped entirely, not parsed.
+	big := make([]byte, maxIgnoreBytes+4096)
+	for i := range big {
+		big[i] = '\n'
+	}
+	copy(big, []byte("keep.md\n"))
+	if err := os.WriteFile(filepath.Join(root, ignoreFileName), big, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "keep.md"), "# Keep")
+
+	// Must not error or OOM, and must discover the markdown.
+	res := scan(t, root, Config{})
+	if got := ids(res); len(got) != 1 || got[0] != "keep.md" {
+		t.Errorf("ids = %v, want [keep.md] (oversized .doctopusignore skipped, not applied)", got)
+	}
+}
+
+// TestScan_IgnoreNegationReincludes pins the current behavior of go-gitignore's
+// '!' negation (re-inclusion): a later '!' pattern re-includes a path excluded
+// by an earlier pattern. (The dependency's source carries a stale TODO claiming
+// negation is unimplemented; it IS implemented in MatchesPathHow. This test
+// guards the behavior so a future dep swap cannot silently change it.)
+func TestScan_IgnoreNegationReincludes(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ".doctopusignore"), "*.md\n!keep.md\n")
+	writeFile(t, filepath.Join(root, "keep.md"), "# Keep")
+	writeFile(t, filepath.Join(root, "drop.md"), "# Drop")
+
+	res := scan(t, root, Config{})
+	got := ids(res)
+	if len(got) != 1 || got[0] != "keep.md" {
+		t.Errorf("ids = %v, want [keep.md] (negation '!keep.md' re-includes it; '*.md' drops drop.md)", got)
+	}
+}

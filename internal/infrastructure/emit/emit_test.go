@@ -102,15 +102,19 @@ func TestFindingsJSON_ShapeAndParse(t *testing.T) {
 }
 
 // TestRemediationGuide_CoversAllKinds asserts the guide source has an entry for
-// every defined finding kind, so any kind that can be emitted is covered.
+// every defined finding kind, so any kind that can be emitted is covered. It
+// walks the FindingKind iota exhaustively (BrokenLink..DeadLink, the same range
+// FindingKind.Valid uses) so a newly-added kind cannot be forgotten here.
 func TestRemediationGuide_CoversAllKinds(t *testing.T) {
-	for _, k := range []analysis.FindingKind{
-		analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
-		analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap,
-	} {
+	for k := analysis.BrokenLink; k.Valid(); k++ {
 		if remediationByKind[k.String()] == "" {
-			t.Errorf("remediationByKind missing entry for kind %q", k.String())
+			t.Errorf("remediationByKind missing entry for kind %q (%d)", k.String(), int(k))
 		}
+	}
+	// Sanity: the loop actually reached the last kind (DeadLink), so it is not a
+	// vacuous pass if Valid's bounds ever regress.
+	if remediationByKind[analysis.DeadLink.String()] == "" {
+		t.Error("remediationByKind missing the DeadLink entry")
 	}
 }
 

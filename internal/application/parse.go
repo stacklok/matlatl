@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/stacklok/doctopus/internal/domain/analysis"
@@ -202,33 +203,15 @@ func (p *Pipeline) checkExternalLinks(ctx context.Context, refs []reference.Refe
 
 // isHTTPURL reports whether u has an http:// or https:// scheme (case-folded).
 func isHTTPURL(u string) bool {
-	return len(u) >= 7 && (eqFold(u[:7], "http://") || (len(u) >= 8 && eqFold(u[:8], "https://")))
-}
-
-// eqFold is a tiny ASCII case-insensitive compare for fixed-length scheme
-// prefixes (avoids pulling strings just for this).
-func eqFold(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		ca, cb := a[i], b[i]
-		if 'A' <= ca && ca <= 'Z' {
-			ca += 'a' - 'A'
-		}
-		if 'A' <= cb && cb <= 'Z' {
-			cb += 'a' - 'A'
-		}
-		if ca != cb {
-			return false
-		}
-	}
-	return true
+	lower := strings.ToLower(u)
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
 }
 
 // deadLinkFinding builds a DeadLink finding for a failed external check. It is a
-// Warning (it fails the build only under --strict, mirroring other soft
-// findings) and never appears in the default deterministic run.
+// Warning severity for reporting (it sorts with the soft findings) but NEVER
+// affects the exit code, even under --strict: external checks are opt-in and
+// non-deterministic, so they are kept out of the CI gate (see Result.CheckExitCode
+// and ADR 0005). It never appears in the default deterministic run.
 func deadLinkFinding(r reference.Reference, res ExternalResult) analysis.Finding {
 	target := rawTargetText(r)
 	reason := res.Err

@@ -31,6 +31,21 @@ Semantics:
   configured) → reachability is reported as indeterminate; this alone does **not**
   fail the build. Broken-link/anchor findings still apply.
 
+- **External dead links are out of the exit contract.** `--check-external` is
+  opt-in and inherently non-deterministic (network state, transient timeouts,
+  rate limits, DNS). `DeadLink` findings are therefore **reported** (in
+  findings.json, JUnit, and the human report) but **never** change the exit code,
+  **even under `--strict`** — gating CI on them would make a green build flaky.
+  CI that wants to fail on dead external links should consume `findings.json`
+  explicitly. (Enforced in `Result.CheckExitCode`, which never reads
+  `DeadLinkCount`, and pinned by the `dead-link` rows in `TestCheckExitCode`.)
+
+- **The default command (`doctopus [path]`) is display-only.** It renders the
+  human report and **always exits 0** on a successful run regardless of findings;
+  only a genuine runtime/usage failure yields a non-zero code. `doctopus check`
+  is the CI gate that applies the table above. (`Pipeline.Run` returns `ExitOK`
+  on success; the gating decision lives only in `check` via `CheckExitCode`.)
+
 `check` always emits `findings.json` and JUnit XML (when `--out` is set) regardless
 of exit code, so CI dashboards get structured results on both pass and fail.
 

@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stacklok/doctopus/internal/domain/corpus"
@@ -45,20 +47,30 @@ func (f *fakeParser) Parse(_ context.Context, file ScannedFile) (*corpus.Documen
 }
 
 // fakeFactory hands out the shared fakeParser from New so tests can inspect its
-// call count after the (single-threaded) run.
+// call count after the (single-threaded) run. news is atomic because the fan-out
+// path calls Clone from multiple worker goroutines concurrently.
 type fakeFactory struct {
 	parser *fakeParser
-	news   int
+	news   atomic.Int64
 }
 
-func (f *fakeFactory) New() DocumentParser { f.news++; return f.parser }
+func (f *fakeFactory) New() DocumentParser { f.news.Add(1); return f.parser }
 
 // Clone returns an INDEPENDENT fakeParser (its own call counter), honoring the
 // per-worker contract: the real goldmark-backed parser is not concurrency-safe,
 // so the factory must mint a fresh parser per worker rather than returning the
 // same instance. Returning the shared parser here would let the fake silently
 // pass a test that the real factory would fail under fan-out.
-func (f *fakeFactory) Clone() DocumentParser { f.news++; return &fakeParser{} }
+//
+// The cloned parser inherits the configured error and onParse hook from the
+// template parser (but NOT its call counter — each worker counts its own). The
+// previous version dropped these, so a fan-out test could never exercise a
+// per-worker parse error or cancellation hook; TestPipeline_Run_*Concurrent*
+// rely on this propagation.
+func (f *fakeFactory) Clone() DocumentParser {
+	f.news.Add(1)
+	return &fakeParser{err: f.parser.err, onParse: f.parser.onParse}
+}
 
 func newFakeFactory(p *fakeParser) *fakeFactory { return &fakeFactory{parser: p} }
 
@@ -221,6 +233,71 @@ func TestPipeline_Run_CanceledMidParse(t *testing.T) {
 	// Only the first file should have been parsed before the cancel was observed.
 	if parser.calls != 1 {
 		t.Errorf("parser called %d times, want 1 (aborted after cancel)", parser.calls)
+	}
+}
+
+// TestPipeline_Run_CanceledMidParse_Concurrent covers cancellation on the
+// CONCURRENT fan-out path (ParseWorkers>=2): when the context is canceled while
+// workers are parsing, the feeder stops enqueuing and parseFiles returns the
+// cancellation error (ExitRuntime / context.Canceled). Unlike the sequential
+// test it cannot assert an exact parse count (workers race to observe Done), so
+// it asserts the fatal outcome only. Run under -race to prove the fan-out has no
+// data race on cancellation.
+func TestPipeline_Run_CanceledMidParse_Concurrent(t *testing.T) {
+	// Enough files that the feeder is still enqueuing when the cancel lands.
+	files := make([]ScannedFile, 0, 200)
+	for i := 0; i < 200; i++ {
+		files = append(files, sf(fmt.Sprintf("d%03d.md", i)))
+	}
+	scanner := &fakeScanner{result: ScanResult{Files: files}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// The hook cancels on the first parse; subsequent workers observe Done. cancel
+	// is safe to call from multiple goroutines.
+	parser := &fakeParser{onParse: func(_ ScannedFile) { cancel() }}
+	cfg := DefaultConfig()
+	cfg.ParseWorkers = 4 // force the multi-worker fan-out path
+	p := NewPipeline(cfg, scanner, newFakeFactory(parser), nil)
+
+	code, _, err := p.Run(ctx)
+	if err == nil {
+		t.Fatal("Run() canceled mid-parse (concurrent): want error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error = %v, want wrapping context.Canceled", err)
+	}
+	if code != platform.ExitRuntime {
+		t.Errorf("code = %v, want ExitRuntime", code)
+	}
+}
+
+// TestPipeline_Run_ParseError_Concurrent exercises a per-worker parse error on
+// the CONCURRENT fan-out path. fakeFactory.Clone propagates the template
+// parser's configured error to every cloned (per-worker) parser, so each file
+// fails to parse. A parse error is non-fatal (ADR 0003): the run completes with
+// an empty corpus and exit OK, with the failures surfaced as parse-error notices.
+// This guards the test seam that previously dropped the injected error in Clone.
+func TestPipeline_Run_ParseError_Concurrent(t *testing.T) {
+	files := []ScannedFile{sf("a.md"), sf("b.md"), sf("c.md"), sf("d.md")}
+	scanner := &fakeScanner{result: ScanResult{Files: files}}
+	parser := &fakeParser{err: errors.New("boom")}
+	cfg := DefaultConfig()
+	cfg.ParseWorkers = 4
+	var log bytes.Buffer
+	p := NewPipeline(cfg, scanner, newFakeFactory(parser), &log)
+
+	code, res, err := p.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run() unexpected fatal error: %v", err)
+	}
+	if code != platform.ExitOK {
+		t.Errorf("code = %v, want ExitOK (parse errors are non-fatal)", code)
+	}
+	if res.DocumentCount != 0 {
+		t.Errorf("DocumentCount = %d, want 0 (every file failed to parse)", res.DocumentCount)
+	}
+	if got := strings.Count(log.String(), "[parse-error]"); got != len(files) {
+		t.Errorf("parse-error notices = %d, want %d:\n%s", got, len(files), log.String())
 	}
 }
 

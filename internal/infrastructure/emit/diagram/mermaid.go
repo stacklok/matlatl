@@ -169,25 +169,30 @@ func writeMermaidClassDefs(b *strings.Builder, colorIdx map[identity.DocumentID]
 // inside the label stays inert. (The previous code mapped ';' to itself — a
 // verified no-op with a misleading comment; removed.) The hostile-label test
 // pins this by asserting a ';' in the title does not produce an injection.
+// mermaidLabelReplacer is a package-level singleton (a strings.Replacer is
+// immutable and safe to share). Promoting it out of escapeMermaidLabel avoids
+// rebuilding the replacer on every call — ~5k extra allocations at 5k docs —
+// matching the pattern in escape.go.
+var mermaidLabelReplacer = strings.NewReplacer(
+	`\`, "∖", // set-minus look-alike; a trailing '\' could escape our closing quote
+	"\r\n", " ",
+	"\n", " ",
+	"\r", " ",
+	"\t", " ",
+	`"`, "'", // a literal double-quote would close the quoted label
+	"#", "＃", // '#' begins an HTML entity / can inject
+	"<", "‹",
+	">", "›",
+	"[", "⟦",
+	"]", "⟧",
+	"{", "⦃",
+	"}", "⦄",
+	"(", "❨",
+	")", "❩",
+	"|", "¦",
+	"`", "ʼ",
+)
+
 func escapeMermaidLabel(s string) string {
-	r := strings.NewReplacer(
-		`\`, "∖", // set-minus look-alike; a trailing '\' could escape our closing quote
-		"\r\n", " ",
-		"\n", " ",
-		"\r", " ",
-		"\t", " ",
-		`"`, "'", // a literal double-quote would close the quoted label
-		"#", "＃", // '#' begins an HTML entity / can inject
-		"<", "‹",
-		">", "›",
-		"[", "⟦",
-		"]", "⟧",
-		"{", "⦃",
-		"}", "⦄",
-		"(", "❨",
-		")", "❩",
-		"|", "¦",
-		"`", "ʼ",
-	)
-	return r.Replace(s)
+	return mermaidLabelReplacer.Replace(s)
 }

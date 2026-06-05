@@ -47,3 +47,25 @@ strategy.
 - The scanner and resolver carry an explicit, tested root-containment boundary.
 - A small, deliberate set of limits is configurable but safe by default.
 - Reviews at every phase gate include a security pass against this list.
+
+### Known limitation: EvalSymlinks→ReadFile TOCTOU (accepted)
+
+The scanner canonicalizes each file with `filepath.EvalSymlinks` and verifies
+containment, then stores the resolved path so the parser reads exactly what was
+validated. This **narrows but does not close** a time-of-check/time-of-use
+window: an attacker who can swap a path between our `Lstat`/`EvalSymlinks` and
+the parser's `ReadFile` (or `BodyReader`'s `os.ReadFile` for llms-full.txt) could
+in principle redirect the read. Fully closing it requires handle-based,
+`openat`/`O_NOFOLLOW`-style I/O, for which Go's standard library exposes **no
+portable API** today. The residual window is **accepted** for a batch scanner
+over a **local** tree it owns end-to-end (it does not follow symlinks and walks a
+single canonicalized root); it is documented here so the trade-off is explicit
+rather than implicit, and re-evaluated if a portable `openat` API lands.
+
+### Ignore-file size cap
+
+`.doctopusignore` is read **before** the walk, so the per-file `MaxFileSizeBytes`
+guard (invariant 3) does not cover it. The scanner therefore `os.Stat`s it first
+and **skips** an ignore file larger than `maxIgnoreBytes` (1 MiB), reading the
+capped bytes itself rather than relying on the dependency's uncapped
+`ReadFile`-based loader, so a hostile multi-GB ignore file cannot OOM the scan.
