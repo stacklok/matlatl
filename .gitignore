@@ -1,7 +1,9 @@
 # Binaries
 /bin/
 /dist/
-doctopus
+# The built binary at the repo root (anchored so it does NOT match the
+# cmd/doctopus/ source directory, which must stay tracked).
+/doctopus
 *.exe
 
 # Test / coverage artifacts
