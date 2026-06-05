@@ -1,0 +1,368 @@
+package graphjson_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"testing"
+
+	"github.com/stacklok/doctopus/internal/application"
+	"github.com/stacklok/doctopus/internal/domain/corpus"
+	"github.com/stacklok/doctopus/internal/domain/graphmodel"
+	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/doctopus/internal/infrastructure/emit/graphjson"
+	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
+	"github.com/stacklok/doctopus/internal/infrastructure/mdparser"
+)
+
+// corpusID is a small helper to build a DocumentID for the synthetic-corpus tests.
+func corpusID(s string) identity.DocumentID { return identity.DocumentID(s) }
+
+// buildCorpusView runs the real pipeline over testdata/corpus and returns the
+// render-ready View.
+func buildCorpusView(t *testing.T) emit.View {
+	t.Helper()
+	root, err := filepath.Abs(filepath.Join("..", "..", "..", "..", "testdata", "corpus"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := application.DefaultConfig()
+	cfg.RootPath = root
+	scanner := fsscanner.New(fsscanner.Config{})
+	parserFac := mdparser.NewFactory(mdparser.Config{})
+	pipe := application.NewPipeline(cfg, scanner, parserFac, nil)
+	_, res, err := pipe.Run(context.Background())
+	if err != nil {
+		t.Fatalf("pipeline run: %v", err)
+	}
+	return emit.BuildView(res)
+}
+
+// TestJSON_RoundTrip proves the emitted bytes unmarshal back into the typed
+// Document (the structural round-trip contract) and re-marshal identically.
+func TestJSON_RoundTrip(t *testing.T) {
+	v := buildCorpusView(t)
+	b, err := graphjson.JSON(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc graphjson.Document
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("graph.json does not round-trip into the typed Document: %v", err)
+	}
+	if doc.SchemaVersion != graphjson.SchemaVersion {
+		t.Errorf("schemaVersion = %d, want %d", doc.SchemaVersion, graphjson.SchemaVersion)
+	}
+	if doc.Tool != "doctopus" {
+		t.Errorf("tool = %q, want doctopus", doc.Tool)
+	}
+	// Re-marshal the typed struct and compare to the original (fixed float
+	// precision means the re-emit is identical).
+	b2, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2 = append(b2, '\n')
+	if !bytes.Equal(b, b2) {
+		t.Errorf("re-marshal of round-tripped Document differs from original")
+	}
+}
+
+// TestJSON_ByteStable runs the emitter twice over two independent pipeline runs
+// and asserts identical bytes — including float formatting (the P3 concern).
+func TestJSON_ByteStable(t *testing.T) {
+	b1, err := graphjson.JSON(buildCorpusView(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2, err := graphjson.JSON(buildCorpusView(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(b1, b2) {
+		t.Error("graph.json is not byte-stable across two pipeline runs")
+	}
+}
+
+// TestJSON_FloatFixedPrecision asserts every HITS score renders at exactly the
+// fixed precision (six decimal places), so output cannot drift across runs.
+func TestJSON_FloatFixedPrecision(t *testing.T) {
+	b, err := graphjson.JSON(buildCorpusView(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Every node hubScore/authorityScore and every hits score is a number with
+	// exactly 6 fractional digits in the raw text.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatal(err)
+	}
+	var nodes []map[string]json.RawMessage
+	if err := json.Unmarshal(raw["nodes"], &nodes); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range nodes {
+		for _, k := range []string{"hubScore", "authorityScore"} {
+			s := string(n[k])
+			if !hasNFractionalDigits(s, graphjson.HITSFloatPrecision) {
+				t.Errorf("node %s = %s, want %d fractional digits", k, s, graphjson.HITSFloatPrecision)
+			}
+		}
+	}
+
+	// The hits.topHubs / topAuthorities scores must render at the same fixed
+	// precision (they marshal through the same Float type, but the contract is
+	// asserted explicitly so a future refactor of that path is caught).
+	var hits map[string]json.RawMessage
+	if err := json.Unmarshal(raw["hits"], &hits); err != nil {
+		t.Fatal(err)
+	}
+	for _, group := range []string{"topHubs", "topAuthorities"} {
+		var ranked []map[string]json.RawMessage
+		if err := json.Unmarshal(hits[group], &ranked); err != nil {
+			t.Fatalf("unmarshal hits.%s: %v", group, err)
+		}
+		if len(ranked) == 0 {
+			t.Errorf("hits.%s is empty; expected ranked entries in the fixture", group)
+		}
+		for _, r := range ranked {
+			s := string(r["score"])
+			if !hasNFractionalDigits(s, graphjson.HITSFloatPrecision) {
+				t.Errorf("hits.%s score = %s, want %d fractional digits", group, s, graphjson.HITSFloatPrecision)
+			}
+		}
+	}
+}
+
+func hasNFractionalDigits(numText string, n int) bool {
+	dot := bytes.IndexByte([]byte(numText), '.')
+	if dot < 0 {
+		return false
+	}
+	return len(numText)-dot-1 == n
+}
+
+// TestJSON_IndeterminateReachability is fix #8: when no root set is found,
+// reachability is INDETERMINATE and graph.json must NOT mark every node
+// unreachable (ADR 0007 — indeterminate is not unreachability). It must report
+// reachability.indeterminate=true and every node reachable=true.
+func TestJSON_IndeterminateReachability(t *testing.T) {
+	// A corpus with no README/index and no type:index front matter has an empty
+	// root set, so reachability is indeterminate.
+	c := corpus.NewCorpus()
+	for _, id := range []string{"docs/a.md", "docs/b.md"} {
+		d := &corpus.Document{
+			ID: corpusID(id),
+			Root: &corpus.Section{Level: 0, Children: []*corpus.Section{
+				{Level: 1, Text: "T", Slug: "t", StartLine: 1, EndLine: 2},
+			}},
+		}
+		if err := c.Add(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g := graphmodel.BuildReferenceGraph(c, nil, graphmodel.BuildOptions{})
+	m := graphmodel.Analyze(g, c, graphmodel.AnalyzeOptions{})
+	v := emit.BuildView(application.Result{DocumentCount: c.Len(), Metrics: m, Corpus: c})
+
+	doc := graphjson.Build(v)
+	if !doc.Reachability.Indeterminate {
+		t.Fatalf("expected reachability.indeterminate=true for an empty root set")
+	}
+	if len(doc.Nodes) == 0 {
+		t.Fatal("expected nodes")
+	}
+	for _, n := range doc.Nodes {
+		if !n.Reachable {
+			t.Errorf("node %q marked unreachable under indeterminate reachability; want reachable=true", n.ID)
+		}
+	}
+	if len(doc.Unreachable) != 0 {
+		t.Errorf("unreachable list must be empty under indeterminate reachability, got %v", doc.Unreachable)
+	}
+}
+
+// TestJSON_HostileTitleEscaped confirms a hostile title is JSON-escaped (never
+// breaks the document). encoding/json handles this; we assert it.
+func TestJSON_HostileTitleEscaped(t *testing.T) {
+	v := buildCorpusView(t)
+	doc := graphjson.Build(v)
+	// Inject a hostile title directly into the typed doc and marshal: a title with
+	// quotes, a brace, a newline and a backslash must survive as a valid string.
+	hostile := "evil\"}{\n\\title"
+	if len(doc.Nodes) == 0 {
+		t.Skip("no nodes")
+	}
+	doc.Nodes[0].Title = hostile
+	b, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal with hostile title failed: %v", err)
+	}
+	// It must still parse, and the title must round-trip exactly.
+	var back graphjson.Document
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatalf("hostile-title doc does not parse (escaping broke the JSON): %v", err)
+	}
+	if back.Nodes[0].Title != hostile {
+		t.Errorf("hostile title did not round-trip: got %q want %q", back.Nodes[0].Title, hostile)
+	}
+}
+
+// TestJSON_ValidatesAgainstSchema validates the emitted document against the
+// committed JSON Schema (docs/schemas/graph.schema.json). We use a minimal,
+// dependency-free validator that enforces the schema's `required` lists and
+// `additionalProperties:false` (the two properties that catch a shape drift):
+// adding/removing/renaming a field fails this test, keeping the type and the
+// published schema in lockstep without pulling in a JSON-schema library.
+func TestJSON_ValidatesAgainstSchema(t *testing.T) {
+	b, err := graphjson.JSON(buildCorpusView(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data any
+	if err := json.Unmarshal(b, &data); err != nil {
+		t.Fatal(err)
+	}
+	schemaPath, err := filepath.Abs(filepath.Join("..", "..", "..", "..", "docs", "schemas", "graph.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(sb, &schema); err != nil {
+		t.Fatalf("parse schema: %v", err)
+	}
+	if errs := validateNode(data, schema, schema, "$"); len(errs) > 0 {
+		sort.Strings(errs)
+		t.Errorf("graph.json does not satisfy graph.schema.json:\n  %v", errs)
+	}
+}
+
+// validateNode is a minimal JSON-Schema (Draft 2020-12 subset) checker: it
+// resolves local $ref, and enforces type, required, additionalProperties:false,
+// const, enum, and recurses into properties / array items. It is intentionally
+// small — just enough to assert the shape contract this repo publishes.
+func validateNode(data any, schema, root map[string]any, path string) []string {
+	if ref, ok := schema["$ref"].(string); ok {
+		resolved := resolveRef(ref, root)
+		if resolved == nil {
+			return []string{fmt.Sprintf("%s: unresolved $ref %q", path, ref)}
+		}
+		return validateNode(data, resolved, root, path)
+	}
+
+	var errs []string
+	switch schema["type"] {
+	case "object":
+		m, ok := data.(map[string]any)
+		if !ok {
+			return []string{fmt.Sprintf("%s: want object", path)}
+		}
+		props, _ := schema["properties"].(map[string]any)
+		// required
+		if req, ok := schema["required"].([]any); ok {
+			for _, r := range req {
+				name := r.(string)
+				if _, present := m[name]; !present {
+					errs = append(errs, fmt.Sprintf("%s: missing required %q", path, name))
+				}
+			}
+		}
+		// additionalProperties:false → no unknown keys
+		if ap, ok := schema["additionalProperties"].(bool); ok && !ap {
+			for k := range m {
+				if _, known := props[k]; !known {
+					errs = append(errs, fmt.Sprintf("%s: unexpected property %q", path, k))
+				}
+			}
+		}
+		for k, v := range m {
+			if ps, ok := props[k].(map[string]any); ok {
+				errs = append(errs, validateNode(v, ps, root, path+"."+k)...)
+			}
+		}
+	case "array":
+		arr, ok := data.([]any)
+		if !ok {
+			return []string{fmt.Sprintf("%s: want array", path)}
+		}
+		if items, ok := schema["items"].(map[string]any); ok {
+			for i, e := range arr {
+				errs = append(errs, validateNode(e, items, root, fmt.Sprintf("%s[%d]", path, i))...)
+			}
+		}
+	case "string":
+		if _, ok := data.(string); !ok {
+			errs = append(errs, fmt.Sprintf("%s: want string", path))
+		}
+	case "integer":
+		// JSON numbers decode to float64; integer means no fractional part.
+		f, ok := data.(float64)
+		if !ok || f != float64(int64(f)) {
+			errs = append(errs, fmt.Sprintf("%s: want integer", path))
+		}
+	case "number":
+		if _, ok := data.(float64); !ok {
+			errs = append(errs, fmt.Sprintf("%s: want number", path))
+		}
+	case "boolean":
+		if _, ok := data.(bool); !ok {
+			errs = append(errs, fmt.Sprintf("%s: want boolean", path))
+		}
+	}
+
+	if c, ok := schema["const"]; ok {
+		if !jsonEqual(data, c) {
+			errs = append(errs, fmt.Sprintf("%s: const mismatch (want %v)", path, c))
+		}
+	}
+	if en, ok := schema["enum"].([]any); ok {
+		matched := false
+		for _, e := range en {
+			if jsonEqual(data, e) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			errs = append(errs, fmt.Sprintf("%s: %v not in enum", path, data))
+		}
+	}
+	return errs
+}
+
+func resolveRef(ref string, root map[string]any) map[string]any {
+	// Only local "#/$defs/Name" refs are used.
+	const prefix = "#/$defs/"
+	if len(ref) <= len(prefix) || ref[:len(prefix)] != prefix {
+		return nil
+	}
+	defs, ok := root["$defs"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	d, ok := defs[ref[len(prefix):]].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return d
+}
+
+func jsonEqual(a, b any) bool {
+	// const/enum values in the schema are decoded the same way as data (float64
+	// for numbers), so a direct compare works for the scalar cases we use.
+	if af, ok := a.(float64); ok {
+		if bf, ok := b.(float64); ok {
+			return af == bf
+		}
+	}
+	return a == b
+}

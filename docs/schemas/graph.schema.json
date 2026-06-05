@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stacklok.com/doctopus/schemas/graph.schema.json",
+  "title": "doctopus graph.json",
+  "description": "The primary machine-/LLM-queryable manifest of an analyzed markdown corpus emitted by `doctopus graph --format json`. This schema is the published contract; the emitter type internal/infrastructure/emit/graphjson.Document is kept in lockstep and a test validates emitted bytes against this document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "tool",
+    "generatedNote",
+    "summary",
+    "nodes",
+    "edges",
+    "sections",
+    "orphans",
+    "unreachable",
+    "brokenLinks",
+    "brokenAnchors",
+    "ambiguous",
+    "components",
+    "hits",
+    "gaps",
+    "rootSet",
+    "reachability"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "tool": { "type": "string" },
+    "generatedNote": { "type": "string" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "documents", "sections", "edges", "references", "components",
+        "orphans", "unreachable", "brokenLinks", "brokenAnchors",
+        "ambiguous", "knowledgeGaps"
+      ],
+      "properties": {
+        "documents": { "type": "integer", "minimum": 0 },
+        "sections": { "type": "integer", "minimum": 0 },
+        "edges": { "type": "integer", "minimum": 0 },
+        "references": { "type": "integer", "minimum": 0 },
+        "components": { "type": "integer", "minimum": 0 },
+        "orphans": { "type": "integer", "minimum": 0 },
+        "unreachable": { "type": "integer", "minimum": 0 },
+        "brokenLinks": { "type": "integer", "minimum": 0 },
+        "brokenAnchors": { "type": "integer", "minimum": 0 },
+        "ambiguous": { "type": "integer", "minimum": 0 },
+        "knowledgeGaps": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id", "kind", "title", "path", "description", "category",
+          "inDegree", "outDegree", "component", "hubScore", "authorityScore",
+          "reachable", "orphan", "intentionalOrphan"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "type": "string", "enum": ["doc", "section"] },
+          "title": { "type": "string" },
+          "path": { "type": "string" },
+          "description": { "type": "string" },
+          "category": { "type": "string" },
+          "inDegree": { "type": "integer", "minimum": 0 },
+          "outDegree": { "type": "integer", "minimum": 0 },
+          "component": { "type": "string" },
+          "hubScore": { "type": "number", "minimum": 0 },
+          "authorityScore": { "type": "number", "minimum": 0 },
+          "reachable": { "type": "boolean" },
+          "orphan": { "type": "boolean" },
+          "intentionalOrphan": { "type": "boolean" }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to", "type", "health"],
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "type": { "type": "string" },
+          "health": { "type": "string" }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "doc", "slug", "level", "title"],
+        "properties": {
+          "id": { "type": "string" },
+          "doc": { "type": "string" },
+          "slug": { "type": "string" },
+          "level": { "type": "integer", "minimum": 1 },
+          "title": { "type": "string" }
+        }
+      }
+    },
+    "orphans": { "type": "array", "items": { "type": "string" } },
+    "unreachable": { "type": "array", "items": { "type": "string" } },
+    "brokenLinks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "line", "target", "detail"],
+        "properties": {
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "target": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "brokenAnchors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "line", "target", "expectedSlug", "detail"],
+        "properties": {
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "target": { "type": "string" },
+          "expectedSlug": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "ambiguous": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "line", "target", "candidates", "detail"],
+        "properties": {
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "target": { "type": "string" },
+          "candidates": { "type": "array", "items": { "type": "string" } },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wcc", "scc"],
+      "properties": {
+        "wcc": { "$ref": "#/$defs/componentList" },
+        "scc": { "$ref": "#/$defs/componentList" }
+      }
+    },
+    "hits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topHubs", "topAuthorities"],
+      "properties": {
+        "topHubs": { "$ref": "#/$defs/rankedList" },
+        "topAuthorities": { "$ref": "#/$defs/rankedList" }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["componentA", "componentB", "representativeA", "representativeB"],
+        "properties": {
+          "componentA": { "type": "string" },
+          "componentB": { "type": "string" },
+          "representativeA": { "type": "string" },
+          "representativeB": { "type": "string" }
+        }
+      }
+    },
+    "rootSet": { "type": "array", "items": { "type": "string" } },
+    "reachability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["indeterminate"],
+      "properties": { "indeterminate": { "type": "boolean" } }
+    }
+  },
+  "$defs": {
+    "componentList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "members"],
+        "properties": {
+          "id": { "type": "string" },
+          "members": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "rankedList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "score"],
+        "properties": {
+          "id": { "type": "string" },
+          "score": { "type": "number", "minimum": 0 }
+        }
+      }
+    }
+  }
+}
