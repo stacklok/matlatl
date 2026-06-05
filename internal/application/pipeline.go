@@ -170,7 +170,13 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 
 	// Stage 4: Build the reference graph (documents + sections, contains +
 	// navigational reference edges; see ADR 0007).
-	graph := graphmodel.BuildReferenceGraph(c, refs, graphmodel.BuildOptions{})
+	graph := graphmodel.BuildReferenceGraph(c, refs, graphmodel.BuildOptions{
+		// Under --strict, a directory link validates but does not vouch for the
+		// folder's contents (ADR 0008): non-index siblings still surface as
+		// orphans/unreachable. The default (lenient) policy lets a directory link
+		// confer reachability on the folder's direct children.
+		StrictDirectoryLinks: p.cfg.Strict,
+	})
 
 	// Stage 5: Analyze. Run reachability/orphan/component/HITS/gap analysis over
 	// the document projection, then turn reference + graph findings into a frozen

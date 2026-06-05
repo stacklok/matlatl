@@ -134,13 +134,22 @@ func (r *Resolver) resolveRelative(raw RawReference) Reference {
 		if r.catalog.HasDocument(id) {
 			return r.withAnchor(raw, id)
 		}
+		// A markdown path that is not a known document may still name a directory
+		// in the corpus (rare, e.g. a folder literally named "x.md"), so attempt a
+		// directory resolution before falling back to Broken (ADR 0008).
+		if dir, ok := r.resolveDirectory(raw, cleaned); ok {
+			return dir
+		}
 		return ref(raw, ResolvedTarget{Kind: TargetNone}, Broken)
 	}
 
-	// Non-markdown path: a known doc (rare) wins, else an existing asset →
-	// NonNote, else Broken.
+	// Non-markdown path: a known doc (rare) wins, else a directory in the corpus
+	// (ADR 0008), else an existing asset → NonNote, else Broken.
 	if r.catalog.HasDocument(id) {
 		return r.withAnchor(raw, id)
+	}
+	if dir, ok := r.resolveDirectory(raw, cleaned); ok {
+		return dir
 	}
 	if r.assets != nil && r.assets.AssetExists(cleaned) {
 		return ref(raw, ResolvedTarget{Kind: TargetAsset, DocumentID: id}, NonNote)
@@ -168,6 +177,14 @@ func (r *Resolver) resolveWikilink(raw RawReference) Reference {
 			return r.withAnchor(raw, aliases[0])
 		} else if len(aliases) > 1 {
 			return refAmbiguous(raw, aliases)
+		}
+		// A wikilink may name a directory in the corpus (ADR 0008): clean the
+		// target as a root-relative path (rejecting root escapes) and attempt a
+		// directory resolution before declaring it Broken.
+		if cleaned := cleanWikilinkPath(raw.RawTarget); cleaned != "" {
+			if dir, ok := r.resolveDirectory(raw, cleaned); ok {
+				return dir
+			}
 		}
 		return ref(raw, ResolvedTarget{Kind: TargetNone}, Broken)
 	default:
@@ -323,6 +340,72 @@ func sortedUnique(ids []identity.DocumentID) []identity.DocumentID {
 	}
 	slices.Sort(ids)
 	return slices.Compact(ids)
+}
+
+// resolveDirectory attempts to classify cleaned (a cleaned, in-root,
+// slash-separated path) as a DIRECTORY in the corpus (ADR 0008). It is pure: it
+// answers "is this a directory?" purely from the Catalog of known DocumentIDs —
+// a path is a directory iff at least one known markdown document lives DIRECTLY
+// in it (one level; the document's Dir() equals the path). The out-of-root guard
+// has already run before this is called, so cleaned is always in-root.
+//
+// On success it returns a Valid TargetDirectory reference carrying the directory
+// path, its index document (README.md / index.md, if present) and the sorted set
+// of direct-child markdown documents, and ok=true. If cleaned names no such
+// directory (no markdown lives directly under it), it returns ok=false and the
+// caller falls through to its existing Broken/asset handling.
+func (r *Resolver) resolveDirectory(raw RawReference, cleaned string) (Reference, bool) {
+	children, index, ok := r.directoryContents(cleaned)
+	if !ok {
+		return Reference{}, false
+	}
+	return ref(raw, ResolvedTarget{
+		Kind:       TargetDirectory,
+		Directory:  cleaned,
+		DocumentID: index, // empty when the directory has no index doc
+		Children:   children,
+	}, Valid), true
+}
+
+// directoryContents enumerates the markdown documents located DIRECTLY in dir
+// (one level — no recursion), and identifies the directory index document
+// (README.md / index.md, case-insensitive, ADR 0007/0008) if one exists. It
+// returns ok=false when no markdown document lives directly under dir (dir is
+// not a documentation directory in the corpus). Children are sorted (the catalog
+// already returns sorted DocumentIDs; we preserve that order). This is a pure set
+// computation over the Catalog — no filesystem access.
+func (r *Resolver) directoryContents(dir string) (children []identity.DocumentID, index identity.DocumentID, ok bool) {
+	for _, id := range r.catalog.DocumentIDs() {
+		if id.Dir() != dir {
+			continue
+		}
+		children = append(children, id)
+	}
+	if len(children) == 0 {
+		return nil, "", false
+	}
+	// Sort defensively so the result is deterministic regardless of the catalog's
+	// iteration order, and pick the lowest-sorted index doc as the canonical one
+	// (README.md sorts before index.md) for a stable primary target.
+	slices.Sort(children)
+	for _, id := range children {
+		if identity.IsDirectoryIndex(id.Base()) {
+			index = id
+			break
+		}
+	}
+	return children, index, true
+}
+
+// cleanWikilinkPath cleans a wikilink target into a root-relative slash path
+// suitable for directory lookup, returning "" if it is empty or escapes the root
+// (ADR 0003 — such a target is never inspected as a directory).
+func cleanWikilinkPath(target string) string {
+	cleaned := path.Clean(strings.TrimSpace(strings.ReplaceAll(target, "\\", "/")))
+	if identity.EscapesRoot(cleaned) {
+		return ""
+	}
+	return cleaned
 }
 
 // resolveInRoot joins a relative target onto the origin document's directory and

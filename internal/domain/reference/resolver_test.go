@@ -1,6 +1,7 @@
 package reference
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stacklok/doctopus/internal/domain/identity"
@@ -347,6 +348,135 @@ func TestResolve_InvalidPolicyFallsBackToDefault(t *testing.T) {
 	// Default is longest-suffix, so extensionless 'guide' resolves.
 	if got := r.Resolve(RawReference{Origin: "x.md", RawTarget: "guide", Type: Wikilink}); got.Health != Valid {
 		t.Errorf("invalid policy did not fall back to longest-suffix; health = %s", got.Health)
+	}
+}
+
+// TestResolve_DirectoryLinks covers directory-link resolution (ADR 0008): a
+// relative link to a directory resolves Valid with TargetDirectory, finds the
+// index doc (if any), enumerates direct children one level deep, treats
+// trailing-slash and no-slash as equivalent, keeps the out-of-root guard, and
+// stays Broken for a path that is neither a file nor a markdown directory.
+func TestResolve_DirectoryLinks(t *testing.T) {
+	// Corpus: docs/adr has an index (README.md) + two non-indexed docs; docs/img
+	// has only an asset (no markdown). docs/ itself has a direct child guide.md
+	// plus the nested adr/ subtree.
+	cat := newFakeCatalog(
+		"README.md",
+		"docs/guide.md",
+		"docs/adr/README.md",
+		"docs/adr/0001.md",
+		"docs/adr/0002.md",
+		"notes/index.md",
+		"plain/a.md",
+		"plain/b.md",
+	)
+	assets := fakeAssets{"docs/img/logo.png": {}}
+	r := NewResolver(cat, assets, LongestSuffix)
+
+	tests := []struct {
+		name         string
+		raw          RawReference
+		wantHealth   LinkHealth
+		wantKind     TargetKind
+		wantDir      string
+		wantIndex    identity.DocumentID
+		wantChildren []identity.DocumentID
+	}{
+		{
+			name:       "dir with index (trailing slash)",
+			raw:        RawReference{Origin: "README.md", RawTarget: "docs/adr/", Type: RelativeLink},
+			wantHealth: Valid, wantKind: TargetDirectory, wantDir: "docs/adr",
+			wantIndex:    "docs/adr/README.md",
+			wantChildren: []identity.DocumentID{"docs/adr/0001.md", "docs/adr/0002.md", "docs/adr/README.md"},
+		},
+		{
+			name:       "dir with index (no slash) is equivalent",
+			raw:        RawReference{Origin: "README.md", RawTarget: "docs/adr", Type: RelativeLink},
+			wantHealth: Valid, wantKind: TargetDirectory, wantDir: "docs/adr",
+			wantIndex:    "docs/adr/README.md",
+			wantChildren: []identity.DocumentID{"docs/adr/0001.md", "docs/adr/0002.md", "docs/adr/README.md"},
+		},
+		{
+			name:       "dir with index.md index",
+			raw:        RawReference{Origin: "README.md", RawTarget: "notes/", Type: RelativeLink},
+			wantHealth: Valid, wantKind: TargetDirectory, wantDir: "notes",
+			wantIndex:    "notes/index.md",
+			wantChildren: []identity.DocumentID{"notes/index.md"},
+		},
+		{
+			name:       "dir with NO index still valid, children enumerated",
+			raw:        RawReference{Origin: "README.md", RawTarget: "plain/", Type: RelativeLink},
+			wantHealth: Valid, wantKind: TargetDirectory, wantDir: "plain",
+			wantIndex:    "",
+			wantChildren: []identity.DocumentID{"plain/a.md", "plain/b.md"},
+		},
+		{
+			name:       "nested dir reaches direct children only (one level)",
+			raw:        RawReference{Origin: "README.md", RawTarget: "docs", Type: RelativeLink},
+			wantHealth: Valid, wantKind: TargetDirectory, wantDir: "docs",
+			wantIndex: "",
+			// docs/adr/* are NOT direct children of docs (they live in docs/adr).
+			wantChildren: []identity.DocumentID{"docs/guide.md"},
+		},
+		{
+			name:       "dir from a wikilink",
+			raw:        RawReference{Origin: "x.md", RawTarget: "plain", Type: Wikilink},
+			wantHealth: Valid, wantKind: TargetDirectory, wantDir: "plain",
+			wantChildren: []identity.DocumentID{"plain/a.md", "plain/b.md"},
+		},
+		{
+			name:       "directory with only a non-markdown asset is Broken",
+			raw:        RawReference{Origin: "README.md", RawTarget: "docs/img/", Type: RelativeLink},
+			wantHealth: Broken, wantKind: TargetNone,
+		},
+		{
+			name:       "path that is neither file nor dir is Broken",
+			raw:        RawReference{Origin: "README.md", RawTarget: "ghost/", Type: RelativeLink},
+			wantHealth: Broken, wantKind: TargetNone,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ref := r.Resolve(tt.raw)
+			if ref.Health != tt.wantHealth {
+				t.Fatalf("health = %s, want %s", ref.Health, tt.wantHealth)
+			}
+			if ref.Target.Kind != tt.wantKind {
+				t.Fatalf("kind = %s, want %s", ref.Target.Kind, tt.wantKind)
+			}
+			if tt.wantKind != TargetDirectory {
+				return
+			}
+			if ref.Target.Directory != tt.wantDir {
+				t.Errorf("directory = %q, want %q", ref.Target.Directory, tt.wantDir)
+			}
+			if ref.Target.DocumentID != tt.wantIndex {
+				t.Errorf("index = %q, want %q", ref.Target.DocumentID, tt.wantIndex)
+			}
+			if !slices.Equal(ref.Target.Children, tt.wantChildren) {
+				t.Errorf("children = %v, want %v", ref.Target.Children, tt.wantChildren)
+			}
+		})
+	}
+}
+
+// TestResolve_DirectoryEscapeNeverInspected is the ADR 0003/0008 ordering test: a
+// directory-looking target that escapes the root is Broken and the catalog/asset
+// lookups are never consulted to enumerate it.
+func TestResolve_DirectoryEscapeNeverInspected(t *testing.T) {
+	cat := newFakeCatalog("docs/links.md", "../outside/secret.md")
+	probed := false
+	probe := assetProbe(func(string) bool { probed = true; return true })
+	r := NewResolver(cat, probe, LongestSuffix)
+
+	// "../../etc/" escapes root → Broken, never inspected as a directory.
+	ref := r.Resolve(RawReference{Origin: "docs/links.md", RawTarget: "../../etc/", Type: RelativeLink})
+	if ref.Health != Broken || ref.Target.Kind != TargetNone {
+		t.Fatalf("escaping dir link = %s/%s, want broken/none", ref.Health, ref.Target.Kind)
+	}
+	if probed {
+		t.Error("asset probe consulted for an out-of-root directory target (must never read)")
 	}
 }
 

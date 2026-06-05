@@ -124,6 +124,10 @@ type ReferenceGraph struct {
 	nodes  map[NodeID]Node
 	edges  []Edge
 	navSet map[reference.LinkType]struct{}
+	// strictDirLinks mirrors BuildOptions.StrictDirectoryLinks: when true, a
+	// directory link contributes only its primary index edge, not child edges
+	// (ADR 0008).
+	strictDirLinks bool
 
 	// documents is the sorted set of document identities (vertices of kind
 	// document), cached for deterministic iteration.
@@ -141,6 +145,14 @@ type BuildOptions struct {
 	// NavigationalTypes overrides the default navigational LinkType set. Empty
 	// means DefaultNavigationalTypes.
 	NavigationalTypes []reference.LinkType
+	// StrictDirectoryLinks controls how a directory link (TargetDirectory)
+	// confers reachability (ADR 0008). When false (default, the lenient "vouch"
+	// policy) a directory link adds navigational edges Origin → each direct-child
+	// document, so the folder's contents are reachable. When true (the
+	// documentation-hygiene hardline, wired to --strict) a directory link adds
+	// only the primary Origin → index edge (when an index exists) and does NOT
+	// vouch for the directory's other contents.
+	StrictDirectoryLinks bool
 }
 
 // BuildReferenceGraph assembles the graph from a frozen corpus and the resolved
@@ -159,10 +171,11 @@ func BuildReferenceGraph(c *corpus.Corpus, refs []reference.Reference, opts Buil
 	}
 
 	g := &ReferenceGraph{
-		nodes:   make(map[NodeID]Node),
-		navSet:  navSet,
-		projAdj: make(map[identity.DocumentID][]identity.DocumentID),
-		projRev: make(map[identity.DocumentID][]identity.DocumentID),
+		nodes:          make(map[NodeID]Node),
+		navSet:         navSet,
+		strictDirLinks: opts.StrictDirectoryLinks,
+		projAdj:        make(map[identity.DocumentID][]identity.DocumentID),
+		projRev:        make(map[identity.DocumentID][]identity.DocumentID),
 	}
 
 	// Vertices + CONTAINS edges, in sorted document order.
@@ -220,6 +233,13 @@ func (g *ReferenceGraph) addReferenceEdge(c *corpus.Corpus, ref reference.Refere
 	if ref.Health != reference.Valid {
 		return
 	}
+	// Directory links (ADR 0008) contribute their own edge set: the primary edge
+	// to the index doc (if any) plus, under the lenient policy, an edge to each
+	// direct-child document so the folder's contents are reachable.
+	if ref.Target.Kind == reference.TargetDirectory {
+		g.addDirectoryEdges(c, ref)
+		return
+	}
 	targetDoc := ref.Target.DocumentID
 	if targetDoc == "" {
 		return
@@ -244,6 +264,38 @@ func (g *ReferenceGraph) addReferenceEdge(c *corpus.Corpus, ref reference.Refere
 
 	from := g.originNode(c, ref)
 	g.edges = append(g.edges, Edge{From: from, To: to, Kind: EdgeReference, Type: ref.Type})
+}
+
+// addDirectoryEdges adds the navigational edges for a directory link (ADR 0008).
+// The origin is the containing section (or document) of the reference. Under the
+// default (lenient) policy it adds Origin → each direct-child document so the
+// folder's contents are reachable; the index doc, if any, is among the children.
+// Under the strict policy it adds only the primary Origin → index edge (when an
+// index exists), and nothing when the directory has no index. Only in-corpus
+// document targets become edges; the edge LinkType mirrors the reference so the
+// navigational-set filter in the projection treats it like any other link.
+func (g *ReferenceGraph) addDirectoryEdges(c *corpus.Corpus, ref reference.Reference) {
+	from := g.originNode(c, ref)
+	add := func(target identity.DocumentID) {
+		if target == "" {
+			return
+		}
+		if _, ok := c.Get(target); !ok {
+			return
+		}
+		to := NodeIDForDocument(target)
+		g.edges = append(g.edges, Edge{From: from, To: to, Kind: EdgeReference, Type: ref.Type})
+	}
+
+	if g.strictDirLinks {
+		// Hardline: resolve/validate but vouch only for the index, not contents.
+		add(ref.Target.DocumentID)
+		return
+	}
+	// Lenient (default): vouch for every direct child (the index is among them).
+	for _, child := range ref.Target.Children {
+		add(child)
+	}
 }
 
 // originNode resolves the origin vertex of a reference: the containing section

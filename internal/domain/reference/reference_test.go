@@ -51,7 +51,7 @@ func TestLinkHealth_StringValid(t *testing.T) {
 }
 
 func TestTargetKind_StringValid(t *testing.T) {
-	all := []TargetKind{TargetNone, TargetDocument, TargetSection, TargetAsset, TargetExternal}
+	all := []TargetKind{TargetNone, TargetDocument, TargetSection, TargetAsset, TargetExternal, TargetDirectory}
 	if TargetNone != 0 {
 		t.Error("TargetNone must be the zero value")
 	}

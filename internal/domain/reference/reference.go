@@ -127,6 +127,11 @@ const (
 	TargetAsset
 	// TargetExternal means the reference points to an off-corpus resource.
 	TargetExternal
+	// TargetDirectory means the reference resolved to a directory in the corpus
+	// (a folder containing markdown). See ADR 0008. The ResolvedTarget then
+	// carries Directory (the folder path), DocumentID (the directory's index doc,
+	// if any), and Children (the markdown docs directly in the folder).
+	TargetDirectory
 )
 
 // String returns the canonical name of the target kind.
@@ -142,6 +147,8 @@ func (k TargetKind) String() string {
 		return "asset"
 	case TargetExternal:
 		return "external"
+	case TargetDirectory:
+		return "directory"
 	default:
 		return "unknown"
 	}
@@ -149,7 +156,7 @@ func (k TargetKind) String() string {
 
 // Valid reports whether k is a defined TargetKind.
 func (k TargetKind) Valid() bool {
-	return k >= TargetNone && k <= TargetExternal
+	return k >= TargetNone && k <= TargetDirectory
 }
 
 // ResolutionPolicy selects how a raw target string is mapped to a DocumentID.
@@ -209,10 +216,19 @@ type ResolvedTarget struct {
 	// Kind tags which fields are meaningful.
 	Kind TargetKind
 	// DocumentID is set when Kind is TargetDocument, TargetSection or
-	// TargetAsset.
+	// TargetAsset. For TargetDirectory it is the directory's index document
+	// (README.md / index.md) when one exists, else empty (ADR 0008).
 	DocumentID identity.DocumentID
 	// Anchor is the resolved section slug, set when Kind is TargetSection.
 	Anchor string
+	// Directory is the cleaned directory path, set only when Kind is
+	// TargetDirectory (ADR 0008).
+	Directory string
+	// Children is the sorted set of markdown documents located DIRECTLY in the
+	// directory (one level — no recursion), set only when Kind is
+	// TargetDirectory. The index document, if any, is included. These are the
+	// docs a directory link makes reachable under the default policy (ADR 0008).
+	Children []identity.DocumentID
 }
 
 // Reference is a fully classified edge: the raw edge, its resolved target, and

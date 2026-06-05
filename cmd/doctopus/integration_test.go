@@ -457,6 +457,50 @@ func TestIntegration_EmitBundle(t *testing.T) {
 	assertNothingEscaped(t, outDir, want)
 }
 
+func dirlinksFixture(t *testing.T) string {
+	t.Helper()
+	p, err := filepath.Abs(filepath.Join("..", "..", "testdata", "dirlinks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// TestIntegration_DirectoryLinks exercises ADR 0008 end-to-end: a directory link
+// ([the ADRs](adr/)) is NOT a broken link, and the folder's docs are reachable
+// (no orphans) under the default policy. Under --strict the directory link does
+// not vouch for the folder's non-index contents, so they surface as findings and
+// the run fails.
+func TestIntegration_DirectoryLinks(t *testing.T) {
+	// Default policy: directory link resolves, contents reachable, exit 0.
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"check", dirlinksFixture(t)}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("default dirlinks check code = %v, want ExitOK (stdout=%q stderr=%q)", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "0 broken link(s)") {
+		t.Errorf("directory link reported as broken: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "0 orphan(s)") {
+		t.Errorf("folder contents reported as orphans under default policy: %q", out.String())
+	}
+
+	// Strict policy: directory link validates but does not vouch; the two
+	// non-index ADRs surface as orphans → exit 1.
+	out.Reset()
+	errOut.Reset()
+	scode := runArgs(context.Background(), []string{"check", dirlinksFixture(t), "--strict"}, &out, &errOut)
+	if scode != platform.ExitFindings {
+		t.Fatalf("strict dirlinks check code = %v, want ExitFindings (stdout=%q)", scode, out.String())
+	}
+	if !strings.Contains(out.String(), "0 broken link(s)") {
+		t.Errorf("strict still must not break the directory link itself: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "2 orphan(s)") {
+		t.Errorf("strict should surface the 2 non-index siblings as orphans: %q", out.String())
+	}
+}
+
 // TestIntegration_EmitRequiresOut: `emit` without --out is a usage error.
 func TestIntegration_EmitRequiresOut(t *testing.T) {
 	var out, errOut bytes.Buffer
