@@ -22,10 +22,14 @@ then renders the result for two audiences:
 
 ## Status
 
-🚧 Early development — built phase by phase (see [`docs/architecture.md`](docs/architecture.md)
-and the [ADRs](docs/adr/)). Not yet released.
+✅ Feature-complete across phases P0–P6: secure scan + parse, link/anchor
+resolution, the reference graph with orphan/unreachable/component/HITS/gap
+analysis, human emitters (terminal, Markdown, Mermaid, DOT, index), LLM
+emitters (`graph.json`, the `llms.txt` family, actionable `findings.json`),
+fan-out parsing, and a read-only MCP server. See [`docs/architecture.md`](docs/architecture.md)
+and the [ADRs](docs/adr/).
 
-## Quick start (planned)
+## Quick start
 
 ```console
 $ doctopus .                 # scan + analyze, print the terminal report
@@ -46,9 +50,11 @@ that prior art leaves open.
 
 ## Documentation
 
+- [User guide](docs/user-guide.md) — commands, flags, CI usage, the LLM artifacts
+- [Developer guide](docs/dev-guide.md) — layout, rules, testing, how to contribute
 - [Architecture](docs/architecture.md)
 - [Architecture Decision Records](docs/adr/)
-- Developer guide and user guide land alongside the relevant phases.
+- [graph.json schema](docs/schemas/graph.schema.json)
 
 ## License
 
