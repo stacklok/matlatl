@@ -2,8 +2,10 @@ package application
 
 import (
 	"context"
+	"time"
 
 	"github.com/stacklok/doctopus/internal/domain/corpus"
+	"github.com/stacklok/doctopus/internal/domain/identity"
 )
 
 // The interfaces in this file are the pipeline's real test seams (ADR 0004).
@@ -14,20 +16,82 @@ import (
 // interfaces for collaborators that lack a real seam.
 
 // ScannedFile is a candidate file discovered by a FileScanner, carrying the
-// information the parser needs without performing any parsing itself. Fuller
-// metadata (size, modtime, symlink status) is added when the scanner lands.
+// information the parser needs without performing any parsing itself.
 type ScannedFile struct {
 	// Path is the absolute filesystem path of the file.
 	Path string
 	// ID is the canonical document identity derived from the scan root.
-	ID corpus.DocumentID
+	ID identity.DocumentID
+	// ModTime is the file's last-modified time.
+	ModTime time.Time
+	// Size is the file size in bytes.
+	Size int64
+}
+
+// NoticeKind classifies a non-fatal scanner observation surfaced to the user.
+type NoticeKind int
+
+const (
+	// NoticeSkippedSymlink reports a symlink that was not followed (ADR 0003).
+	NoticeSkippedSymlink NoticeKind = iota
+	// NoticeEscapesRoot reports a path that, after canonicalization, resolves
+	// outside the scan root (the genuine root-escape boundary, ADR 0003).
+	NoticeEscapesRoot
+	// NoticeOversized reports a file skipped for exceeding the size cap.
+	NoticeOversized
+	// NoticeTruncated reports that discovery stopped at the file-count cap.
+	NoticeTruncated
+	// NoticeWalkError reports a directory-walk error on an entry (the entry was
+	// skipped; the walk continued).
+	NoticeWalkError
+	// NoticeIOError reports a stat/info or identity-derivation failure on an
+	// otherwise-eligible file (the file was skipped).
+	NoticeIOError
+)
+
+// String returns a short identifier for the notice kind.
+func (k NoticeKind) String() string {
+	switch k {
+	case NoticeSkippedSymlink:
+		return "skipped-symlink"
+	case NoticeEscapesRoot:
+		return "escapes-root"
+	case NoticeOversized:
+		return "oversized"
+	case NoticeTruncated:
+		return "truncated"
+	case NoticeWalkError:
+		return "walk-error"
+	case NoticeIOError:
+		return "io-error"
+	default:
+		return "unknown"
+	}
+}
+
+// Notice is a non-fatal observation from the scan stage (a skipped symlink, an
+// oversized file, a root-escaping path, or a truncated discovery). Notices are
+// reported to the user but do not by themselves fail the run.
+type Notice struct {
+	Kind NoticeKind
+	// Path is the offending filesystem path (best-effort; may be relative).
+	Path string
+	// Detail is a human-readable explanation.
+	Detail string
+}
+
+// ScanResult is the outcome of a scan: the deterministically sorted files to
+// parse plus any notices.
+type ScanResult struct {
+	Files   []ScannedFile
+	Notices []Notice
 }
 
 // FileScanner walks a root and returns the markdown files to parse, enforcing
 // the security boundary and ignore rules (ADR 0003). Production implementation:
 // internal/infrastructure/fsscanner.
 type FileScanner interface {
-	Scan(ctx context.Context, root string) ([]ScannedFile, error)
+	Scan(ctx context.Context, root string) (ScanResult, error)
 }
 
 // DocumentParser turns a scanned file into a pure-domain Document (front
@@ -36,6 +100,20 @@ type FileScanner interface {
 // goldmark, ADR 0002).
 type DocumentParser interface {
 	Parse(ctx context.Context, file ScannedFile) (*corpus.Document, error)
+}
+
+// DocumentParserFactory mints DocumentParsers. A single DocumentParser is not
+// guaranteed goroutine-safe (its underlying goldmark parser carries per-call
+// mutable state), so the parse stage obtains parsers through this factory:
+// today it uses one parser single-threaded; in P6 fan-out parsing it can call
+// Clone per worker for an independent parser without any layering change.
+// Production implementation: internal/infrastructure/mdparser.
+type DocumentParserFactory interface {
+	// New returns a freshly configured DocumentParser.
+	New() DocumentParser
+	// Clone returns an independent DocumentParser safe to use on its own
+	// goroutine. It is equivalent to New but names the per-worker intent.
+	Clone() DocumentParser
 }
 
 // Artifact is a single named output to be written to the output directory.

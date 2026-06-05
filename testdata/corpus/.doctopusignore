@@ -1,0 +1,3 @@
+# Fixture ignore file (gitignore semantics).
+ignored/
+draft-*.md
