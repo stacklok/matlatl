@@ -167,10 +167,13 @@ func (s *Scanner) Scan(ctx context.Context, root string) (application.ScanResult
 			return nil
 		}
 
-		// Stat the canonical (real) path, not the walk path: closes the
-		// EvalSymlinks→read TOCTOU window by working from the resolved file from
-		// here on. We also store realPath in ScannedFile.Path so the parser
-		// reads exactly what we validated.
+		// Stat the canonical (real) path, not the walk path, and store realPath in
+		// ScannedFile.Path so the parser reads exactly what we validated. This
+		// NARROWS the EvalSymlinks→read TOCTOU window but does not close it: a
+		// residual Lstat→ReadFile race remains (an attacker who can swap the path
+		// between our check and the parser's open). Truly closing it needs
+		// openat/O_NOFOLLOW-style handle-based I/O (no portable stdlib API today);
+		// the residual window is accepted for a batch scanner over a local tree.
 		fi, ierr := os.Lstat(realPath)
 		if ierr != nil {
 			notices = append(notices, application.Notice{
