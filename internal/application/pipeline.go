@@ -1,11 +1,13 @@
 package application
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/stacklok/doctopus/internal/domain/analysis"
 	"github.com/stacklok/doctopus/internal/domain/corpus"
@@ -82,8 +84,27 @@ type Result struct {
 	// Metrics is the frozen P3 graph-analysis carrier (graph, components, HITS,
 	// degrees, root set, reachability, gaps) for later emitters (P4/P5).
 	Metrics *graphmodel.GraphMetrics
+	// Corpus is the frozen corpus the run was computed over. Human emitters read
+	// it for per-document presentation data (title, description, mod-date) that
+	// the metrics/report do not carry. It is read-only; emitters must not mutate
+	// it (ADR 0004). nil for an empty/failed run.
+	Corpus *corpus.Corpus
+	// BrokenEdges are the unresolved navigational references (origin → raw
+	// target) extracted at resolution time. The frozen graph keeps only Valid
+	// edges, so the P4 diagram emitters read this to render red placeholder
+	// target nodes (ADR 0003 styling) without re-parsing finding messages.
+	// Sorted (Origin, Target) for determinism.
+	BrokenEdges []BrokenEdge
 	// Notices are non-fatal observations from the scan stage.
 	Notices []Notice
+}
+
+// BrokenEdge is an origin document and the raw target text of a reference that
+// did not resolve to an in-corpus document (a broken link). It carries the
+// presentation data the diagram emitters need without exposing the resolver.
+type BrokenEdge struct {
+	Origin identity.DocumentID
+	Target string
 }
 
 // Run executes the pipeline: scan → parse → resolve → build → analyze, returning
@@ -173,6 +194,7 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	findings := findingsFromReferences(refs)
 	findings = append(findings, findingsFromMetrics(metrics)...)
 	report := analysis.NewAnalysisReport(findings)
+	brokenEdges := brokenEdgesFromReferences(refs)
 
 	res := Result{
 		DocumentCount:     c.Len(),
@@ -186,9 +208,37 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		KnowledgeGapCount: report.CountByKind(analysis.KnowledgeGap),
 		Report:            report,
 		Metrics:           metrics,
+		Corpus:            c,
+		BrokenEdges:       brokenEdges,
 		Notices:           scan.Notices,
 	}
 	return platform.ExitOK, res, nil
+}
+
+// brokenEdgesFromReferences extracts the origin→target pairs of references that
+// did not resolve to an in-corpus document (Health==Broken), sorted (Origin,
+// Target) and de-duplicated, for the diagram emitters' red placeholder nodes.
+func brokenEdgesFromReferences(refs []reference.Reference) []BrokenEdge {
+	seen := make(map[BrokenEdge]struct{})
+	var out []BrokenEdge
+	for _, r := range refs {
+		if r.Health != reference.Broken {
+			continue
+		}
+		e := BrokenEdge{Origin: r.Origin, Target: rawTargetText(r)}
+		if _, dup := seen[e]; dup {
+			continue
+		}
+		seen[e] = struct{}{}
+		out = append(out, e)
+	}
+	slices.SortFunc(out, func(a, b BrokenEdge) int {
+		if c := cmp.Compare(a.Origin, b.Origin); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.Target, b.Target)
+	})
+	return out
 }
 
 // fsAssetExistence answers reference.AssetExistence by stat-ing a cleaned,

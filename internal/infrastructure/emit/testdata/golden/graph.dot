@@ -1,0 +1,37 @@
+digraph doctopus {
+  rankdir=LR;
+  node [shape=box, style="rounded,filled", fontname="Helvetica"];
+  "n_06572a96a58dc510" [label="Changelog\nCHANGELOG.md", fillcolor="#e3f2fd", color="#90a4ae", penwidth=1, width=0.900];
+  "n_b335630551682c19" [label="Project Home\nREADME.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=1.247];
+  "n_0b5ca119d2be595a" [label="Docs Index\ndocs/README.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=0.900];
+  "n_c344658336d865fb" [label="Cycle Alpha\ndocs/cycle/alpha.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
+  "n_21df47f145ac30d3" [label="Cycle Beta\ndocs/cycle/beta.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
+  "n_07fdd026b11c494c" [label="User Guide\ndocs/guide.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=1.302];
+  "n_8465deffe64c568a" [label="Island One\ndocs/island/one.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
+  "n_38145d64d747ed05" [label="Island Two\ndocs/island/two.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
+  "n_67c4130eda9f62b6" [label="Link Showcase\ndocs/links.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=0.900];
+  "n_0fac627e152b4ea7" [label="Project Notes\ndocs/project/notes.md", fillcolor="#ffebee", color="#c62828", penwidth=2, width=0.900];
+  "n_82ce932fc7a62701" [label="Stray Page\ndocs/stray.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=0.900];
+  "n_1114225c1a5c9130" [label="Overview\ndocs/sub/overview.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=1.247];
+  "n_9a677fd2b06d5f46" [label="Team Notes\ndocs/team/notes.md", fillcolor="#ffebee", color="#c62828", penwidth=2, width=0.900];
+  "b_02f24e23efa58dde" [label="../../../../etc/passwd (missing)", fillcolor="#ffcdd2", color="#b71c1c", penwidth=2];
+  "n_67c4130eda9f62b6" -> "b_02f24e23efa58dde" [style=dashed, color="#b71c1c"];
+  "b_1af82d5b08986ada" [label="does-not-exist (missing)", fillcolor="#ffcdd2", color="#b71c1c", penwidth=2];
+  "n_67c4130eda9f62b6" -> "b_1af82d5b08986ada" [style=dashed, color="#b71c1c"];
+  "b_aa3e4c2307d0271c" [label="nope.md (missing)", fillcolor="#ffcdd2", color="#b71c1c", penwidth=2];
+  "n_67c4130eda9f62b6" -> "b_aa3e4c2307d0271c" [style=dashed, color="#b71c1c"];
+  "n_b335630551682c19" -> "n_07fdd026b11c494c";
+  "n_b335630551682c19" -> "n_1114225c1a5c9130";
+  "n_0b5ca119d2be595a" -> "n_07fdd026b11c494c";
+  "n_c344658336d865fb" -> "n_21df47f145ac30d3";
+  "n_21df47f145ac30d3" -> "n_c344658336d865fb";
+  "n_07fdd026b11c494c" -> "n_b335630551682c19";
+  "n_07fdd026b11c494c" -> "n_1114225c1a5c9130";
+  "n_8465deffe64c568a" -> "n_38145d64d747ed05";
+  "n_38145d64d747ed05" -> "n_8465deffe64c568a";
+  "n_67c4130eda9f62b6" -> "n_b335630551682c19";
+  "n_67c4130eda9f62b6" -> "n_07fdd026b11c494c";
+  "n_67c4130eda9f62b6" -> "n_1114225c1a5c9130";
+  "n_82ce932fc7a62701" -> "n_b335630551682c19";
+  "n_1114225c1a5c9130" -> "n_07fdd026b11c494c";
+}

@@ -1,0 +1,45 @@
+doctopus analysis report
+
+Corpus: 13 documents, 24 headings, 24 references across 6 components.
+
+Broken links (3)
+  docs/links.md:13 wikilink link target "does-not-exist" does not resolve to a document in the corpus
+    fix: Check that "does-not-exist" exists and is spelled correctly relative to "docs/links.md"; if it lives elsewhere, fix the path or move the file.
+  docs/links.md:14 relative-link link target "nope.md" does not resolve to a document in the corpus
+    fix: Check that "nope.md" exists and is spelled correctly relative to "docs/links.md"; if it lives elsewhere, fix the path or move the file.
+  docs/links.md:22 relative-link link target "../../../../etc/passwd" does not resolve to a document in the corpus
+    fix: Check that "../../../../etc/passwd" exists and is spelled correctly relative to "docs/links.md"; if it lives elsewhere, fix the path or move the file.
+
+Broken anchors (1)
+  docs/links.md:14 anchor #no-such-heading does not exist in "docs/guide.md"
+    fix: Add a heading that slugifies to "no-such-heading" in "docs/guide.md", or update the fragment to match an existing heading (slugs are GitHub-style: lowercase, spaces to dashes).
+
+Isolated orphans (2)
+  no inbound or outbound navigational links — link them in from a relevant page, or delete them
+  docs/project/notes.md
+  docs/team/notes.md
+
+Unreachable (6)
+  not reachable from any root — add an inbound link from a page reachable from a root
+  docs/cycle/alpha.md
+  docs/cycle/beta.md
+  docs/island/one.md
+  docs/island/two.md
+  docs/links.md
+  docs/stray.md
+
+Top hubs (link out to many docs)
+  0.665  Link Showcase
+  0.475  Project Home
+  0.423  User Guide
+  0.242  Docs Index
+  0.242  Overview
+
+Top authorities (linked to by many docs)
+  0.626  User Guide
+  0.603  Overview
+  0.494  Project Home
+  0.000  Cycle Alpha
+  0.000  Cycle Beta
+
+Knowledge gaps: 3 disconnected cluster pair(s) that may warrant a bridge (experimental)
