@@ -5,64 +5,193 @@ on:
     branches: [main]
   pull_request:
 
+# Cancel superseded PR runs; never collapse main-branch history.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Least privilege: every job here is read-only.
 permissions:
   contents: read
 
 jobs:
-  build-test:
-    name: build & test
-    runs-on: ubuntu-latest
+  test:
+    name: build & test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS is a deliberate second lane: the scanner/resolver carry
+        # path/symlink/TOCTOU and case-sensitivity logic with OS-divergent
+        # behavior (macOS resolves $TMPDIR through /private, etc.).
+        os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
-          go-version: "1.26"
+          go-version-file: go.mod # single source of truth (go 1.26)
           check-latest: true
+          # setup-go caches the module + build cache by default (keyed on go.sum).
 
-      - name: Verify modules
+      - name: Module integrity
         run: go mod verify
 
-      - name: Vet
+      - name: go vet
         run: go vet ./...
 
       - name: Build
         run: go build ./...
 
-      - name: Test (race + coverage)
-        # -tags=integration so integration/golden-only code is exercised and not
-        # reported as 0% — honest coverage (this run also covers the golden tests).
-        run: go test -race -tags=integration -covermode=atomic -coverprofile=coverage.out ./...
+      # One race-enabled run with coverage + integration tag. -shuffle=on surfaces
+      # test-ordering coupling; -count=1 defeats the test cache so green == ran.
+      - name: Test (race, shuffle, coverage, integration)
+        run: go test -race -shuffle=on -count=1 -tags=integration -covermode=atomic -coverprofile=coverage.out ./...
 
-      - name: Integration / golden tests (no-coverage sanity run)
-        run: go test -race -tags=integration ./...
+      # Coverage gating + the benchmark smoke run only need to happen once.
+      - name: Coverage floor + summary
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go tool cover -func=coverage.out > coverage.txt
+          pct="$(awk '/^total:/{gsub(/%/,"",$3); print $3}' coverage.txt)"
+          {
+            echo "### Coverage: ${pct}%"
+            echo '```'
+            tail -1 coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          awk -v p="$pct" 'BEGIN{ exit (p+0 < 83.0) }' \
+            || { echo "::error::coverage ${pct}% is below the 83% floor"; exit 1; }
+
+      - name: Benchmark smoke (O(V·E) / OOM guard)
+        if: runner.os == 'Linux'
+        # -run=^$ disables tests; -benchtime=1x runs the 5k-doc pipeline exactly
+        # once. The real memory ceiling is asserted by TestPipeline_5kDocs_MemoryCeiling
+        # in the normal suite; this catches a super-linear time/alloc regression.
+        run: go test -tags=integration -run '^$' -bench BenchmarkPipeline_5kDocs -benchtime=1x -benchmem ./internal/application/
+
+      - name: Upload coverage
+        if: runner.os == 'Linux' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: warn
+          retention-days: 14
 
   lint:
     name: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
-          go-version: "1.26"
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+          go-version-file: go.mod
+      # v9 drives golangci-lint v2 (our .golangci.yml is `version: "2"`). The old
+      # v6 pulled golangci-lint v1.64.8 (built with Go 1.24) and refused the
+      # Go-1.26 module — that was the CI failure. Pin the binary, don't float.
+      - uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
         with:
-          version: latest
+          version: v2.12.2
+
+  verify:
+    name: verify (fmt / tidy / architecture)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt (-s)
+        shell: bash
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -s -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt -s found unformatted files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go mod tidy drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum \
+            || { echo "::error::go.mod/go.sum not tidy; run 'go mod tidy'"; exit 1; }
+
+      - name: Domain purity (ADR 0004)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if go list -deps ./internal/domain/... \
+              | grep -E 'dominikbraun|goldmark|spf13|sabhiram|mark3labs|net/http|internal/(application|infrastructure)'; then
+            echo "::error::domain layer imports a forbidden dependency (ADR 0004)"
+            exit 1
+          fi
+
+      - name: Application stays emitter-agnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          if go list -deps ./internal/application/... | grep 'infrastructure/emit'; then
+            echo "::error::application layer imports infrastructure/emit"
+            exit 1
+          fi
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1.0.4
+        with:
+          go-version-file: go.mod
+          go-package: ./...
 
   docs:
     name: docs (link-rot gate)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
-          go-version: "1.26"
+          go-version-file: go.mod
       - name: Build matlatl
         run: go build -o bin/matlatl ./cmd/matlatl
       # Dogfood: matlatl checks its OWN docs for broken links/anchors and
-      # orphaned/unreachable pages. Fixtures under testdata/ are excluded by the
-      # repo-root .matlatlignore, so this gate sees only the real docs.
-      - name: Doc link-rot gate (matlatl check . --strict)
+      # orphaned/unreachable pages. testdata/ is excluded via .matlatlignore, so
+      # this gate sees only the real docs.
+      - name: Strict doc gate (matlatl check . --strict)
         run: ./bin/matlatl check . --strict
+
+  cross-build:
+    name: cross-compile (${{ matrix.target.goos }}/${{ matrix.target.goarch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { goos: darwin, goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          GOOS: ${{ matrix.target.goos }}
+          GOARCH: ${{ matrix.target.goarch }}
+          CGO_ENABLED: "0"
+        run: go build ./cmd/matlatl
