@@ -11,14 +11,15 @@ import (
 )
 
 // CheckExitCode maps a run Result to the ADR 0005 exit code for `doctopus
-// check`. Broken links and broken anchors always fail (exit 1). Ambiguous links
-// (and, in later phases, orphans) are warnings that fail only under --strict.
-// A clean repo or an empty corpus returns ExitOK (0).
+// check`. Broken links and broken anchors always fail (exit 1). Ambiguous links,
+// orphans and unreachable documents are warnings that fail only under --strict.
+// KnowledgeGap (Info) never affects the exit code. A clean repo or an empty
+// corpus returns ExitOK (0).
 func (r Result) CheckExitCode(strict bool) platform.ExitCode {
 	if r.BrokenLinkCount > 0 || r.BrokenAnchorCount > 0 {
 		return platform.ExitFindings
 	}
-	if strict && r.AmbiguousCount > 0 {
+	if strict && (r.AmbiguousCount > 0 || r.OrphanCount > 0 || r.UnreachableCount > 0) {
 		return platform.ExitFindings
 	}
 	return platform.ExitOK

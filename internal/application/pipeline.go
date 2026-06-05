@@ -9,6 +9,7 @@ import (
 
 	"github.com/stacklok/doctopus/internal/domain/analysis"
 	"github.com/stacklok/doctopus/internal/domain/corpus"
+	"github.com/stacklok/doctopus/internal/domain/graphmodel"
 	"github.com/stacklok/doctopus/internal/domain/identity"
 	"github.com/stacklok/doctopus/internal/domain/reference"
 	"github.com/stacklok/doctopus/internal/platform"
@@ -18,9 +19,13 @@ import (
 // Build → Analyze → Emit; see architecture.md). It holds the configuration and
 // the port implementations it drives.
 //
-// As of Phase 1 the Scan and Parse stages are real: the pipeline scans the
-// root, parses each discovered file, and assembles a Corpus (with the heading
-// inventory). Resolve/Build/Analyze/Emit remain no-ops for later phases.
+// Stages 1–5 (Scan, Parse, Resolve, Build, Analyze) are all wired here: the
+// pipeline scans the root, parses each discovered file into a Corpus, resolves
+// every reference, builds the reference graph (ADR 0007), and runs the full
+// reachability/orphan/component/HITS/gap analysis into a frozen report +
+// GraphMetrics. Emit (stage 6) is performed by the command layer after Run
+// (e.g. check writes findings.json/JUnit), so the pipeline stays
+// emitter-agnostic.
 //
 // Concurrency (P6 note): parsing is single-threaded and documents are merged
 // into the Corpus sequentially. This sequential merge is the seam where fan-out
@@ -63,22 +68,38 @@ type Result struct {
 	HeadingCount int
 	// ReferenceCount is the total number of references resolved.
 	ReferenceCount int
-	// BrokenLinkCount / BrokenAnchorCount / AmbiguousCount are convenience
-	// tallies for the human summary.
+	// BrokenLinkCount / BrokenAnchorCount / AmbiguousCount / OrphanCount /
+	// UnreachableCount / KnowledgeGapCount are convenience tallies for the human
+	// summary and exit-code decision.
 	BrokenLinkCount   int
 	BrokenAnchorCount int
 	AmbiguousCount    int
-	// Report is the frozen analysis report (broken links/anchors, ambiguous).
+	OrphanCount       int
+	UnreachableCount  int
+	KnowledgeGapCount int
+	// Report is the frozen analysis report (all finding kinds).
 	Report *analysis.AnalysisReport
+	// Metrics is the frozen P3 graph-analysis carrier (graph, components, HITS,
+	// degrees, root set, reachability, gaps) for later emitters (P4/P5).
+	Metrics *graphmodel.GraphMetrics
 	// Notices are non-fatal observations from the scan stage.
 	Notices []Notice
 }
 
-// Run executes the pipeline. As of Phase 1 it scans + parses; downstream stages
-// are no-ops. It returns ExitOK on success and honors context cancellation.
+// Run executes the pipeline: scan → parse → resolve → build → analyze, returning
+// a frozen Result (report + GraphMetrics). Stage 6 (emit) is the caller's. It
+// returns ExitOK on success and honors context cancellation.
 func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	if err := ctx.Err(); err != nil {
 		return platform.ExitRuntime, Result{}, fmt.Errorf("pipeline canceled: %w", err)
+	}
+
+	// --check-external is accepted but not yet implemented (planned: P6). Surface
+	// a notice when set so the flag is never silently a no-op, matching the
+	// reachability-indeterminate notice pattern below (ADR 0003 external checks).
+	if p.cfg.CheckExternal {
+		_, _ = fmt.Fprintln(p.log,
+			"doctopus: notice [check-external-noop] --check-external is not yet implemented (planned: P6)")
 	}
 
 	// Stage 1: Scan.
@@ -120,9 +141,37 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		refs = append(refs, resolver.ResolveAll(doc.RawReferences)...)
 	}
 
-	// Stage 5 (subset): turn unhealthy references into findings and freeze a
-	// report. Orphan/unreachable analysis is P3.
+	// Stage 4: Build the reference graph (documents + sections, contains +
+	// navigational reference edges; see ADR 0007).
+	graph := graphmodel.BuildReferenceGraph(c, refs, graphmodel.BuildOptions{})
+
+	// Stage 5: Analyze. Run reachability/orphan/component/HITS/gap analysis over
+	// the document projection, then turn reference + graph findings into a frozen
+	// report. Gaps use MinComponentSize:2 so isolated singletons (already reported
+	// as orphans) do not also generate an O(k^2) blow-up of singleton gaps
+	// (ADR 0007).
+	metrics := graphmodel.Analyze(graph, c, graphmodel.AnalyzeOptions{
+		RootGlobs: p.cfg.Roots,
+		Gaps:      graphmodel.GapOptions{MinComponentSize: 2},
+	})
+	if metrics.RootSet.Indeterminate && c.Len() > 0 {
+		_, _ = fmt.Fprintln(p.log,
+			"doctopus: notice [reachability-indeterminate] no root set found "+
+				"(no README.md/index.md, no type:index, no --root); "+
+				"reachability not computed (orphans still reported)")
+	}
+	for _, bad := range metrics.RootSet.BadGlobs {
+		_, _ = fmt.Fprintf(p.log,
+			"doctopus: notice [bad-root-glob] --root pattern %q is malformed and matched nothing\n", bad)
+	}
+	if metrics.GapsTruncated {
+		_, _ = fmt.Fprintf(p.log,
+			"doctopus: notice [gaps-truncated] knowledge-gap list capped at %d; "+
+				"additional component pairs were not reported\n", graphmodel.MaxGaps)
+	}
+
 	findings := findingsFromReferences(refs)
+	findings = append(findings, findingsFromMetrics(metrics)...)
 	report := analysis.NewAnalysisReport(findings)
 
 	res := Result{
@@ -132,7 +181,11 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		BrokenLinkCount:   report.CountByKind(analysis.BrokenLink),
 		BrokenAnchorCount: report.CountByKind(analysis.BrokenAnchor),
 		AmbiguousCount:    report.CountByKind(analysis.Ambiguous),
+		OrphanCount:       report.CountByKind(analysis.Orphan),
+		UnreachableCount:  report.CountByKind(analysis.Unreachable),
+		KnowledgeGapCount: report.CountByKind(analysis.KnowledgeGap),
 		Report:            report,
+		Metrics:           metrics,
 		Notices:           scan.Notices,
 	}
 	return platform.ExitOK, res, nil

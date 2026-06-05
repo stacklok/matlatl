@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stacklok/doctopus/internal/domain/analysis"
+	"github.com/stacklok/doctopus/internal/domain/graphmodel"
 	"github.com/stacklok/doctopus/internal/domain/identity"
 	"github.com/stacklok/doctopus/internal/domain/reference"
 	"github.com/stacklok/doctopus/internal/platform"
@@ -85,6 +86,68 @@ func TestFindingID_Stable(t *testing.T) {
 	}
 }
 
+// TestFindingsFromMetrics covers the graph→Finding mapping: isolated orphans
+// (Orphan/Warning), unreachable docs (Unreachable/Warning), and knowledge-gap
+// bridge candidates (KnowledgeGap/Info), with severities per ADR 0005.
+func TestFindingsFromMetrics(t *testing.T) {
+	if got := findingsFromMetrics(nil); got != nil {
+		t.Errorf("findingsFromMetrics(nil) = %v, want nil", got)
+	}
+
+	m := &graphmodel.GraphMetrics{
+		Orphans: graphmodel.OrphanReport{
+			Isolated:    []identity.DocumentID{"iso.md"},
+			Unreachable: []identity.DocumentID{"stray.md"},
+		},
+		Gaps: []graphmodel.Gap{
+			{ComponentA: "a.md", ComponentB: "b.md", RepresentativeA: "a.md", RepresentativeB: "b.md"},
+		},
+	}
+
+	got := findingsFromMetrics(m)
+	byKind := map[analysis.FindingKind]analysis.Finding{}
+	for _, f := range got {
+		byKind[f.Kind] = f
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d findings, want 3 (orphan, unreachable, gap): %+v", len(got), got)
+	}
+
+	orphan, ok := byKind[analysis.Orphan]
+	if !ok || orphan.Severity != analysis.Warning || orphan.Location.Document != "iso.md" {
+		t.Errorf("orphan finding wrong: %+v", orphan)
+	}
+
+	// The unreachableFinding path specifically (ADR 0005 Warning).
+	un, ok := byKind[analysis.Unreachable]
+	if !ok {
+		t.Fatal("missing Unreachable finding")
+	}
+	if un.Severity != analysis.Warning {
+		t.Errorf("unreachable severity = %v, want Warning", un.Severity)
+	}
+	if un.Location.Document != "stray.md" {
+		t.Errorf("unreachable location = %q, want stray.md", un.Location.Document)
+	}
+	if !strings.Contains(un.Message, "stray.md") || !strings.Contains(un.Message, "unreachable") {
+		t.Errorf("unreachable message wrong: %q", un.Message)
+	}
+	if !strings.Contains(un.SuggestedFix, "inbound link") {
+		t.Errorf("unreachable fix should suggest an inbound link: %q", un.SuggestedFix)
+	}
+	if !strings.HasPrefix(un.ID, "unreachable:stray.md") {
+		t.Errorf("unreachable ID = %q, want unreachable:stray.md prefix", un.ID)
+	}
+
+	gap, ok := byKind[analysis.KnowledgeGap]
+	if !ok || gap.Severity != analysis.Info {
+		t.Errorf("gap finding missing or not Info: %+v", gap)
+	}
+	if !strings.Contains(gap.Message, "a.md") || !strings.Contains(gap.Message, "b.md") {
+		t.Errorf("gap message should name both clusters: %q", gap.Message)
+	}
+}
+
 func TestCheckExitCode(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -98,6 +161,15 @@ func TestCheckExitCode(t *testing.T) {
 		{"ambiguous non-strict", Result{AmbiguousCount: 1}, false, platform.ExitOK},
 		{"ambiguous strict", Result{AmbiguousCount: 1}, true, platform.ExitFindings},
 		{"broken beats strict-off", Result{BrokenLinkCount: 2, AmbiguousCount: 3}, false, platform.ExitFindings},
+		// ADR 0005: orphans/unreachable are warnings — pass without --strict, fail
+		// with it.
+		{"orphan non-strict", Result{OrphanCount: 1}, false, platform.ExitOK},
+		{"orphan strict", Result{OrphanCount: 1}, true, platform.ExitFindings},
+		{"unreachable non-strict", Result{UnreachableCount: 1}, false, platform.ExitOK},
+		{"unreachable strict", Result{UnreachableCount: 1}, true, platform.ExitFindings},
+		// ADR 0005: knowledge gaps are Info — they NEVER fail, even under --strict.
+		{"gap non-strict", Result{KnowledgeGapCount: 5}, false, platform.ExitOK},
+		{"gap strict", Result{KnowledgeGapCount: 5}, true, platform.ExitOK},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
