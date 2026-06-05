@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stacklok/doctopus/internal/domain/analysis"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
-// CheckExitCode maps a run Result to the ADR 0005 exit code for `doctopus
+// CheckExitCode maps a run Result to the ADR 0005 exit code for `matlatl
 // check`. Broken links and broken anchors always fail (exit 1). Ambiguous links,
 // orphans and unreachable documents are warnings that fail only under --strict.
 // KnowledgeGap (Info) never affects the exit code. A clean repo or an empty

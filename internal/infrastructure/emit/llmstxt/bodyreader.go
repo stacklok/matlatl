@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
 )
 
 // BodyReader reads a document's raw markdown bytes from disk, confined to a scan

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 // mermaidComponentClasses is the number of distinct component fill classes the

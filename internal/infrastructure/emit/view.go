@@ -5,11 +5,11 @@ import (
 	"slices"
 	"time"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/analysis"
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/graphmodel"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // View is the render-ready, emitter-agnostic snapshot every human emitter

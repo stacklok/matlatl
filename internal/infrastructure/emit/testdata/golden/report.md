@@ -1,4 +1,4 @@
-# doctopus report
+# matlatl report
 
 ## Corpus overview
 
@@ -32,7 +32,7 @@
 
 ## Isolated orphans
 
-_No inbound or outbound navigational links. Link them in from a relevant page, or delete them. To keep one intentionally unlinked, add front matter `doctopus: orphan-intentional`._
+_No inbound or outbound navigational links. Link them in from a relevant page, or delete them. To keep one intentionally unlinked, add front matter `matlatl: orphan-intentional`._
 
 - `docs/project/notes.md` — Project Notes
 - `docs/team/notes.md` — Team Notes

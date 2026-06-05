@@ -11,8 +11,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
 )
 
 func sampleReport() *analysis.AnalysisReport {
@@ -65,7 +65,7 @@ func TestFindingsJSON_ShapeAndParse(t *testing.T) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("findings.json does not parse: %v", err)
 	}
-	if doc.SchemaVersion != FindingsSchemaVersion || doc.Tool != "doctopus" {
+	if doc.SchemaVersion != FindingsSchemaVersion || doc.Tool != "matlatl" {
 		t.Errorf("bad header: version=%d tool=%q", doc.SchemaVersion, doc.Tool)
 	}
 	if doc.Summary.Total != 3 || doc.Summary.BrokenLink != 1 || doc.Summary.BrokenAnchor != 1 || doc.Summary.Ambiguous != 1 {

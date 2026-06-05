@@ -1,10 +1,14 @@
 <!-- markdownlint-disable MD041 -->
-# 🐙 doctopus
+# 🕸️ matlatl
 
 > Map the markdown in your repo into trees and graphs, find the orphans, and emit
 > artifacts that are equally readable by **humans** and **LLMs**.
 
-`doctopus` recursively reads the markdown documents in a repository, parses their
+`matlatl` is Nahuatl for *net*: the tool casts a net over your repo's markdown —
+every link a knot, every doc a node — then shows you the holes and what slipped
+through (the orphans).
+
+`matlatl` recursively reads the markdown documents in a repository, parses their
 front matter, headings, and links (relative links, wikilinks, anchors, embeds),
 and builds two overlaid structures:
 
@@ -32,19 +36,19 @@ and the [ADRs](docs/adr/).
 ## Quick start
 
 ```console
-$ doctopus .                 # scan + analyze, print the terminal report
-$ doctopus check .           # CI lint mode: non-zero exit on broken links/anchors
-$ doctopus graph . --format mermaid
-$ doctopus index .           # emit index.md + llms.txt
-$ doctopus orphans .         # list orphans / unreachable docs
-$ doctopus serve .           # MCP server exposing graph queries to agents
+$ matlatl .                 # scan + analyze, print the terminal report
+$ matlatl check .           # CI lint mode: non-zero exit on broken links/anchors
+$ matlatl graph . --format mermaid
+$ matlatl index .           # emit index.md + llms.txt
+$ matlatl orphans .         # list orphans / unreachable docs
+$ matlatl serve .           # MCP server exposing graph queries to agents
 ```
 
 ## Why another markdown tool?
 
 Link checkers (lychee, markdown-link-check) validate links but build no graph.
 Knowledge tools (Obsidian, Foam, Dendron, Quartz) visualize a graph but are not
-CI-oriented and emit nothing an LLM can act on. `doctopus` treats a
+CI-oriented and emit nothing an LLM can act on. `matlatl` treats a
 **machine-readable, LLM-queryable graph as a first-class output** — the gap all of
 that prior art leaves open.
 

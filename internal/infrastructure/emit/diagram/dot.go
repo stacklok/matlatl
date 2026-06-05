@@ -5,8 +5,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 // DOT-library decision (ADR 0002 allowed github.com/dominikbraun/graph's
@@ -29,7 +29,7 @@ import (
 // (sorted iteration). It is a complete, balanced-brace DOT digraph.
 func DOT(v emit.View) []byte {
 	var b strings.Builder
-	b.WriteString("digraph doctopus {\n")
+	b.WriteString("digraph matlatl {\n")
 	b.WriteString("  rankdir=LR;\n")
 	b.WriteString("  node [shape=box, style=\"rounded,filled\", fontname=\"Helvetica\"];\n")
 

@@ -1,7 +1,7 @@
 package graphmodel
 
 import (
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // MaxGaps is the hard defensive cap on the number of gaps DetectGaps will

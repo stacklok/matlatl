@@ -6,13 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/reference"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
-// newCheckCommand implements `doctopus check [path]` — the CI gate (ADR 0005).
+// newCheckCommand implements `matlatl check [path]` — the CI gate (ADR 0005).
 func newCheckCommand() *cobra.Command {
 	var resolution string
 
@@ -103,11 +103,11 @@ func writeCheckArtifacts(ctx context.Context, outDir string, res application.Res
 func printCheckSummary(cmd *cobra.Command, res application.Result) {
 	out := cmd.OutOrStdout()
 	if res.DocumentCount == 0 {
-		_, _ = fmt.Fprintln(out, "doctopus check: no markdown documents found (nothing to check)")
+		_, _ = fmt.Fprintln(out, "matlatl check: no markdown documents found (nothing to check)")
 		return
 	}
 	_, _ = fmt.Fprintf(out,
-		"doctopus check: %d documents, %d references — %d broken link(s), %d broken anchor(s), "+
+		"matlatl check: %d documents, %d references — %d broken link(s), %d broken anchor(s), "+
 			"%d ambiguous, %d orphan(s), %d unreachable\n",
 		res.DocumentCount, res.ReferenceCount,
 		res.BrokenLinkCount, res.BrokenAnchorCount, res.AmbiguousCount,

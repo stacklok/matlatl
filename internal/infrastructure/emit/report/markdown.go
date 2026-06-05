@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stacklok/doctopus/internal/domain/analysis"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 // ReportMarkdownName is the conventional committable report filename.
@@ -22,7 +22,7 @@ func Markdown(v emit.View) []byte {
 	var b strings.Builder
 	c := v.Counts
 
-	b.WriteString("# doctopus report\n\n")
+	b.WriteString("# matlatl report\n\n")
 
 	// Corpus overview table.
 	b.WriteString("## Corpus overview\n\n")
@@ -78,7 +78,7 @@ func Markdown(v emit.View) []byte {
 	// Orphans.
 	b.WriteString("## Isolated orphans\n\n")
 	b.WriteString("_No inbound or outbound navigational links. Link them in from a relevant page, or delete them. " +
-		"To keep one intentionally unlinked, add front matter `doctopus: orphan-intentional`._\n\n")
+		"To keep one intentionally unlinked, add front matter `matlatl: orphan-intentional`._\n\n")
 	writeDocList(&b, v, v.Orphans)
 	b.WriteString("\n")
 

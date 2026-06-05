@@ -18,7 +18,7 @@ Use these libraries:
 | Markdown → AST              | `github.com/yuin/goldmark`               | CommonMark, de-facto standard, stdlib-only deps. **Quarantined to `internal/infrastructure/mdparser`** — no other package imports it. |
 | Front matter (YAML + TOML)  | `go.abhg.dev/goldmark/frontmatter`       | Single parse pass within goldmark; handles `---` YAML and `+++` TOML. |
 | CLI                         | `github.com/spf13/cobra`                 | Multi-verb command tree. |
-| Ignore-file matching        | `github.com/sabhiram/go-gitignore`       | `.doctopusignore` with gitignore semantics. |
+| Ignore-file matching        | `github.com/sabhiram/go-gitignore`       | `.matlatlignore` with gitignore semantics. |
 | MCP server                  | `github.com/mark3labs/mcp-go`            | Optional, isolated in `internal/infrastructure/mcpserver`; migrate to the official SDK when stable. |
 | External link liveness      | stdlib `net/http`                        | Opt-in only; bounded concurrency + SSRF guard (ADR 0003). |
 

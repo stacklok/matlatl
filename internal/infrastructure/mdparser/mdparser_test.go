@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 func parse(t *testing.T, src string) *corpus.Document {

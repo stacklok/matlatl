@@ -5,19 +5,19 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/graphjson"
-	idxemit "github.com/stacklok/doctopus/internal/infrastructure/emit/index"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/llmstxt"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
+	idxemit "github.com/stacklok/matlatl/internal/infrastructure/emit/index"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/llmstxt"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
-// newIndexCommand implements `doctopus index [path]` — generate the navigation
+// newIndexCommand implements `matlatl index [path]` — generate the navigation
 // surface(s) for the corpus. By default it renders index.md (a human TOC + agent
 // navigation surface). Flags select an LLM-facing artifact INSTEAD: --llms
 // (llms.txt curated index), --full (llms-full.txt concatenated bodies), --small
 // (llms-small.txt hubs + getting-started), or --graph (graph.json). Exactly one
 // artifact is produced; with --out it is written under the output directory,
-// otherwise printed to stdout. For the full bundle in one shot use `doctopus
+// otherwise printed to stdout. For the full bundle in one shot use `matlatl
 // emit --out <dir>`.
 func newIndexCommand() *cobra.Command {
 	var (
@@ -40,7 +40,7 @@ func newIndexCommand() *cobra.Command {
 			"windows), or --graph (graph.json). With --out the artifact is written " +
 			"under the output directory; otherwise it prints to stdout.\n\n" +
 			"To produce the complete LLM bundle (index.md + llms.txt + llms-full.txt + " +
-			"llms-small.txt + graph.json + findings.json) in one shot, use `doctopus " +
+			"llms-small.txt + graph.json + findings.json) in one shot, use `matlatl " +
 			"emit --out <dir>`.",
 		Args:          usageArgs(cobra.MaximumNArgs(1)),
 		SilenceUsage:  true,

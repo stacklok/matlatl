@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"hash/fnv"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 // componentFillPalette is the deterministic component fill palette shared by the

@@ -20,7 +20,7 @@ graph vertices, the MCP server, and the full emitter set.
 nothing outward:
 
 ```
-cmd/doctopus/            thin entrypoint; wires Cobra → application
+cmd/matlatl/            thin entrypoint; wires Cobra → application
 internal/domain/         pure types + logic, no I/O, no goldmark
   corpus/                Document, Section, FrontMatter, Corpus, HeadingInventory, AliasTable
   reference/             Reference, LinkType, LinkHealth, ResolvedTarget, LinkResolver, ResolutionPolicy

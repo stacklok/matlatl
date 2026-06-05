@@ -6,6 +6,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Renamed the project from `doctopus` to `matlatl`** (Nahuatl for *net*; the
+  tool casts a net over a repo's markdown). The module path is now
+  `github.com/stacklok/matlatl`, the binary and command are `matlatl`, the ignore
+  file is `.matlatlignore`, and the intentional-orphan front-matter key is
+  `matlatl: orphan-intentional`. The `tool` field in `graph.json`/`findings.json`
+  and the MCP server name are now `matlatl`.
+
 ### Added
 
 - Persistent `--root <glob>` flag to designate extra reachability roots on top of
@@ -14,7 +23,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Published `docs/schemas/findings.schema.json` (schema version 2) for the
   `findings.json` artifact, validated against emitted output in tests.
 - `LICENSE` (Apache-2.0), `CONTRIBUTING.md`, `AGENTS.md`, and this changelog.
-- Repo-root `.doctopusignore` (excludes test fixtures) and a committed `llms.txt`
+- Repo-root `.matlatlignore` (excludes test fixtures) and a committed `llms.txt`
   generated from the project's own docs; `make llms` / `make dogfood` regenerate
   it and run the strict doc-link-rot gate, mirrored in CI.
 
@@ -25,7 +34,7 @@ Initial release. Feature-complete across phases P0–P6.
 ### Added
 
 - **Scan + parse** — secure recursive markdown scan for untrusted repos (root
-  containment, resource caps, `.doctopusignore`), goldmark + front matter + a
+  containment, resource caps, `.matlatlignore`), goldmark + front matter + a
   custom wikilink parser into a pure-domain corpus.
 - **Resolve** — link/anchor resolution with `exact` / `longest-suffix` /
   `basename` policies, GitHub-style anchor slugs, and directory-link reachability
@@ -44,5 +53,5 @@ Initial release. Feature-complete across phases P0–P6.
 - **Concurrency** — bounded fan-out parsing with a deterministic single-threaded
   merge (byte-identical output at any worker count).
 
-[Unreleased]: https://github.com/stacklok/doctopus/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/stacklok/doctopus/releases/tag/v0.1.0
+[Unreleased]: https://github.com/stacklok/matlatl/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/stacklok/matlatl/releases/tag/v0.1.0

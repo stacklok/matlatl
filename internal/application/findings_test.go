@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/analysis"
-	"github.com/stacklok/doctopus/internal/domain/graphmodel"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
 func TestFindingsFromReferences_KindsAndSeverity(t *testing.T) {

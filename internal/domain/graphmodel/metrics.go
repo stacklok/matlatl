@@ -1,8 +1,8 @@
 package graphmodel
 
 import (
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // GraphMetrics is the frozen carrier of all P3 graph analysis results. It is the

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
 func corpusFixture(t *testing.T) string {
@@ -323,7 +323,7 @@ func TestIntegration_ReportToOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("report.md not written: %v", err)
 	}
-	if !strings.Contains(string(b), "# doctopus report") || !strings.Contains(string(b), "| Metric | Count |") {
+	if !strings.Contains(string(b), "# matlatl report") || !strings.Contains(string(b), "| Metric | Count |") {
 		t.Errorf("report.md missing expected content:\n%s", b)
 	}
 	assertNothingEscaped(t, outDir, []string{"report.md"})
@@ -343,7 +343,7 @@ func TestIntegration_GraphDotToOut(t *testing.T) {
 		t.Fatalf("graph.dot not written: %v", err)
 	}
 	s := string(b)
-	if !strings.HasPrefix(s, "digraph doctopus {") {
+	if !strings.HasPrefix(s, "digraph matlatl {") {
 		t.Errorf("graph.dot missing digraph header:\n%s", s)
 	}
 	if strings.Count(s, "{") != strings.Count(s, "}") {

@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
-# doctopus developer guide
+# matlatl developer guide
 
-How `doctopus` is built, how to work on it, and the rules that keep it coherent.
+How `matlatl` is built, how to work on it, and the rules that keep it coherent.
 Read this alongside [`architecture.md`](architecture.md) and the [ADRs](adr/).
 
 ## Layout
 
 ```
-cmd/doctopus/            entrypoint + Cobra commands (wires infra → application)
+cmd/matlatl/            entrypoint + Cobra commands (wires infra → application)
 internal/
   domain/                pure: no I/O, no goldmark, no third-party graph/MCP libs
     identity/            DocumentID (canonical-path identity) + path-containment helpers
@@ -50,7 +50,7 @@ testdata/                fixture corpora + golden artifacts
 ## Build, test, lint
 
 ```console
-$ make build              # ./bin/doctopus
+$ make build              # ./bin/matlatl
 $ make test               # unit + smoke, under -race
 $ make test-integration   # golden + integration (-tags=integration)
 $ make cover              # coverage (includes integration-tagged code)
@@ -88,7 +88,7 @@ go list -deps ./internal/application/... | grep 'infrastructure/emit'
   `internal/infrastructure/emit/testdata/golden/`. Regenerate intentionally:
 
   ```console
-  DOCTOPUS_UPDATE_GOLDEN=1 go test ./internal/infrastructure/emit/...
+  MATLATL_UPDATE_GOLDEN=1 go test ./internal/infrastructure/emit/...
   # then review the diff before committing
   ```
 
@@ -129,7 +129,7 @@ why output is byte-identical at any worker count. See [ADR 0004](adr/0004-ddd-la
 
 ## How the build was made
 
-doctopus was built in phases P0–P6, each: implement → a six-lens expert panel
+matlatl was built in phases P0–P6, each: implement → a six-lens expert panel
 review (security, concurrency, QA, duplication, library-vs-handroll, idiomacy) →
 address findings → small commits. The phasing and the panel's load-bearing
 corrections are recorded in the ADRs and the commit history.

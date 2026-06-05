@@ -5,12 +5,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/diagram"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/graphjson"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/diagram"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
-// newGraphCommand implements `doctopus graph [path]` — emit the reference graph
+// newGraphCommand implements `matlatl graph [path]` — emit the reference graph
 // as Mermaid (default) or DOT/Graphviz. With --out the diagram is written under
 // the output directory; otherwise it prints to stdout. A --tree flag emits the
 // hierarchy variant (Mermaid only).

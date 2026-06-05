@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 // TestLinkText_NeutralizesBracketsNewlinesAndBackslash asserts the link-text

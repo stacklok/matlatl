@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // The interfaces in this file are the pipeline's real test seams (ADR 0004).

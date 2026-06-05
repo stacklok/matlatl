@@ -9,12 +9,12 @@ A markdown link whose target is a *directory* — `[ADRs](docs/adr/)`,
 `[ADRs](adr/)`, `[notes](sub)` — is a universal documentation convention.
 GitHub, MkDocs and Docusaurus all render it: GitHub shows the folder's file
 listing (or its `README.md` if present), MkDocs/Docusaurus route to the folder's
-`index.md`. doctopus did not model this. The resolver only matched markdown-file
+`index.md`. matlatl did not model this. The resolver only matched markdown-file
 `DocumentID`s, so a directory link was classified **Broken**, and — because no
 edge was produced — the markdown files inside that directory showed up as
 **orphans / unreachable** even though something explicitly linked their folder.
 
-This was verified by dogfooding doctopus on its own repo: `docs/adr/` and `adr/`
+This was verified by dogfooding matlatl on its own repo: `docs/adr/` and `adr/`
 (linked from `README.md`, `docs/architecture.md`, `docs/dev-guide.md`,
 `docs/user-guide.md`) were reported as broken links, and
 `docs/adr/0007-graph-node-semantics.md` (which nothing links to by file path) was

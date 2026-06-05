@@ -1,4 +1,4 @@
-# doctopus
+# matlatl
 
 > A markdown documentation corpus of 16 document(s) across 1 component(s), with 99 heading(s) and 46 resolved reference(s). Entries are ordered by importance (most-connected first).
 
@@ -13,13 +13,13 @@
 - [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md): 6. Canonical anchor-slug dialect
 - [7. Graph node semantics and the document projection](docs/adr/0007-graph-node-semantics.md): 7. Graph node semantics and the document projection
 - [8. Directory links resolve and confer navigational reachability](docs/adr/0008-directory-links.md): 8. Directory links resolve and confer navigational reachability
-- [doctopus architecture](docs/architecture.md): doctopus architecture
-- [doctopus developer guide](docs/dev-guide.md): doctopus developer guide
-- [doctopus user guide](docs/user-guide.md): doctopus user guide
+- [matlatl architecture](docs/architecture.md): matlatl architecture
+- [matlatl developer guide](docs/dev-guide.md): matlatl developer guide
+- [matlatl user guide](docs/user-guide.md): matlatl user guide
 - [Agent guide](AGENTS.md): Agent guide
 - [Changelog](CHANGELOG.md): Changelog
-- [Contributing to doctopus](CONTRIBUTING.md): Contributing to doctopus
-- [🐙 doctopus](README.md): 🐙 doctopus
+- [Contributing to matlatl](CONTRIBUTING.md): Contributing to matlatl
+- [🕸️ matlatl](README.md): 🕸️ matlatl
 
 ## Known gaps
 

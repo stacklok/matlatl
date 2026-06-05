@@ -9,15 +9,15 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/diagram"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/graphjson"
-	idxemit "github.com/stacklok/doctopus/internal/infrastructure/emit/index"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/llmstxt"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/report"
-	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
-	"github.com/stacklok/doctopus/internal/infrastructure/mdparser"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/diagram"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
+	idxemit "github.com/stacklok/matlatl/internal/infrastructure/emit/index"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/llmstxt"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/report"
+	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
+	"github.com/stacklok/matlatl/internal/infrastructure/mdparser"
 )
 
 // corpusRootPath is the absolute path of the corpus fixture, needed by the
@@ -36,7 +36,7 @@ func corpusRootPath(t *testing.T) string {
 //
 //	go test ./internal/infrastructure/emit/ -run TestGolden -update
 //
-// (or set DOCTOPUS_UPDATE_GOLDEN=1). The goldens live under
+// (or set MATLATL_UPDATE_GOLDEN=1). The goldens live under
 // internal/infrastructure/emit/testdata/golden/ and are checked into the repo.
 var updateGolden = flag.Bool("update", false, "regenerate golden files")
 
@@ -80,7 +80,7 @@ func goldenPath(name string) string {
 func assertGolden(t *testing.T, name string, got []byte, normalize func([]byte) []byte) {
 	t.Helper()
 	path := goldenPath(name)
-	if *updateGolden || os.Getenv("DOCTOPUS_UPDATE_GOLDEN") == "1" {
+	if *updateGolden || os.Getenv("MATLATL_UPDATE_GOLDEN") == "1" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}

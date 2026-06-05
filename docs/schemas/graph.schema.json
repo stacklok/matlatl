@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stacklok.com/doctopus/schemas/graph.schema.json",
-  "title": "doctopus graph.json",
-  "description": "The primary machine-/LLM-queryable manifest of an analyzed markdown corpus emitted by `doctopus graph --format json`. This schema is the published contract; the emitter type internal/infrastructure/emit/graphjson.Document is kept in lockstep and a test validates emitted bytes against this document.",
+  "$id": "https://stacklok.com/matlatl/schemas/graph.schema.json",
+  "title": "matlatl graph.json",
+  "description": "The primary machine-/LLM-queryable manifest of an analyzed markdown corpus emitted by `matlatl graph --format json`. This schema is the published contract; the emitter type internal/infrastructure/emit/graphjson.Document is kept in lockstep and a test validates emitted bytes against this document.",
   "type": "object",
   "additionalProperties": false,
   "required": [

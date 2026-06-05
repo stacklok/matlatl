@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/graphmodel"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 func buildView(t *testing.T, docs ...*corpus.Document) emit.View {

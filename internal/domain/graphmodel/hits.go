@@ -4,7 +4,7 @@ import (
 	"math"
 	"slices"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // HitsScores holds per-document hub and authority scores plus the iteration

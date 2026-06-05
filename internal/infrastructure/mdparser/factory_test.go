@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // TestFactory_CloneConcurrent locks the P6 per-worker contract: Factory.Clone

@@ -3,9 +3,9 @@ package application
 import (
 	"fmt"
 
-	"github.com/stacklok/doctopus/internal/domain/analysis"
-	"github.com/stacklok/doctopus/internal/domain/graphmodel"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // findingsFromMetrics turns the P3 graph analysis into Findings: isolated
@@ -40,7 +40,7 @@ func orphanFinding(id identity.DocumentID) analysis.Finding {
 		Message:  fmt.Sprintf("%q is an isolated orphan: no document links to it and it links to nothing", id),
 		SuggestedFix: fmt.Sprintf(
 			"Link %q in from a relevant page (e.g. an index or a related doc), or delete it if obsolete. "+
-				"To keep it intentionally unlinked, add front matter `doctopus: orphan-intentional`.", id),
+				"To keep it intentionally unlinked, add front matter `matlatl: orphan-intentional`.", id),
 		Details: map[string]string{
 			DetailTargetDocument: id.String(),
 		},
@@ -56,7 +56,7 @@ func unreachableFinding(id identity.DocumentID) analysis.Finding {
 		Message:  fmt.Sprintf("%q is unreachable from the root set (nothing reachable links to it)", id),
 		SuggestedFix: fmt.Sprintf(
 			"Add an inbound link to %q from a page that is itself reachable from a root (README.md/index.md). "+
-				"To keep it intentionally unlinked, add front matter `doctopus: orphan-intentional`.", id),
+				"To keep it intentionally unlinked, add front matter `matlatl: orphan-intentional`.", id),
 		Details: map[string]string{
 			DetailTargetDocument: id.String(),
 		},

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/application"
+	"github.com/stacklok/matlatl/internal/application"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -88,12 +88,12 @@ func TestScan_DefaultIgnoresAndIgnoreFile(t *testing.T) {
 	writeFile(t, filepath.Join(root, "vendor", "v.md"), "# vendor")
 	writeFile(t, filepath.Join(root, "ignored", "x.md"), "# ignored")
 	writeFile(t, filepath.Join(root, "draft-foo.md"), "# draft")
-	writeFile(t, filepath.Join(root, ".doctopusignore"), "ignored/\ndraft-*.md\n")
+	writeFile(t, filepath.Join(root, ".matlatlignore"), "ignored/\ndraft-*.md\n")
 
 	res := scan(t, root, Config{})
 	got := ids(res)
 	if len(got) != 1 || got[0] != "keep.md" {
-		t.Errorf("ids = %v, want only [keep.md] (defaults + .doctopusignore honored)", got)
+		t.Errorf("ids = %v, want only [keep.md] (defaults + .matlatlignore honored)", got)
 	}
 }
 
@@ -297,17 +297,17 @@ func TestScan_UppercaseExtensionsDiscovered(t *testing.T) {
 	}
 }
 
-func TestScan_DoctopusignoreCRLF(t *testing.T) {
+func TestScan_MatlatlignoreCRLF(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "keep.md"), "# keep")
 	writeFile(t, filepath.Join(root, "secret.md"), "# secret")
 	// CRLF line endings (Windows-authored ignore file) must not leave a trailing
 	// \r that breaks the pattern.
-	writeFile(t, filepath.Join(root, ".doctopusignore"), "secret.md\r\n")
+	writeFile(t, filepath.Join(root, ".matlatlignore"), "secret.md\r\n")
 
 	res := scan(t, root, Config{})
 	if got := ids(res); len(got) != 1 || got[0] != "keep.md" {
-		t.Errorf("ids = %v, want [keep.md] (CRLF .doctopusignore honored)", got)
+		t.Errorf("ids = %v, want [keep.md] (CRLF .matlatlignore honored)", got)
 	}
 }
 
@@ -340,7 +340,7 @@ func TestScan_SymlinkedOutputDirExcluded(t *testing.T) {
 }
 
 // TestScan_OversizedIgnoreFileSkippedGracefully is the ADR-0003 invariant-3
-// regression test for the ignore-file OOM vector: .doctopusignore is read before
+// regression test for the ignore-file OOM vector: .matlatlignore is read before
 // the WalkDir loop and therefore is NOT covered by MaxFileSizeBytes. A hostile,
 // multi-GB ignore file must be skipped (os.Stat-gated at maxIgnoreBytes) without
 // reading it into memory, and the scan must still complete and discover the
@@ -364,7 +364,7 @@ func TestScan_OversizedIgnoreFileSkippedGracefully(t *testing.T) {
 	// Must not error or OOM, and must discover the markdown.
 	res := scan(t, root, Config{})
 	if got := ids(res); len(got) != 1 || got[0] != "keep.md" {
-		t.Errorf("ids = %v, want [keep.md] (oversized .doctopusignore skipped, not applied)", got)
+		t.Errorf("ids = %v, want [keep.md] (oversized .matlatlignore skipped, not applied)", got)
 	}
 }
 
@@ -375,7 +375,7 @@ func TestScan_OversizedIgnoreFileSkippedGracefully(t *testing.T) {
 // guards the behavior so a future dep swap cannot silently change it.)
 func TestScan_IgnoreNegationReincludes(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, ".doctopusignore"), "*.md\n!keep.md\n")
+	writeFile(t, filepath.Join(root, ".matlatlignore"), "*.md\n!keep.md\n")
 	writeFile(t, filepath.Join(root, "keep.md"), "# Keep")
 	writeFile(t, filepath.Join(root, "drop.md"), "# Drop")
 

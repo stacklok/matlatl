@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-`doctopus` ingests arbitrary, potentially hostile repositories (CI on forked PRs,
+`matlatl` ingests arbitrary, potentially hostile repositories (CI on forked PRs,
 scanning third-party docs). Security is therefore a **Phase 1 correctness
 requirement**, not a later "hardening" step. A pre-code review identified five
 distinct attack surfaces that must be addressed before the scanner ships.
@@ -64,7 +64,7 @@ rather than implicit, and re-evaluated if a portable `openat` API lands.
 
 ### Ignore-file size cap
 
-`.doctopusignore` is read **before** the walk, so the per-file `MaxFileSizeBytes`
+`.matlatlignore` is read **before** the walk, so the per-file `MaxFileSizeBytes`
 guard (invariant 3) does not cover it. The scanner therefore `os.Stat`s it first
 and **skips** an ignore file larger than `maxIgnoreBytes` (1 MiB), reading the
 capped bytes itself rather than relying on the dependency's uncapped

@@ -6,7 +6,7 @@
 
 | Document | Description | Modified |
 | --- | --- | --- |
-| `CHANGELOG.md` | Changelog | 2026-06-05T08:58:05Z |
+| `CHANGELOG.md` | Changelog | 2026-06-05T13:09:14Z |
 | `README.md` | Top-level readme for the fixture corpus. | 2026-06-05T07:41:33Z |
 
 ## docs

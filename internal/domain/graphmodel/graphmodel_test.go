@@ -4,9 +4,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 func TestNodeKind_StringValid(t *testing.T) {

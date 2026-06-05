@@ -4,8 +4,8 @@ import (
 	"path"
 	"slices"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // HierarchyNode is a node in the document hierarchy: a document plus its

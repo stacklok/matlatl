@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-`doctopus check` is the CI gate. CI pipelines depend on a precise, stable mapping
+`matlatl check` is the CI gate. CI pipelines depend on a precise, stable mapping
 from analysis outcome to process exit code. Leaving this implicit causes flaky or
 surprising pipeline behavior, so it is specified up front and golden-tested.
 
@@ -40,9 +40,9 @@ Semantics:
   explicitly. (Enforced in `Result.CheckExitCode`, which never reads
   `DeadLinkCount`, and pinned by the `dead-link` rows in `TestCheckExitCode`.)
 
-- **The default command (`doctopus [path]`) is display-only.** It renders the
+- **The default command (`matlatl [path]`) is display-only.** It renders the
   human report and **always exits 0** on a successful run regardless of findings;
-  only a genuine runtime/usage failure yields a non-zero code. `doctopus check`
+  only a genuine runtime/usage failure yields a non-zero code. `matlatl check`
   is the CI gate that applies the table above. (`Pipeline.Run` returns `ExitOK`
   on success; the gating decision lives only in `check` via `CheckExitCode`.)
 

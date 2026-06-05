@@ -27,7 +27,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 // Artifact filenames (stable; downstream tooling keys on these).

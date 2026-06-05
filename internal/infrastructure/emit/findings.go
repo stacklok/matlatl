@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/stacklok/doctopus/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
 )
 
 // Artifact filenames (stable; CI integrations key on these).
@@ -84,10 +84,10 @@ var remediationByKind = map[string]string{
 	analysis.Orphan.String(): "The document is isolated: nothing links to it and it links to nothing, so no reader " +
 		"or agent can navigate to it. Add an inbound link from a relevant page (an index or a related doc) " +
 		"and outbound links to its neighbors, or delete it if obsolete. To keep it intentionally unlinked, " +
-		"add front matter `doctopus: orphan-intentional`.",
+		"add front matter `matlatl: orphan-intentional`.",
 	analysis.Unreachable.String(): "The document cannot be reached by following links from any root (README.md/index.md " +
 		"or a `type: index` doc). Add an inbound link from a page that is itself reachable from a root. " +
-		"To keep it intentionally unlinked, add front matter `doctopus: orphan-intentional`.",
+		"To keep it intentionally unlinked, add front matter `matlatl: orphan-intentional`.",
 	analysis.KnowledgeGap.String(): "Two clusters of documentation (`details.componentA` and `details.componentB`) have no " +
 		"navigational links between them. This is an experimental heuristic, not an error. If the two areas " +
 		"are related, add a link between `details.representativeA` and `details.representativeB` to connect them.",
@@ -119,7 +119,7 @@ func remediationGuideFor(report *analysis.AnalysisReport) map[string]string {
 func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
 	doc := findingsDocument{
 		SchemaVersion:    FindingsSchemaVersion,
-		Tool:             "doctopus",
+		Tool:             "matlatl",
 		RemediationGuide: remediationGuideFor(report),
 		Summary: findingsSum{
 			Total:        report.Len(),

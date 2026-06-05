@@ -3,9 +3,9 @@ package graphmodel
 import (
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 // TestDetectGaps_Semantics locks the gap definition (ADR 0007): a gap is a pair

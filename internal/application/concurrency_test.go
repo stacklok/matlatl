@@ -5,11 +5,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/graphjson"
-	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
-	"github.com/stacklok/doctopus/internal/infrastructure/mdparser"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
+	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
+	"github.com/stacklok/matlatl/internal/infrastructure/mdparser"
 )
 
 // runPipelineGraphJSON runs the full pipeline at a given worker count over root

@@ -2,7 +2,7 @@
 // 0=success, 1=findings at/above threshold, 2=usage error, 3=runtime error.
 package platform
 
-// ExitCode is the process exit status returned by doctopus. The mapping is a
+// ExitCode is the process exit status returned by matlatl. The mapping is a
 // stable contract that CI pipelines depend on (see ADR 0005).
 type ExitCode int
 

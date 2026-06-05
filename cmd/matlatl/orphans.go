@@ -5,10 +5,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
-// newOrphansCommand implements `doctopus orphans [path]` — lists isolated
+// newOrphansCommand implements `matlatl orphans [path]` — lists isolated
 // orphans and unreachable documents (ADR 0007). It does not gate CI on its own;
 // exit-code gating on orphans/unreachable is `check --strict`.
 func newOrphansCommand() *cobra.Command {
@@ -48,7 +48,7 @@ func newOrphansCommand() *cobra.Command {
 
 			out := cmd.OutOrStdout()
 			if view.Counts.Documents == 0 {
-				_, _ = fmt.Fprintln(out, "doctopus orphans: no markdown documents found")
+				_, _ = fmt.Fprintln(out, "matlatl orphans: no markdown documents found")
 				return nil
 			}
 

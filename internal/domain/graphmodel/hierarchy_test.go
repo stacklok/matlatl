@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // docWithParent builds a document with a front-matter parent (and optional

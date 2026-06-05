@@ -6,7 +6,7 @@ Status: Accepted
 ## Context
 
 Cross-file anchor validation (`[doc](other.md#some-heading)`) only works if the slug
-`doctopus` computes for a heading equals the slug the *consumer* will dereference.
+`matlatl` computes for a heading equals the slug the *consumer* will dereference.
 GitHub, CommonMark/goldmark, and Obsidian slugify headings differently (punctuation
 stripping, Unicode handling, duplicate-heading suffixing). Without a pinned dialect,
 cross-file anchor checks emit false-positive "broken anchor" findings on real repos.

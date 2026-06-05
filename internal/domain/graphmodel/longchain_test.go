@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 // chainID is the stable DocumentID for the i-th node of a synthetic chain,

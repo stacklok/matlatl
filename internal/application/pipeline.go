@@ -9,15 +9,15 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/stacklok/doctopus/internal/domain/analysis"
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/graphmodel"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
-// Pipeline orchestrates the six-stage doctopus flow (Scan → Parse → Resolve →
+// Pipeline orchestrates the six-stage matlatl flow (Scan → Parse → Resolve →
 // Build → Analyze → Emit; see architecture.md). It holds the configuration and
 // the port implementations it drives.
 //
@@ -146,11 +146,11 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		if pr.err != nil {
 			// A single unparseable file is a notice, not a fatal error: the scan
 			// continues so one hostile/broken file cannot abort the whole run.
-			_, _ = fmt.Fprintf(p.log, "doctopus: notice [parse-error] %s: %v\n", pr.id, pr.err)
+			_, _ = fmt.Fprintf(p.log, "matlatl: notice [parse-error] %s: %v\n", pr.id, pr.err)
 			continue
 		}
 		if aerr := c.Add(pr.doc); aerr != nil {
-			_, _ = fmt.Fprintf(p.log, "doctopus: notice [merge-error] %s: %v\n", pr.id, aerr)
+			_, _ = fmt.Fprintf(p.log, "matlatl: notice [merge-error] %s: %v\n", pr.id, aerr)
 			continue
 		}
 	}
@@ -189,17 +189,17 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	})
 	if metrics.RootSet.Indeterminate && c.Len() > 0 {
 		_, _ = fmt.Fprintln(p.log,
-			"doctopus: notice [reachability-indeterminate] no root set found "+
+			"matlatl: notice [reachability-indeterminate] no root set found "+
 				"(no README.md/index.md, no type:index, no --root); "+
 				"reachability not computed (orphans still reported)")
 	}
 	for _, bad := range metrics.RootSet.BadGlobs {
 		_, _ = fmt.Fprintf(p.log,
-			"doctopus: notice [bad-root-glob] --root pattern %q is malformed and matched nothing\n", bad)
+			"matlatl: notice [bad-root-glob] --root pattern %q is malformed and matched nothing\n", bad)
 	}
 	if metrics.GapsTruncated {
 		_, _ = fmt.Fprintf(p.log,
-			"doctopus: notice [gaps-truncated] knowledge-gap list capped at %d; "+
+			"matlatl: notice [gaps-truncated] knowledge-gap list capped at %d; "+
 				"additional component pairs were not reported\n", graphmodel.MaxGaps)
 	}
 
@@ -299,6 +299,6 @@ func (a *fsAssetExistence) AssetExists(relPath string) bool {
 // reportNotices writes scan notices to the log sink (stderr in the CLI).
 func (p *Pipeline) reportNotices(notices []Notice) {
 	for _, n := range notices {
-		_, _ = fmt.Fprintf(p.log, "doctopus: notice [%s] %s: %s\n", n.Kind, n.Path, n.Detail)
+		_, _ = fmt.Fprintf(p.log, "matlatl: notice [%s] %s: %s\n", n.Kind, n.Path, n.Detail)
 	}
 }

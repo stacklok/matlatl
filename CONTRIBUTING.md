@@ -1,4 +1,4 @@
-# Contributing to doctopus
+# Contributing to matlatl
 
 Thanks for contributing! Start with the **[developer guide](docs/dev-guide.md)** —
 it covers the repo layout, the DDD layering rules, and the testing strategy. The
@@ -25,7 +25,7 @@ go list -deps ./internal/domain/... | \
 
 `make check` runs fmt + vet + lint + unit tests; `make test-integration` runs the
 integration/golden suite. If you touch markdown with links, keep the doc gate
-green: `make dogfood` regenerates `llms.txt` and runs `doctopus check . --strict`.
+green: `make dogfood` regenerates `llms.txt` and runs `matlatl check . --strict`.
 
 ## Conventions
 

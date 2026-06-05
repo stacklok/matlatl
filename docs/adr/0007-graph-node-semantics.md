@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-`doctopus` models a corpus as a graph and runs reachability, orphan/unreachable
+`matlatl` models a corpus as a graph and runs reachability, orphan/unreachable
 classification, weak/strong components, HITS, and knowledge-gap detection over
 it. ADR 0004 made both Documents *and* Sections first-class vertices ("full-fat,
 mixed granularity"). That raises a precise-semantics hazard the panel flagged: if
@@ -90,8 +90,8 @@ expect section-level orphan findings.
 
 ### Intentional orphans
 
-A document whose front matter sets **`doctopus: orphan-intentional`** (in
-`FrontMatter.Extra` under key `doctopus`, value `orphan-intentional`) is excluded
+A document whose front matter sets **`matlatl: orphan-intentional`** (in
+`FrontMatter.Extra` under key `matlatl`, value `orphan-intentional`) is excluded
 from **Orphan and Unreachable** findings but still appears as a vertex and in all
 other metrics. The exact key/value is fixed here so authors can opt out of noise
 (e.g. changelogs, license files).

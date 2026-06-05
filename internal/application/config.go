@@ -1,10 +1,10 @@
-// Package application orchestrates the doctopus pipeline. It depends on the
+// Package application orchestrates the matlatl pipeline. It depends on the
 // domain and platform layers and defines the small set of interfaces (ports)
-// that mark genuine test seams. It is wired by cmd/doctopus and must not import
+// that mark genuine test seams. It is wired by cmd/matlatl and must not import
 // cobra. See ADR 0004.
 package application
 
-import "github.com/stacklok/doctopus/internal/domain/reference"
+import "github.com/stacklok/matlatl/internal/domain/reference"
 
 // Config holds the resolved run configuration for the pipeline. It is built by
 // the CLI layer from flags and arguments and treated as read-only by the
@@ -15,7 +15,7 @@ type Config struct {
 	// Roots is the explicit reachability root set (documents BFS starts from);
 	// empty means autodetect (README.md/index.md/type:index).
 	Roots []string
-	// Ignore holds additional ignore patterns layered on .doctopusignore.
+	// Ignore holds additional ignore patterns layered on .matlatlignore.
 	Ignore []string
 	// ResolutionPolicy selects how raw targets map to documents (ADR 0001).
 	ResolutionPolicy reference.ResolutionPolicy

@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/stacklok/doctopus/internal/domain/analysis"
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 // maxParseWorkers caps the autodetected worker pool. Parsing is CPU + a little
@@ -153,7 +153,7 @@ func sortResults(rs []parseResult) {
 func (p *Pipeline) checkExternalLinks(ctx context.Context, refs []reference.Reference) []analysis.Finding {
 	if p.cfg.ExternalChecker == nil {
 		_, _ = fmt.Fprintln(p.log,
-			"doctopus: notice [check-external-unwired] --check-external set but no checker configured; skipping")
+			"matlatl: notice [check-external-unwired] --check-external set but no checker configured; skipping")
 		return nil
 	}
 

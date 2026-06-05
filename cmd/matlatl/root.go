@@ -6,13 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/report"
-	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
-	"github.com/stacklok/doctopus/internal/infrastructure/linkcheck"
-	"github.com/stacklok/doctopus/internal/infrastructure/mdparser"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/report"
+	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
+	"github.com/stacklok/matlatl/internal/infrastructure/linkcheck"
+	"github.com/stacklok/matlatl/internal/infrastructure/mdparser"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
 // exitCodeError wraps an error with an explicit process exit code so main can
@@ -25,7 +25,7 @@ type exitCodeError struct {
 func (e exitCodeError) Error() string { return e.err.Error() }
 func (e exitCodeError) Unwrap() error { return e.err }
 
-// newRootCommand assembles the doctopus command tree.
+// newRootCommand assembles the matlatl command tree.
 func newRootCommand() *cobra.Command {
 	var (
 		strict        bool
@@ -39,9 +39,9 @@ func newRootCommand() *cobra.Command {
 	var noColor bool
 
 	root := &cobra.Command{
-		Use:   "doctopus [path]",
+		Use:   "matlatl [path]",
 		Short: "Analyze a repository's markdown documentation graph",
-		Long: "doctopus scans a repository's markdown, resolves its links, builds a " +
+		Long: "matlatl scans a repository's markdown, resolves its links, builds a " +
 			"reference graph, and analyzes it (reachability, orphans/unreachable, " +
 			"weak/strong components, HITS, knowledge gaps), then renders a human " +
 			"report.\n\n" +
@@ -62,9 +62,9 @@ func newRootCommand() *cobra.Command {
 
 			pipeline := buildPipeline(cfg, logSink)
 			// The default command is DISPLAY-ONLY: it always exits 0 on a
-			// successful run regardless of findings. `doctopus check` is the CI
+			// successful run regardless of findings. `matlatl check` is the CI
 			// gate (it applies the ADR 0005 exit contract via Result.CheckExitCode);
-			// `doctopus .` just renders the human report. Pipeline.Run returns
+			// `matlatl .` just renders the human report. Pipeline.Run returns
 			// (ExitOK, _, nil) on success, so the only non-nil error here is a
 			// genuine runtime/usage failure, which we propagate with its code.
 			_, res, err := pipeline.Run(cmd.Context())

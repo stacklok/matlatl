@@ -7,7 +7,7 @@ import "fmt"
 
 // Build metadata. These are overridden at link time via -ldflags, e.g.:
 //
-//	go build -ldflags "-X github.com/stacklok/doctopus/internal/platform.Version=1.2.3 ..."
+//	go build -ldflags "-X github.com/stacklok/matlatl/internal/platform.Version=1.2.3 ..."
 //
 // They default to "dev" for local/unstamped builds.
 var (
@@ -23,5 +23,5 @@ var (
 // It is deliberately not named String to avoid visual collision with the
 // fmt.Stringer convention on a package-level function.
 func BuildInfo() string {
-	return fmt.Sprintf("doctopus %s (commit %s, built %s)", Version, Commit, Date)
+	return fmt.Sprintf("matlatl %s (commit %s, built %s)", Version, Commit, Date)
 }

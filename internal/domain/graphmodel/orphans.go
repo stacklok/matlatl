@@ -1,8 +1,8 @@
 package graphmodel
 
 import (
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // Degree holds the in/out navigational degree of a document in the projection.

@@ -5,15 +5,15 @@ import (
 	"io"
 	"os"
 
-	"github.com/stacklok/doctopus/internal/domain/analysis"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 // TerminalOptions tunes the terminal report.
 type TerminalOptions struct {
 	// Color selects color behavior (auto/never/always). Auto is TTY+NO_COLOR aware.
 	Color ColorMode
-	// Quiet renders only the one-line summary (the legacy `doctopus .` output).
+	// Quiet renders only the one-line summary (the legacy `matlatl .` output).
 	Quiet bool
 }
 
@@ -27,7 +27,7 @@ func Terminal(w io.Writer, v emit.View, opts TerminalOptions) error {
 	p := palette{enabled: useColor(opts.Color, w, os.LookupEnv)}
 
 	if v.Counts.Documents == 0 {
-		_, err := fmt.Fprintln(w, "doctopus: no markdown documents found (nothing to analyze)")
+		_, err := fmt.Fprintln(w, "matlatl: no markdown documents found (nothing to analyze)")
 		return err
 	}
 	if opts.Quiet {
@@ -40,7 +40,7 @@ func Terminal(w io.Writer, v emit.View, opts TerminalOptions) error {
 func summaryLine(w io.Writer, p palette, v emit.View) error {
 	c := v.Counts
 	_, err := fmt.Fprintf(w,
-		"doctopus: %d documents, %d headings, %d references — %s, %s, %d ambiguous, %d orphan(s), %d unreachable\n",
+		"matlatl: %d documents, %d headings, %d references — %s, %s, %d ambiguous, %d orphan(s), %d unreachable\n",
 		c.Documents, c.Headings, c.References,
 		p.colorCount(c.BrokenLink, fmt.Sprintf("%d broken link(s)", c.BrokenLink)),
 		p.colorCount(c.BrokenAnchor, fmt.Sprintf("%d broken anchor(s)", c.BrokenAnchor)),
@@ -62,7 +62,7 @@ func fullReport(w io.Writer, p palette, v emit.View) error {
 	ew := &errWriter{w: w}
 	c := v.Counts
 
-	ew.line(p.bold("doctopus analysis report"))
+	ew.line(p.bold("matlatl analysis report"))
 	ew.line("")
 	ew.line(fmt.Sprintf("Corpus: %s, %s, %s across %s.",
 		plural(c.Documents, "document"), plural(c.Headings, "heading"),

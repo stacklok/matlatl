@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-These ADRs capture the significant, hard-to-reverse decisions behind `doctopus`.
+These ADRs capture the significant, hard-to-reverse decisions behind `matlatl`.
 Each record is short, dated, and immutable once accepted — supersede rather than edit.
 
 Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/architecture-decision-record).

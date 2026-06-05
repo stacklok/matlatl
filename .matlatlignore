@@ -1,4 +1,4 @@
-# Exclude test fixtures and golden corpora so `doctopus check .` over its own
+# Exclude test fixtures and golden corpora so `matlatl check .` over its own
 # repo analyzes only the real, human-curated docs (README, docs/, ADRs). The
 # fixtures under testdata/ are deliberately broken/orphaned inputs for the test
 # suite and would otherwise drown out genuine doc-link rot.

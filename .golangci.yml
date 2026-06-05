@@ -1,4 +1,4 @@
-# golangci-lint configuration for doctopus.
+# golangci-lint configuration for matlatl.
 # Tuned for an idiomatic, security-conscious Go CLI.
 version: "2"
 
@@ -47,4 +47,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/stacklok/doctopus
+        - github.com/stacklok/matlatl

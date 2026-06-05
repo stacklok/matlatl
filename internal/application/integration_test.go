@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/reference"
-	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
-	"github.com/stacklok/doctopus/internal/infrastructure/mdparser"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
+	"github.com/stacklok/matlatl/internal/infrastructure/mdparser"
 )
 
 // fixtureRoot is the committed testdata corpus, relative to this package.
@@ -47,7 +47,7 @@ func TestIntegration_ScanParseFixture(t *testing.T) {
 	}
 
 	// 13 documents (ignored/secret.md and draft-notes.md excluded by
-	// .doctopusignore): the P1/P2 docs plus the P3 analysis fixtures
+	// .matlatlignore): the P1/P2 docs plus the P3 analysis fixtures
 	// (CHANGELOG.md intentional-orphan, docs/cycle/{alpha,beta}.md cycle,
 	// docs/island/{one,two}.md disconnected cluster, docs/stray.md unreachable).
 	if c.Len() != 13 {

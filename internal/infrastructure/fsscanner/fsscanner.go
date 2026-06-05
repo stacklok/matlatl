@@ -18,8 +18,8 @@ import (
 
 	ignore "github.com/sabhiram/go-gitignore"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // Default resource caps (ADR 0003). They are safe-by-default and overridable
@@ -30,8 +30,8 @@ const (
 	// DefaultMaxFiles is the discovery cap; discovery stops once it is reached.
 	DefaultMaxFiles = 10_000
 	// ignoreFileName is the per-root ignore file (gitignore semantics).
-	ignoreFileName = ".doctopusignore"
-	// maxIgnoreBytes caps the size of .doctopusignore that we will read into
+	ignoreFileName = ".matlatlignore"
+	// maxIgnoreBytes caps the size of .matlatlignore that we will read into
 	// memory. The ignore file is read BEFORE the WalkDir loop (and therefore
 	// before the per-file MaxFileSizeBytes guard applies), so a hostile repo
 	// could otherwise hand us a multi-GB ignore file and OOM the scan (ADR 0003
@@ -244,14 +244,14 @@ func (s *Scanner) Scan(ctx context.Context, root string) (application.ScanResult
 // errStopWalk is a sentinel used to halt WalkDir at the file-count cap.
 var errStopWalk = errors.New("fsscanner: max files reached")
 
-// loadIgnore compiles root/.doctopusignore if present, returning nil when
+// loadIgnore compiles root/.matlatlignore if present, returning nil when
 // absent, unreadable, or oversized (none of these are an error — a repo without
 // a usable ignore file simply has no ignore rules).
 //
 // Security (ADR 0003 invariant 3): the ignore file is read BEFORE the WalkDir
 // loop, so the per-file MaxFileSizeBytes guard does NOT cover it. We therefore
 // os.Stat it first and skip a file larger than maxIgnoreBytes, so a hostile repo
-// cannot OOM the scan with a multi-GB .doctopusignore. We then read the capped
+// cannot OOM the scan with a multi-GB .matlatlignore. We then read the capped
 // bytes ourselves and hand them to CompileIgnoreLines rather than
 // CompileIgnoreFile (whose internal ReadFile has no size cap). Splitting on "\n"
 // and trimming any trailing "\r" preserves CompileIgnoreFile's CRLF handling.

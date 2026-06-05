@@ -10,14 +10,14 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/graphmodel"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/graphjson"
-	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
-	"github.com/stacklok/doctopus/internal/infrastructure/mdparser"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
+	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
+	"github.com/stacklok/matlatl/internal/infrastructure/mdparser"
 )
 
 // corpusID is a small helper to build a DocumentID for the synthetic-corpus tests.
@@ -58,8 +58,8 @@ func TestJSON_RoundTrip(t *testing.T) {
 	if doc.SchemaVersion != graphjson.SchemaVersion {
 		t.Errorf("schemaVersion = %d, want %d", doc.SchemaVersion, graphjson.SchemaVersion)
 	}
-	if doc.Tool != "doctopus" {
-		t.Errorf("tool = %q, want doctopus", doc.Tool)
+	if doc.Tool != "matlatl" {
+		t.Errorf("tool = %q, want matlatl", doc.Tool)
 	}
 	// Re-marshal the typed struct and compare to the original (fixed float
 	// precision means the re-emit is identical).

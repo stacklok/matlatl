@@ -1,11 +1,11 @@
-// Package mcpserver exposes a doctopus analysis as a read-only MCP server over
+// Package mcpserver exposes a matlatl analysis as a read-only MCP server over
 // stdio, for an agent to query a markdown corpus' link graph. It is the ONLY
 // package that imports the MCP library (github.com/mark3labs/mcp-go, ADR 0002):
 // the dependency is quarantined here so the core tool never depends on MCP and a
 // build that does not invoke `serve` pays nothing for it at runtime (the import
-// is reachable only from `doctopus serve`).
+// is reachable only from `matlatl serve`).
 //
-// The server runs the doctopus pipeline ONCE over the path at construction time
+// The server runs the matlatl pipeline ONCE over the path at construction time
 // to build the frozen analysis (corpus, graph, metrics), then serves five
 // read-only tools that return the SAME structured data as the file artifacts by
 // reusing the emit.View + emit/graphjson layers — nothing is reinvented:
@@ -29,17 +29,17 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/graphmodel"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/graphjson"
-	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
-	"github.com/stacklok/doctopus/internal/infrastructure/mdparser"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
+	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
+	"github.com/stacklok/matlatl/internal/infrastructure/mdparser"
 )
 
 const (
-	serverName    = "doctopus"
+	serverName    = "matlatl"
 	serverVersion = "1"
 )
 
@@ -51,7 +51,7 @@ type Analysis struct {
 	metrics *graphmodel.GraphMetrics
 }
 
-// BuildAnalysis runs the doctopus pipeline over rootPath and returns the frozen
+// BuildAnalysis runs the matlatl pipeline over rootPath and returns the frozen
 // analysis the MCP tools serve. It uses the production scanner + parser factory;
 // external link checking is OFF (the MCP surface is read-only and deterministic).
 func BuildAnalysis(ctx context.Context, rootPath string) (*Analysis, error) {
@@ -83,7 +83,7 @@ func NewServer(a *Analysis) *server.MCPServer {
 
 // Serve builds the analysis over rootPath and serves the MCP tools over stdio
 // until the context is canceled or stdin closes. It is the entry point
-// `doctopus serve` calls.
+// `matlatl serve` calls.
 func Serve(ctx context.Context, rootPath string) error {
 	a, err := BuildAnalysis(ctx, rootPath)
 	if err != nil {

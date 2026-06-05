@@ -1,6 +1,6 @@
 # Agent guide
 
-doctopus maps a repo's markdown into a graph/tree and emits human + LLM
+matlatl maps a repo's markdown into a graph/tree and emits human + LLM
 artifacts. This file points you at what you can't trivially grep for; read the
 linked docs rather than re-deriving them.
 
@@ -37,13 +37,13 @@ linked docs rather than re-deriving them.
 ## Running it / the MCP entrypoint
 
 ```console
-doctopus .              # terminal report
-doctopus check .        # CI gate (exit codes per ADR 0005); --strict to harden
-doctopus emit --out ai  # full human + LLM artifact bundle
-doctopus serve .        # read-only MCP server over stdio
+matlatl .              # terminal report
+matlatl check .        # CI gate (exit codes per ADR 0005); --strict to harden
+matlatl emit --out ai  # full human + LLM artifact bundle
+matlatl serve .        # read-only MCP server over stdio
 ```
 
-`doctopus serve` is the **MCP entrypoint** for agents: it speaks MCP over stdio
+`matlatl serve` is the **MCP entrypoint** for agents: it speaks MCP over stdio
 and exposes read-only tools (`what-links-to`, `list-orphans`, `path-between`,
 `get-section`, `corpus-summary`). Prefer it for live graph queries over parsing
 artifacts yourself.
@@ -51,6 +51,6 @@ artifacts yourself.
 ## Dogfooding
 
 This repo eats its own dog food: `make dogfood` regenerates the repo-root
-`llms.txt` and runs `doctopus check . --strict` (also a CI gate). `testdata/` is
-excluded via `.doctopusignore` so the gate sees only real docs. If you add
+`llms.txt` and runs `matlatl check . --strict` (also a CI gate). `testdata/` is
+excluded via `.matlatlignore` so the gate sees only real docs. If you add
 markdown with links, keep that gate green — don't introduce doc-link rot.

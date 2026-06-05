@@ -3,7 +3,7 @@ package llmstxt
 import (
 	"strings"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // Text-safety helpers for the llms.txt family. The corpus title, document

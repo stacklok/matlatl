@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/graphmodel"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 // hostileTitle bundles every character that could break or inject into a
@@ -104,7 +104,7 @@ func TestDOT_HostileLabelEscaped(t *testing.T) {
 	}
 	// A literal newline must never appear inside the digraph body (it would break
 	// the statement); it is rendered as the two-character escape \n.
-	body := strings.TrimPrefix(out, "digraph doctopus {\n")
+	body := strings.TrimPrefix(out, "digraph matlatl {\n")
 	if strings.Contains(hostileTitle, "\n") && strings.Contains(body, "<script>\n") {
 		t.Errorf("DOT leaked a raw newline in a label:\n%s", out)
 	}
@@ -114,7 +114,7 @@ func TestDOT_HostileLabelEscaped(t *testing.T) {
 	if openB != 1 || closeB != 1 {
 		t.Errorf("DOT structural braces unbalanced: { = %d, } = %d\n%s", openB, closeB, out)
 	}
-	if !strings.HasPrefix(out, "digraph doctopus {\n") || !strings.HasSuffix(out, "}\n") {
+	if !strings.HasPrefix(out, "digraph matlatl {\n") || !strings.HasSuffix(out, "}\n") {
 		t.Errorf("DOT not well-formed:\n%s", out)
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // Component is a connected component: an ID (the sorted-minimum member, for

@@ -4,7 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 
-	"github.com/stacklok/doctopus/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
 )
 
 // JUnit XML schema (minimal, stable, CI-portable). Each finding becomes a
@@ -64,7 +64,7 @@ func JUnitXML(report *analysis.AnalysisReport) ([]byte, error) {
 		Tests:    report.Len(),
 		Failures: report.Len(),
 		Testsuite: []junitTestsuit{{
-			Name:     "doctopus",
+			Name:     "matlatl",
 			Tests:    report.Len(),
 			Failures: report.Len(),
 			Testcase: cases,

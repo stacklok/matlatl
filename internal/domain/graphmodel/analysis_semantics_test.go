@@ -4,9 +4,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 func validSectionRef(origin, targetDoc, anchor string) reference.Reference {
@@ -60,12 +60,12 @@ func nodeByID(g *ReferenceGraph, id NodeID) (Node, bool) {
 	return Node{}, false
 }
 
-// TestIntentionalOrphan_Suppressed: a doc marked doctopus: orphan-intentional is
+// TestIntentionalOrphan_Suppressed: a doc marked matlatl: orphan-intentional is
 // excluded from both Isolated and Unreachable, but still a vertex.
 func TestIntentionalOrphan_Suppressed(t *testing.T) {
 	c := buildCorpus(t,
 		doc("README.md", "intro", nil),
-		doc("CHANGELOG.md", "changelog", map[string]any{"doctopus": "orphan-intentional"}),
+		doc("CHANGELOG.md", "changelog", map[string]any{"matlatl": "orphan-intentional"}),
 		doc("real-orphan.md", "ro", nil),
 	)
 	g := BuildReferenceGraph(c, nil, BuildOptions{})

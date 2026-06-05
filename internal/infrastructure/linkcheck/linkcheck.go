@@ -32,7 +32,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stacklok/doctopus/internal/application"
+	"github.com/stacklok/matlatl/internal/application"
 )
 
 // Resolver looks up the IP addresses for a host. The standard implementation
@@ -280,7 +280,7 @@ func (c *Checker) do(ctx context.Context, method, raw string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("User-Agent", "doctopus-linkcheck/1")
+	req.Header.Set("User-Agent", "matlatl-linkcheck/1")
 	resp, err := c.client.Do(req)
 	if err != nil {
 		// A guarded redirect refusal already wraps errBlocked (the *url.Error

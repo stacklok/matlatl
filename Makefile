@@ -1,5 +1,5 @@
-# doctopus developer Makefile
-BINARY      := doctopus
+# matlatl developer Makefile
+BINARY      := matlatl
 PKG         := ./...
 BIN_DIR     := bin
 GOFLAGS     ?=
@@ -12,13 +12,13 @@ help: ## Show this help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: ## Build the doctopus binary into ./bin
+build: ## Build the matlatl binary into ./bin
 	@mkdir -p $(BIN_DIR)
-	go build $(GOFLAGS) -o $(BIN_DIR)/$(BINARY) ./cmd/doctopus
+	go build $(GOFLAGS) -o $(BIN_DIR)/$(BINARY) ./cmd/matlatl
 
 .PHONY: install
-install: ## Install doctopus into GOBIN
-	go install $(GOFLAGS) ./cmd/doctopus
+install: ## Install matlatl into GOBIN
+	go install $(GOFLAGS) ./cmd/matlatl
 
 .PHONY: test
 test: ## Run unit + smoke tests
@@ -51,7 +51,7 @@ fmt: ## Format the codebase
 	gofmt -s -w .
 
 .PHONY: docs
-docs: build ## Doc link-rot gate: doctopus checks its own repo docs (strict)
+docs: build ## Doc link-rot gate: matlatl checks its own repo docs (strict)
 	./$(BIN_DIR)/$(BINARY) check . --strict
 
 .PHONY: llms

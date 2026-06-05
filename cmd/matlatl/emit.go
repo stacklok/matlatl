@@ -5,15 +5,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/graphjson"
-	idxemit "github.com/stacklok/doctopus/internal/infrastructure/emit/index"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/llmstxt"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
+	idxemit "github.com/stacklok/matlatl/internal/infrastructure/emit/index"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/llmstxt"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
-// newEmitCommand implements `doctopus emit --out <dir>` — produce the COMPLETE
+// newEmitCommand implements `matlatl emit --out <dir>` — produce the COMPLETE
 // LLM artifact bundle in one shot: index.md, llms.txt, llms-full.txt,
 // llms-small.txt, graph.json, and findings.json, all under --out. It is the
 // obvious "give me everything an agent needs" path; the per-artifact commands
@@ -61,7 +61,7 @@ func newEmitCommand() *cobra.Command {
 				return exitCodeError{code: platform.ExitRuntime, err: werr}
 			}
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(),
-				"doctopus emit: wrote %d artifact(s) to %s\n", len(artifacts), cfg.OutputDir)
+				"matlatl emit: wrote %d artifact(s) to %s\n", len(artifacts), cfg.OutputDir)
 			return nil
 		},
 	}

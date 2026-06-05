@@ -9,7 +9,7 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // Severity classifies the weight of a finding. The ordering (Info < Warning <

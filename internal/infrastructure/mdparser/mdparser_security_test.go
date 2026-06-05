@@ -12,7 +12,7 @@ import (
 	"github.com/yuin/goldmark/text"
 	"go.abhg.dev/goldmark/frontmatter"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
 )
 
 // TestYAMLAliasBomb is the ADR 0003 adversarial test: a sub-64KiB YAML front

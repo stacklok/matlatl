@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
 func runCmd(t *testing.T, args ...string) (string, string, error) {
@@ -45,8 +45,8 @@ func TestVersionCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version command error: %v", err)
 	}
-	if !strings.Contains(out, "doctopus") {
-		t.Errorf("version output = %q, want it to contain 'doctopus'", out)
+	if !strings.Contains(out, "matlatl") {
+		t.Errorf("version output = %q, want it to contain 'matlatl'", out)
 	}
 }
 
@@ -119,18 +119,18 @@ func TestExitCode_UsageTooManyArgsRoot(t *testing.T) {
 	if code != platform.ExitUsage {
 		t.Fatalf("too-many-args root code = %v, want ExitUsage", code)
 	}
-	if !strings.Contains(errOut, "doctopus:") {
+	if !strings.Contains(errOut, "matlatl:") {
 		t.Errorf("usage error printed nothing useful to stderr, got: %q", errOut)
 	}
 }
 
 func TestExitCode_UsageTooManyArgsStub(t *testing.T) {
-	// Regression for the gate finding: `doctopus check a b` must exit 2, not 3.
+	// Regression for the gate finding: `matlatl check a b` must exit 2, not 3.
 	code, _, errOut := runExit(t, "check", "a", "b")
 	if code != platform.ExitUsage {
 		t.Fatalf("`check a b` code = %v, want ExitUsage", code)
 	}
-	if !strings.Contains(errOut, "doctopus:") {
+	if !strings.Contains(errOut, "matlatl:") {
 		t.Errorf("stub usage error printed nothing to stderr, got: %q", errOut)
 	}
 }
@@ -140,7 +140,7 @@ func TestExitCode_UsageBadFlag(t *testing.T) {
 	if code != platform.ExitUsage {
 		t.Fatalf("bad-flag code = %v, want ExitUsage", code)
 	}
-	if !strings.Contains(errOut, "doctopus:") {
+	if !strings.Contains(errOut, "matlatl:") {
 		t.Errorf("bad-flag printed nothing to stderr, got: %q", errOut)
 	}
 }
@@ -150,7 +150,7 @@ func TestExitCode_VersionOK(t *testing.T) {
 	if code != platform.ExitOK {
 		t.Fatalf("version code = %v, want ExitOK", code)
 	}
-	if !strings.Contains(out, "doctopus") {
-		t.Errorf("version output = %q, want 'doctopus'", out)
+	if !strings.Contains(out, "matlatl") {
+		t.Errorf("version output = %q, want 'matlatl'", out)
 	}
 }

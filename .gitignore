@@ -2,8 +2,8 @@
 /bin/
 /dist/
 # The built binary at the repo root (anchored so it does NOT match the
-# cmd/doctopus/ source directory, which must stay tracked).
-/doctopus
+# cmd/matlatl/ source directory, which must stay tracked).
+/matlatl
 *.exe
 
 # Test / coverage artifacts
@@ -16,5 +16,5 @@ coverage.*
 .vscode/
 .DS_Store
 
-# doctopus's own generated output
+# matlatl's own generated output
 /out/

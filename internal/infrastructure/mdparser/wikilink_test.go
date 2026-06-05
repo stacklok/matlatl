@@ -3,7 +3,7 @@ package mdparser
 import (
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 // wikiRefs parses src and returns only the wikilink/transclusion/anchor refs the

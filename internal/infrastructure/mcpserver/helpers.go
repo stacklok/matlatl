@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // shortestPath returns a navigational path from src to dst over the document

@@ -1,4 +1,4 @@
-digraph doctopus {
+digraph matlatl {
   rankdir=LR;
   node [shape=box, style="rounded,filled", fontname="Helvetica"];
   "n_7b163b263d162ee4" [label="Changelog\nCHANGELOG.md", fillcolor="#e3f2fd", color="#90a4ae", penwidth=1, width=0.900];

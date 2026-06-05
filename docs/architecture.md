@@ -1,17 +1,17 @@
-# doctopus architecture
+# matlatl architecture
 
-> Working overview of how `doctopus` is structured and why. The binding decisions
+> Working overview of how `matlatl` is structured and why. The binding decisions
 > live in the [ADRs](adr/); this document is the readable map over them.
 
 ## 1. What it does
 
-`doctopus` runs a six-stage pipeline over a repository's markdown:
+`matlatl` runs a six-stage pipeline over a repository's markdown:
 
 ```
 Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ Emit
 ```
 
-1. **Scan** — walk the repo, respect `.doctopusignore`, enforce the security
+1. **Scan** — walk the repo, respect `.matlatlignore`, enforce the security
    boundary and resource caps (ADR 0003).
 2. **Parse** — goldmark + front matter + the custom wikilink parser turn each file
    into a pure-domain `Document` (front matter, section tree, raw references).
@@ -38,7 +38,7 @@ third-party parsing. The **application** layer orchestrates the pipeline and def
 the few interfaces that mark real test seams.
 
 ```
-cmd/doctopus → internal/application → internal/domain
+cmd/matlatl → internal/application → internal/domain
                          │
                          └── internal/infrastructure (implements ports)
 ```
@@ -86,7 +86,7 @@ cross-linked docs (~27k references). On a 12-core arm64 machine:
 Peak resident heap for the run is ~32 MiB (`TestPipeline_5kDocs_MemoryCeiling`,
 asserted under a 1 GiB total-allocation ceiling) — the model is **linear**
 (O(V+E)), not the feared in-memory-everything blow-up. Wall-time is `O(V+E)`:
-5k docs analyze in ~0.24 s end-to-end (`time doctopus <5k-dir>`).
+5k docs analyze in ~0.24 s end-to-end (`time matlatl <5k-dir>`).
 
 **Recommendation.** Fan-out parsing yields a **modest ~15–20%** wall-time
 improvement at 5k docs (parsing is a minority of the total, and the
@@ -109,9 +109,9 @@ target, and resolves the host and checks the **resolved IP** (defeating
 DNS-rebinding-to-internal). The resolver and transport are injectable so tests
 prove internal targets are refused **without a network call**.
 
-## 4c. MCP server (`doctopus serve`)
+## 4c. MCP server (`matlatl serve`)
 
-`doctopus serve [path]` runs the analysis once and exposes read-only MCP tools
+`matlatl serve [path]` runs the analysis once and exposes read-only MCP tools
 over stdio (`github.com/mark3labs/mcp-go`, isolated in
 `internal/infrastructure/mcpserver` — the only package importing the MCP lib):
 `what-links-to`, `list-orphans`, `path-between`, `get-section`, and

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 // IndexMarkdownName is the conventional index filename.

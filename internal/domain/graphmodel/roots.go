@@ -5,15 +5,15 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // Front-matter keys/values that affect analysis (ADR 0007).
 const (
-	// FMKeyDoctopus is the front-matter key (in FrontMatter.Extra) carrying
-	// doctopus directives.
-	FMKeyDoctopus = "doctopus"
+	// FMKeyMatlatl is the front-matter key (in FrontMatter.Extra) carrying
+	// matlatl directives.
+	FMKeyMatlatl = "matlatl"
 	// FMValOrphanIntentional marks a document as an intentional orphan, excluding
 	// it from Orphan/Unreachable findings.
 	FMValOrphanIntentional = "orphan-intentional"
@@ -97,12 +97,12 @@ func isIndexType(doc *corpus.Document) bool {
 }
 
 // isIntentionalOrphan reports whether a document opts out of orphan/unreachable
-// findings via `doctopus: orphan-intentional` (ADR 0007).
+// findings via `matlatl: orphan-intentional` (ADR 0007).
 func isIntentionalOrphan(doc *corpus.Document) bool {
 	if doc.FrontMatter.Extra == nil {
 		return false
 	}
-	v, ok := doc.FrontMatter.Extra[FMKeyDoctopus]
+	v, ok := doc.FrontMatter.Extra[FMKeyMatlatl]
 	if !ok {
 		return false
 	}

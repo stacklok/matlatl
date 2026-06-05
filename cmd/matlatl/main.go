@@ -1,4 +1,4 @@
-// Command doctopus is the CLI entrypoint. It builds the Cobra command tree and
+// Command matlatl is the CLI entrypoint. It builds the Cobra command tree and
 // maps the outcome to the process exit code per ADR 0005.
 package main
 
@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
 func main() {
@@ -48,10 +48,10 @@ func runArgs(ctx context.Context, args []string, stdout, stderr io.Writer) platf
 		// Even with cobra's SilenceErrors, the user needs an explanation for a
 		// coded failure (e.g. a bad flag exiting 2). Emit it to stderr
 		// (best-effort: a failing stderr does not change the exit code).
-		_, _ = fmt.Fprintln(stderr, "doctopus:", coded.Error())
+		_, _ = fmt.Fprintln(stderr, "matlatl:", coded.Error())
 		return coded.code
 	}
 
-	_, _ = fmt.Fprintln(stderr, "doctopus:", err)
+	_, _ = fmt.Fprintln(stderr, "matlatl:", err)
 	return platform.ExitRuntime
 }

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // Catalog is the read-only view of the corpus that the resolver needs. It is a

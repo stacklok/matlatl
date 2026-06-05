@@ -11,7 +11,7 @@ import (
 // wikilinkKind is the AST node kind for our custom [[wikilink]] / ![[embed]]
 // nodes. They are walked alongside the standard inline nodes in
 // extractReferences and turned into reference.RawReference values.
-var wikilinkKind = ast.NewNodeKind("DoctopusWikilink")
+var wikilinkKind = ast.NewNodeKind("MatlatlWikilink")
 
 // wikilinkNode is a parsed wikilink or embed. Resolution-relevant fields (the
 // raw target and fragment) are captured verbatim; Display is kept only for

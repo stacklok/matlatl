@@ -3,11 +3,11 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/stacklok/doctopus/internal/infrastructure/mcpserver"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/infrastructure/mcpserver"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
-// newServeCommand implements `doctopus serve [path]` — run the read-only MCP
+// newServeCommand implements `matlatl serve [path]` — run the read-only MCP
 // server over stdio. It builds the analysis once over the path, then exposes the
 // graph-query tools (what-links-to, list-orphans, path-between, get-section,
 // corpus-summary) to an MCP client. The MCP dependency is isolated in
@@ -16,7 +16,7 @@ func newServeCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "serve [path]",
 		Short: "Run the read-only MCP server (stdio)",
-		Long: "serve builds the doctopus analysis once over the given path and exposes " +
+		Long: "serve builds the matlatl analysis once over the given path and exposes " +
 			"read-only MCP tools over stdio for an agent: what-links-to, list-orphans, " +
 			"path-between, get-section, and corpus-summary (the graph.json manifest). " +
 			"All tools return the same structured data as the file artifacts.",

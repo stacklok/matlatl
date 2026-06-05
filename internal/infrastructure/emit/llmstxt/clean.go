@@ -6,7 +6,7 @@ import "strings"
 // stripped, so llms-full/small carry the human-readable markdown only (the
 // typed front matter is already projected into the context header). It strips a
 // single leading YAML (`---`) or TOML (`+++`) fence delimited block — the two
-// forms doctopus parses (ADR 0002) — and nothing else: the body markdown is
+// forms matlatl parses (ADR 0002) — and nothing else: the body markdown is
 // passed through verbatim so the agent sees the real source. Determinism is
 // trivial (a pure byte transform).
 //

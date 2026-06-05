@@ -11,8 +11,8 @@ package corpus
 import (
 	"time"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 // DocumentID is the canonical document identity (ADR 0001). It is re-exported
@@ -20,7 +20,7 @@ import (
 // sites keep working; the validating constructor lives in identity.
 type DocumentID = identity.DocumentID
 
-// FrontMatter holds the typed YAML/TOML front-matter fields doctopus
+// FrontMatter holds the typed YAML/TOML front-matter fields matlatl
 // understands, plus any unrecognized keys in Extra. A zero FrontMatter is a
 // valid "no front matter" value.
 type FrontMatter struct {

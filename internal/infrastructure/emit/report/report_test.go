@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/graphmodel"
-	"github.com/stacklok/doctopus/internal/domain/reference"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
+	"github.com/stacklok/matlatl/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
 func TestEscapeCell_NeutralizesPipeAndNewline(t *testing.T) {
@@ -225,7 +225,7 @@ func TestTerminal_QuietSummaryLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := buf.String()
-	if !strings.HasPrefix(got, "doctopus: 1 documents") || strings.Count(got, "\n") != 1 {
+	if !strings.HasPrefix(got, "matlatl: 1 documents") || strings.Count(got, "\n") != 1 {
 		t.Errorf("quiet mode should print one summary line, got: %q", got)
 	}
 }

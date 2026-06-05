@@ -1,4 +1,4 @@
-module github.com/stacklok/doctopus
+module github.com/stacklok/matlatl
 
 go 1.26
 

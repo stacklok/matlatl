@@ -10,7 +10,7 @@
 // the type spine only.
 package reference
 
-import "github.com/stacklok/doctopus/internal/domain/identity"
+import "github.com/stacklok/matlatl/internal/domain/identity"
 
 // LinkType classifies the syntactic origin of a reference edge.
 type LinkType int

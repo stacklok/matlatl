@@ -1,5 +1,5 @@
 // Package mdparser implements application.DocumentParser. It is the ONLY package
-// in doctopus that imports goldmark (ADR 0002): markdown parsing and the
+// in matlatl that imports goldmark (ADR 0002): markdown parsing and the
 // third-party AST are quarantined here, so the domain stays pure.
 //
 // It turns markdown bytes into a pure-domain corpus.Document: typed front matter
@@ -25,10 +25,10 @@ import (
 	"github.com/yuin/goldmark/util"
 	"go.abhg.dev/goldmark/frontmatter"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/domain/corpus"
-	"github.com/stacklok/doctopus/internal/domain/identity"
-	"github.com/stacklok/doctopus/internal/domain/reference"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 // DefaultMaxFrontMatterBytes caps the size of the leading front-matter block

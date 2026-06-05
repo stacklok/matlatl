@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 )
 
 // fakeCatalog is an in-test Catalog: a set of documents, a per-doc set of

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stacklok.com/doctopus/schemas/findings.schema.json",
-  "title": "doctopus findings.json",
-  "description": "The machine- and CI-consumable findings report emitted by `doctopus check --out <dir>` and `doctopus emit --out <dir>`. Every finding is self-contained and actionable: structured `details` plus a top-level `remediationGuide` keyed by finding kind. This schema is the published contract; the emitter type internal/infrastructure/emit.findingsDocument is kept in lockstep and a test validates emitted bytes against this document.",
+  "$id": "https://stacklok.com/matlatl/schemas/findings.schema.json",
+  "title": "matlatl findings.json",
+  "description": "The machine- and CI-consumable findings report emitted by `matlatl check --out <dir>` and `matlatl emit --out <dir>`. Every finding is self-contained and actionable: structured `details` plus a top-level `remediationGuide` keyed by finding kind. This schema is the published contract; the emitter type internal/infrastructure/emit.findingsDocument is kept in lockstep and a test validates emitted bytes against this document.",
   "type": "object",
   "additionalProperties": false,
   "required": [

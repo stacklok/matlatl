@@ -5,13 +5,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/stacklok/doctopus/internal/application"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit"
-	"github.com/stacklok/doctopus/internal/infrastructure/emit/report"
-	"github.com/stacklok/doctopus/internal/platform"
+	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/report"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
-// newReportCommand implements `doctopus report [path]` — render a committable
+// newReportCommand implements `matlatl report [path]` — render a committable
 // Markdown analysis report. With --out it writes report.md under the output
 // directory (through the FSWriter safeJoin guard, ADR 0003); otherwise it prints
 // to stdout. Like check, it never gates CI on its own (exits 0 on a clean run).
