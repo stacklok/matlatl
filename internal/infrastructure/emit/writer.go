@@ -28,7 +28,7 @@ var _ application.ArtifactWriter = (*FSWriter)(nil)
 
 // Write persists each artifact under the output directory, creating it if
 // needed. It returns on the first error.
-func (w *FSWriter) Write(_ context.Context, artifacts []application.Artifact) error {
+func (w *FSWriter) Write(ctx context.Context, artifacts []application.Artifact) error {
 	if w.outDir == "" {
 		return fmt.Errorf("emit: empty output directory")
 	}
@@ -41,6 +41,9 @@ func (w *FSWriter) Write(_ context.Context, artifacts []application.Artifact) er
 	}
 
 	for _, art := range artifacts {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		dest, perr := safeJoin(absOut, art.Name)
 		if perr != nil {
 			return perr
@@ -56,18 +59,15 @@ func (w *FSWriter) Write(_ context.Context, artifacts []application.Artifact) er
 }
 
 // safeJoin cleans name and joins it under absOut, verifying the result stays
-// within absOut (reverse zip-slip guard, ADR 0003).
+// within absOut (reverse zip-slip guard, ADR 0003) via the shared containment
+// helper. An absolute name is rejected up front for a clearer error.
 func safeJoin(absOut, name string) (string, error) {
 	clean := filepath.Clean(filepath.FromSlash(name))
 	if filepath.IsAbs(clean) {
 		return "", fmt.Errorf("emit: artifact name %q must be relative", name)
 	}
-	dest := filepath.Join(absOut, clean)
-	rel, err := filepath.Rel(absOut, dest)
-	if err != nil {
-		return "", fmt.Errorf("emit: bad artifact path %q: %w", name, err)
-	}
-	if identity.EscapesRoot(filepath.ToSlash(rel)) {
+	dest, ok := identity.Contains(absOut, clean)
+	if !ok {
 		return "", fmt.Errorf("emit: artifact name %q escapes the output directory", name)
 	}
 	return dest, nil

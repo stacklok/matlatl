@@ -99,6 +99,7 @@ func newRootCommand() *cobra.Command {
 		newCheckCommand(),
 		newGraphCommand(),
 		newIndexCommand(),
+		newEmitCommand(),
 		newReportCommand(),
 		newOrphansCommand(),
 		newStubCommand("serve", "Run the MCP server", "P6"),

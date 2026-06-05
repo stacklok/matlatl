@@ -11,8 +11,12 @@ import "strings"
 // table, inject Markdown formatting/HTML, or escape an inline code span.
 //
 // Three contexts, three helpers:
-//   - EscapeMarkdownText: flowing Markdown (headings, list items, prose). All
-//     Markdown-significant characters are backslash-escaped.
+//   - EscapeMarkdownText: flowing Markdown (headings, list items, prose). The
+//     Markdown-significant characters are backslash-escaped. '#' is deliberately
+//     NOT escaped: it is only block-significant at the start of a line, and these
+//     helpers already collapse every newline to a space, so a leading '#' can
+//     never begin a heading in the rendered single-line value — escaping it would
+//     only add noise (e.g. a legitimate "C#" or "#tag" in prose).
 //   - EscapeTableCell: a GFM table cell. Same as text, plus the pipe `|` which
 //     would otherwise end the cell.
 //   - EscapeInlineCode: the body of a single-backtick code span.
@@ -64,6 +68,20 @@ var inlineCodeReplacer = strings.NewReplacer(
 	"\n", " ",
 	"\r", " ",
 )
+
+// CategoryLabel renders a document's category (its directory) for display: the
+// root directory ("." or "") becomes the explicit "(root)" label, everything
+// else passes through verbatim. It is the ONE shared implementation used by
+// every emitter that surfaces a category (index.md, graph.json, llms.txt) so
+// the label can never silently drift between artifacts. Callers that render the
+// label in a single-line context must still collapse newlines themselves (a
+// directory name may legally contain one on Linux).
+func CategoryLabel(cat string) string {
+	if cat == "." || cat == "" {
+		return "(root)"
+	}
+	return cat
+}
 
 // EscapeMarkdownText escapes a string for safe inclusion in flowing Markdown
 // (not a table cell): newlines collapse to spaces and Markdown-significant

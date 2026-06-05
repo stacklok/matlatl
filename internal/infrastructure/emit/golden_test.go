@@ -12,11 +12,24 @@ import (
 	"github.com/stacklok/doctopus/internal/application"
 	"github.com/stacklok/doctopus/internal/infrastructure/emit"
 	"github.com/stacklok/doctopus/internal/infrastructure/emit/diagram"
+	"github.com/stacklok/doctopus/internal/infrastructure/emit/graphjson"
 	idxemit "github.com/stacklok/doctopus/internal/infrastructure/emit/index"
+	"github.com/stacklok/doctopus/internal/infrastructure/emit/llmstxt"
 	"github.com/stacklok/doctopus/internal/infrastructure/emit/report"
 	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
 	"github.com/stacklok/doctopus/internal/infrastructure/mdparser"
 )
+
+// corpusRootPath is the absolute path of the corpus fixture, needed by the
+// llms-full/small emitters' root-confined body reader.
+func corpusRootPath(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs(filepath.Join("..", "..", "..", "testdata", "corpus"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
 
 // updateGolden, when set, rewrites the golden files instead of comparing.
 // Regenerate with:
@@ -115,6 +128,27 @@ func TestGolden_Artifacts(t *testing.T) {
 		}
 		assertGolden(t, "report.txt", buf.Bytes(), nil)
 	})
+
+	// --- P5 LLM artifacts ---
+	root := corpusRootPath(t)
+	reader := llmstxt.NewBodyReader(root)
+	opts := llmstxt.Options{} // derive the title from the root doc (deterministic)
+	t.Run("graph.json", func(t *testing.T) {
+		b, err := graphjson.JSON(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertGolden(t, "graph.json", b, nil)
+	})
+	t.Run("llms.txt", func(t *testing.T) {
+		assertGolden(t, "llms.txt", llmstxt.LLMSTxt(v, opts), nil)
+	})
+	t.Run("llms-full.txt", func(t *testing.T) {
+		assertGolden(t, "llms-full.txt", llmstxt.LLMSFull(v, reader, opts), nil)
+	})
+	t.Run("llms-small.txt", func(t *testing.T) {
+		assertGolden(t, "llms-small.txt", llmstxt.LLMSSmall(v, reader, opts), nil)
+	})
 }
 
 // TestGolden_ByteStable runs every emitter twice and asserts identical bytes,
@@ -123,6 +157,7 @@ func TestGolden_ByteStable(t *testing.T) {
 	v1 := buildCorpusView(t)
 	v2 := buildCorpusView(t)
 
+	reader := llmstxt.NewBodyReader(corpusRootPath(t))
 	cases := []struct {
 		name string
 		gen  func(emit.View) []byte
@@ -132,6 +167,16 @@ func TestGolden_ByteStable(t *testing.T) {
 		{"graph.dot", diagram.DOT},
 		{"hierarchy.mmd", diagram.MermaidHierarchy},
 		{"index.md", idxemit.Markdown},
+		{"graph.json", func(v emit.View) []byte {
+			b, err := graphjson.JSON(v)
+			if err != nil {
+				t.Fatalf("graph.json emit: %v", err)
+			}
+			return b
+		}},
+		{"llms.txt", func(v emit.View) []byte { return llmstxt.LLMSTxt(v, llmstxt.Options{}) }},
+		{"llms-full.txt", func(v emit.View) []byte { return llmstxt.LLMSFull(v, reader, llmstxt.Options{}) }},
+		{"llms-small.txt", func(v emit.View) []byte { return llmstxt.LLMSSmall(v, reader, llmstxt.Options{}) }},
 		// report.txt: the terminal emitter writes to an io.Writer, so adapt it to
 		// the []byte generator shape (color forced off for a stable comparison).
 		{"report.txt", func(v emit.View) []byte {

@@ -265,11 +265,11 @@ func (a *fsAssetExistence) AssetExists(relPath string) bool {
 	if a.root == "" || relPath == "" {
 		return false
 	}
-	full := filepath.Join(a.root, filepath.FromSlash(relPath))
 	// Defense in depth: never stat outside the root even if a caller slipped.
-	// Normalize to slashes and use the shared root-containment predicate.
-	rel, err := filepath.Rel(a.root, full)
-	if err != nil || identity.EscapesRoot(filepath.ToSlash(rel)) {
+	// Use the shared root-containment join (the same guard the writer/body
+	// reader use).
+	full, ok := identity.Contains(a.root, relPath)
+	if !ok {
 		return false
 	}
 	info, err := os.Lstat(full)

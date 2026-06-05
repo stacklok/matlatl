@@ -18,14 +18,26 @@ const (
 	JUnitXMLName     = "junit.xml"
 )
 
+// FindingsSchemaVersion is the findings.json schema version. Adding optional
+// fields is backward-compatible; renaming/removing a field or a Details key is a
+// breaking change that bumps this. v2 (this phase) added per-finding "details"
+// (structured, machine-actionable context) and a top-level "remediationGuide"
+// mapping each finding kind to a standalone how-to, so every finding is
+// self-contained for an agent.
+const FindingsSchemaVersion = 2
+
 // findingsDocument is the stable findings.json schema. Adding fields is
 // backward-compatible; renaming/removing is a breaking change and must bump
-// SchemaVersion.
+// FindingsSchemaVersion.
 type findingsDocument struct {
-	SchemaVersion int           `json:"schemaVersion"`
-	Tool          string        `json:"tool"`
-	Summary       findingsSum   `json:"summary"`
-	Findings      []findingJSON `json:"findings"`
+	SchemaVersion int         `json:"schemaVersion"`
+	Tool          string      `json:"tool"`
+	Summary       findingsSum `json:"summary"`
+	// RemediationGuide maps each finding kind that appears in this report to a
+	// one-paragraph, standalone how-to, so an agent can act on a finding using
+	// only this document. Keyed by the finding kind string (e.g. "broken-link").
+	RemediationGuide map[string]string `json:"remediationGuide"`
+	Findings         []findingJSON     `json:"findings"`
 }
 
 type findingsSum struct {
@@ -46,6 +58,55 @@ type findingJSON struct {
 	Line         int    `json:"line"`
 	Message      string `json:"message"`
 	SuggestedFix string `json:"suggestedFix,omitempty"`
+	// Details is the finding's structured, machine-actionable context (e.g. the
+	// ambiguous candidates, the expected anchor slug). Omitted when empty. The
+	// map is rendered with sorted keys (encoding/json sorts map keys), so output
+	// is deterministic.
+	Details map[string]string `json:"details,omitempty"`
+}
+
+// remediationByKind is the standalone how-to for each finding kind. It is keyed
+// by the analysis.FindingKind.String() value and is the single source of truth
+// for the findings.json remediationGuide. Every kind a finding can carry MUST
+// have an entry (asserted in tests) so the guide always covers the report.
+var remediationByKind = map[string]string{
+	analysis.BrokenLink.String(): "The reference points at a path that does not resolve to any document in the corpus. " +
+		"Open the finding's `document` at `line`, then either correct the link target to a real, " +
+		"existing document path (the `details.target` field holds the path as written, relative to the " +
+		"origin document), move/create the intended target file, or remove the dead link.",
+	analysis.BrokenAnchor.String(): "The target document exists but has no heading whose slug matches the fragment. " +
+		"Either add a heading to `details.targetDocument` that slugifies to `details.expectedSlug` " +
+		"(slugs are GitHub-style: lowercase, spaces→dashes, punctuation dropped), or change the link's " +
+		"`#fragment` to an existing heading slug in that document.",
+	analysis.Ambiguous.String(): "The target matches more than one document, so the link is non-deterministic. " +
+		"Replace it with one of the unique paths in `details.candidates` (newline-separated): pick the " +
+		"intended document and use a path long enough to be unambiguous.",
+	analysis.Orphan.String(): "The document is isolated: nothing links to it and it links to nothing, so no reader " +
+		"or agent can navigate to it. Add an inbound link from a relevant page (an index or a related doc) " +
+		"and outbound links to its neighbors, or delete it if obsolete. To keep it intentionally unlinked, " +
+		"add front matter `doctopus: orphan-intentional`.",
+	analysis.Unreachable.String(): "The document cannot be reached by following links from any root (README.md/index.md " +
+		"or a `type: index` doc). Add an inbound link from a page that is itself reachable from a root. " +
+		"To keep it intentionally unlinked, add front matter `doctopus: orphan-intentional`.",
+	analysis.KnowledgeGap.String(): "Two clusters of documentation (`details.componentA` and `details.componentB`) have no " +
+		"navigational links between them. This is an experimental heuristic, not an error. If the two areas " +
+		"are related, add a link between `details.representativeA` and `details.representativeB` to connect them.",
+}
+
+// remediationGuideFor returns the remediation entries for exactly the kinds
+// present in the report, so the guide is scoped to what was emitted. A clean
+// report yields an empty (but non-nil) guide.
+func remediationGuideFor(report *analysis.AnalysisReport) map[string]string {
+	guide := make(map[string]string)
+	for _, k := range []analysis.FindingKind{
+		analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
+		analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap,
+	} {
+		if report.CountByKind(k) > 0 {
+			guide[k.String()] = remediationByKind[k.String()]
+		}
+	}
+	return guide
 }
 
 // FindingsJSON renders an AnalysisReport as the canonical findings.json bytes
@@ -53,8 +114,9 @@ type findingJSON struct {
 // so output is deterministic.
 func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
 	doc := findingsDocument{
-		SchemaVersion: 1,
-		Tool:          "doctopus",
+		SchemaVersion:    FindingsSchemaVersion,
+		Tool:             "doctopus",
+		RemediationGuide: remediationGuideFor(report),
 		Summary: findingsSum{
 			Total:        report.Len(),
 			BrokenLink:   report.CountByKind(analysis.BrokenLink),
@@ -75,6 +137,7 @@ func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
 			Line:         f.Location.Line,
 			Message:      f.Message,
 			SuggestedFix: f.SuggestedFix,
+			Details:      f.Details,
 		})
 	}
 	b, err := json.MarshalIndent(doc, "", "  ")

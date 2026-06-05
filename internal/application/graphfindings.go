@@ -41,6 +41,9 @@ func orphanFinding(id identity.DocumentID) analysis.Finding {
 		SuggestedFix: fmt.Sprintf(
 			"Link %q in from a relevant page (e.g. an index or a related doc), or delete it if obsolete. "+
 				"To keep it intentionally unlinked, add front matter `doctopus: orphan-intentional`.", id),
+		Details: map[string]string{
+			DetailTargetDocument: id.String(),
+		},
 	}
 }
 
@@ -54,6 +57,9 @@ func unreachableFinding(id identity.DocumentID) analysis.Finding {
 		SuggestedFix: fmt.Sprintf(
 			"Add an inbound link to %q from a page that is itself reachable from a root (README.md/index.md). "+
 				"To keep it intentionally unlinked, add front matter `doctopus: orphan-intentional`.", id),
+		Details: map[string]string{
+			DetailTargetDocument: id.String(),
+		},
 	}
 }
 
@@ -69,5 +75,11 @@ func gapFinding(gap graphmodel.Gap) analysis.Finding {
 		SuggestedFix: fmt.Sprintf(
 			"If these areas are related, consider linking %q and %q to connect the two clusters.",
 			gap.RepresentativeA, gap.RepresentativeB),
+		Details: map[string]string{
+			DetailComponentA:      gap.ComponentA.String(),
+			DetailComponentB:      gap.ComponentB.String(),
+			DetailRepresentativeA: gap.RepresentativeA.String(),
+			DetailRepresentativeB: gap.RepresentativeB.String(),
+		},
 	}
 }

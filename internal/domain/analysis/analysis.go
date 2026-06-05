@@ -108,6 +108,18 @@ type Finding struct {
 	Message string
 	// SuggestedFix is an optional remediation hint.
 	SuggestedFix string
+	// Details carries optional structured, machine-actionable context for a
+	// finding — the data an agent needs to act WITHOUT re-deriving it from the
+	// prose Message (e.g. the candidate documents for an ambiguous link, the
+	// expected slug for a broken anchor, the raw target for a broken link). Keys
+	// are stable, documented per kind (see the application finding builders and
+	// the findings.json schema). nil when the finding has no structured detail.
+	//
+	// It is a pure-data map of stable string→string pairs; the domain attaches no
+	// behavior to it. Emitters render it verbatim. Multi-valued detail (e.g. the
+	// ambiguous candidate list) is encoded as a "\n"-joined string under a single
+	// key so the type stays a flat, deterministic map.
+	Details map[string]string
 }
 
 // AnalysisReport is the frozen result of the analysis stage: a deterministically

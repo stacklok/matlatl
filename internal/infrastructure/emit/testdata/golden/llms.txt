@@ -1,0 +1,20 @@
+# Project Home
+
+> A markdown documentation corpus of 13 document(s) across 6 component(s), with 24 heading(s) and 24 resolved reference(s). Entries are ordered by importance (most-connected first).
+
+## Documentation
+
+- [User Guide](docs/guide.md): How to use the thing.
+- [Overview](docs/sub/overview.md): Overview
+- [Project Home](README.md): Top-level readme for the fixture corpus.
+- [Docs Index](docs/README.md): Docs Index
+
+## Known gaps
+
+This corpus is INCOMPLETE for navigation; an agent should not assume full coverage:
+
+- 2 orphan document(s) (nothing links to them)
+- 6 unreachable document(s) (not reachable from a root)
+- 3 broken link(s)
+- 1 broken anchor(s)
+- 1 ambiguous link(s)

@@ -25,6 +25,31 @@ func (r Result) CheckExitCode(strict bool) platform.ExitCode {
 	return platform.ExitOK
 }
 
+// Stable structured-detail keys attached to a Finding.Details map. They are the
+// machine-actionable context an agent needs to act on a finding without parsing
+// the prose Message, and are surfaced verbatim in findings.json (schema v2). A
+// key here is part of the findings.json contract: renaming one is a breaking
+// change that bumps the findings schema version.
+const (
+	// DetailTarget is the raw, human-facing link target (path plus #fragment).
+	DetailTarget = "target"
+	// DetailLinkType is the syntactic link type (e.g. "relative-link", "wikilink").
+	DetailLinkType = "linkType"
+	// DetailExpectedSlug is the anchor slug a broken-anchor reference expected.
+	DetailExpectedSlug = "expectedSlug"
+	// DetailTargetDocument is the resolved document a broken anchor lives in.
+	DetailTargetDocument = "targetDocument"
+	// DetailCandidates is the newline-joined candidate DocumentIDs of an ambiguous
+	// reference (the alternatives an agent can pick a unique path from).
+	DetailCandidates = "candidates"
+	// DetailComponentA / DetailComponentB are the two cluster IDs of a gap, and
+	// DetailRepresentativeA / DetailRepresentativeB a concrete bridge endpoint each.
+	DetailComponentA      = "componentA"
+	DetailComponentB      = "componentB"
+	DetailRepresentativeA = "representativeA"
+	DetailRepresentativeB = "representativeB"
+)
+
 // findingsFromReferences turns resolved references into analysis Findings. Only
 // unhealthy references that map to a P2 finding kind (broken link, broken
 // anchor, ambiguous) produce findings; healthy/external/ignored references do
@@ -79,6 +104,10 @@ func brokenLinkFinding(r reference.Reference) analysis.Finding {
 		SuggestedFix: fmt.Sprintf(
 			"Check that %q exists and is spelled correctly relative to %q; if it lives elsewhere, fix the path or move the file.",
 			target, r.Origin),
+		Details: map[string]string{
+			DetailTarget:   target,
+			DetailLinkType: r.Type.String(),
+		},
 	}
 }
 
@@ -96,6 +125,12 @@ func brokenAnchorFinding(r reference.Reference) analysis.Finding {
 		SuggestedFix: fmt.Sprintf(
 			"Add a heading that slugifies to %q in %q, or update the fragment to match an existing heading (slugs are GitHub-style: lowercase, spaces to dashes).",
 			r.Fragment, doc),
+		Details: map[string]string{
+			DetailTarget:         rawTargetText(r),
+			DetailLinkType:       r.Type.String(),
+			DetailExpectedSlug:   r.Fragment,
+			DetailTargetDocument: doc.String(),
+		},
 	}
 }
 
@@ -114,5 +149,10 @@ func ambiguousFinding(r reference.Reference) analysis.Finding {
 		SuggestedFix: fmt.Sprintf(
 			"Disambiguate %q by using a longer, unique path (e.g. one of: %s).",
 			rawTargetText(r), list),
+		Details: map[string]string{
+			DetailTarget:     rawTargetText(r),
+			DetailLinkType:   r.Type.String(),
+			DetailCandidates: strings.Join(cands, "\n"),
+		},
 	}
 }

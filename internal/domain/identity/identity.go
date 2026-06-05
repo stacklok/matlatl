@@ -106,6 +106,24 @@ func EscapesRoot(slashRel string) bool {
 	return slashRel == "" || slashRel == "." || slashRel == ".." || strings.HasPrefix(slashRel, "../")
 }
 
+// Contains joins relPath (a slash-or-OS-separated, root-relative path) under the
+// absolute root absRoot, cleans it, and verifies the result stays within the
+// root. It returns the cleaned OS-separator path and true when contained, or
+// ("", false) when the joined path escapes the root (via "..", an absolute
+// component, etc.). It is the single root-containment join used by every
+// filesystem boundary in the codebase (the scanner's asset check, the llms-full
+// body reader, the artifact writer) so they cannot diverge on the guard (ADR
+// 0003). It is a pure path computation — it performs no I/O and (like the
+// scanner's separate symlink resolution) does not itself resolve symlinks.
+func Contains(absRoot, relPath string) (string, bool) {
+	full := filepath.Join(absRoot, filepath.FromSlash(relPath))
+	rel, err := filepath.Rel(absRoot, full)
+	if err != nil || EscapesRoot(filepath.ToSlash(rel)) {
+		return "", false
+	}
+	return full, true
+}
+
 // String returns the identifier as a plain string.
 func (id DocumentID) String() string { return string(id) }
 

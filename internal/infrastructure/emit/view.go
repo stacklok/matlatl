@@ -57,6 +57,12 @@ type View struct {
 	// Metrics is the frozen graph-analysis carrier, for emitters that render the
 	// graph itself (mermaid, dot). Read-only.
 	Metrics *graphmodel.GraphMetrics
+
+	// corpus is the frozen corpus the run was computed over, retained so the
+	// machine emitters (graph.json sections, llms-full bodies) can reach a
+	// document's section tree and front matter. It is READ-ONLY: emitters must
+	// never mutate it (ADR 0004). Reached only through the Document accessor.
+	corpus *corpus.Corpus
 }
 
 // Counts are the corpus-overview tallies surfaced at the top of every report.
@@ -105,6 +111,7 @@ const topN = 5
 func BuildView(res application.Result) View {
 	v := View{docIndex: map[identity.DocumentID]int{}}
 	c := res.Corpus
+	v.corpus = c
 	if res.Metrics == nil || c == nil {
 		v.Counts = countsFromResult(res, nil)
 		return v
@@ -163,6 +170,25 @@ func BuildView(res application.Result) View {
 	return v
 }
 
+// ReachableSet returns the set of reachable document IDs and whether
+// reachability is INDETERMINATE (no root set was found). It is the single shared
+// reachability helper for the machine emitters (graph.json, llms.txt) so they
+// cannot diverge on the indeterminate case: per ADR 0007, indeterminate is NOT
+// the same as "everything unreachable" — callers must consult the returned flag
+// and treat every document as reachable (do not mark anything unreachable) when
+// it is true. A nil metrics carrier is treated as indeterminate with an empty
+// set.
+func ReachableSet(m *graphmodel.GraphMetrics) (set map[identity.DocumentID]struct{}, indeterminate bool) {
+	if m == nil || m.Orphans.Indeterminate {
+		return map[identity.DocumentID]struct{}{}, true
+	}
+	set = make(map[identity.DocumentID]struct{}, len(m.Reachability.Reached))
+	for _, id := range m.Reachability.Reached {
+		set[id] = struct{}{}
+	}
+	return set, false
+}
+
 // Doc returns the DocView for id and whether it exists.
 func (v View) Doc(id identity.DocumentID) (DocView, bool) {
 	i, ok := v.docIndex[id]
@@ -170,6 +196,16 @@ func (v View) Doc(id identity.DocumentID) (DocView, bool) {
 		return DocView{}, false
 	}
 	return v.Docs[i], true
+}
+
+// Document returns the frozen *corpus.Document for id and whether it exists. The
+// returned document is READ-ONLY (ADR 0004): the machine emitters read its
+// section tree / front matter but must not mutate it.
+func (v View) Document(id identity.DocumentID) (*corpus.Document, bool) {
+	if v.corpus == nil {
+		return nil, false
+	}
+	return v.corpus.Get(id)
 }
 
 // TitleOf returns the best-effort display title for id (or the id itself).

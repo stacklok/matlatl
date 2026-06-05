@@ -391,6 +391,81 @@ func TestIntegration_GraphBadFormat(t *testing.T) {
 	}
 }
 
+// --- P5 LLM-emitter integration tests ---
+
+// TestIntegration_GraphJSONToOut: `graph --format json --out` writes a parseable,
+// schema-stamped graph.json under --out, and a second run is byte-identical.
+func TestIntegration_GraphJSONToOut(t *testing.T) {
+	outDir := t.TempDir()
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"graph", corpusFixture(t), "--format", "json", "--out", outDir}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("graph json code = %v, want ExitOK (stderr=%q)", code, errOut.String())
+	}
+	b, err := os.ReadFile(filepath.Join(outDir, "graph.json"))
+	if err != nil {
+		t.Fatalf("graph.json not written: %v", err)
+	}
+	var doc struct {
+		SchemaVersion int `json:"schemaVersion"`
+		Summary       struct {
+			Documents int `json:"documents"`
+		} `json:"summary"`
+		Nodes []json.RawMessage `json:"nodes"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("graph.json does not parse: %v", err)
+	}
+	if doc.SchemaVersion != 1 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
+		t.Errorf("graph.json content unexpected: version=%d docs=%d nodes=%d", doc.SchemaVersion, doc.Summary.Documents, len(doc.Nodes))
+	}
+	assertNothingEscaped(t, outDir, []string{"graph.json"})
+}
+
+// TestIntegration_EmitBundle: `emit --out` writes the full LLM artifact set,
+// every file parses, and nothing escapes --out.
+func TestIntegration_EmitBundle(t *testing.T) {
+	outDir := t.TempDir()
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"emit", corpusFixture(t), "--out", outDir}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("emit code = %v, want ExitOK (stderr=%q)", code, errOut.String())
+	}
+	want := []string{"index.md", "llms.txt", "llms-full.txt", "llms-small.txt", "graph.json", "findings.json"}
+	for _, name := range want {
+		b, err := os.ReadFile(filepath.Join(outDir, name))
+		if err != nil {
+			t.Fatalf("bundle missing %s: %v", name, err)
+		}
+		if len(b) == 0 {
+			t.Errorf("bundle artifact %s is empty", name)
+		}
+	}
+	// graph.json + findings.json parse as JSON.
+	for _, name := range []string{"graph.json", "findings.json"} {
+		b, _ := os.ReadFile(filepath.Join(outDir, name))
+		var v any
+		if err := json.Unmarshal(b, &v); err != nil {
+			t.Errorf("%s does not parse: %v", name, err)
+		}
+	}
+	// llms.txt has the spec shape.
+	llms, _ := os.ReadFile(filepath.Join(outDir, "llms.txt"))
+	if !strings.HasPrefix(string(llms), "# ") || !strings.Contains(string(llms), "## Known gaps") {
+		t.Errorf("llms.txt missing spec shape:\n%s", llms)
+	}
+	assertNothingEscaped(t, outDir, want)
+}
+
+// TestIntegration_EmitRequiresOut: `emit` without --out is a usage error.
+func TestIntegration_EmitRequiresOut(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"emit", corpusFixture(t)}, &out, &errOut)
+	if code != platform.ExitUsage {
+		t.Fatalf("emit without --out code = %v, want ExitUsage (2)", code)
+	}
+}
+
 // assertNothingEscaped verifies that the out dir contains only the expected
 // files (plus directories) — nothing was written outside --out (ADR 0003).
 func assertNothingEscaped(t *testing.T, outDir string, want []string) {

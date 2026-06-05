@@ -17,21 +17,6 @@ type Component struct {
 // Components is a sorted list of components (ordered by ID).
 type Components []Component
 
-// ComponentIDs returns the component IDs in their existing (already-sorted)
-// order. Components is constructed sorted by ID (see finalizeComponents), so no
-// re-sort is needed.
-//
-// Planned consumer: the P4/P5 emitters (graph.json component grouping, the
-// human report's "clusters" section) will read this to label each document's
-// component. It is exported ahead of that consumer as the stable emitter API.
-func (comps Components) ComponentIDs() []identity.DocumentID {
-	out := make([]identity.DocumentID, 0, len(comps))
-	for _, c := range comps {
-		out = append(out, c.ID)
-	}
-	return out
-}
-
 // WeaklyConnectedComponents computes WCCs over the UNDIRECTED projection using
 // union-find with path compression and union-by-size. Component IDs are the
 // lexicographically smallest member, and the component list is sorted by ID, so

@@ -131,6 +131,11 @@ func (c *Corpus) HeadingCount() int { return c.headings.count() }
 // AddHeading records that document id contains a heading with the given canonical
 // slug (ADR 0006). This is a build-phase mutation routed through the Corpus so
 // the underlying index is never exposed.
+//
+// Test-only seam: the production path populates the heading inventory directly
+// from a Document's section tree inside Add; this exported entry point exists so
+// tests can build a heading inventory without a full Document and is not called
+// from non-test code.
 func (c *Corpus) AddHeading(id DocumentID, slug string) {
 	c.headings.add(id, slug)
 }
@@ -144,6 +149,11 @@ func (c *Corpus) HasHeading(id DocumentID, slug string) bool {
 // AddAlias records that document id is reachable via the given alias. This is a
 // build-phase mutation routed through the Corpus so the underlying index is
 // never exposed.
+//
+// Test-only seam: the production path populates the alias table directly from a
+// Document's front-matter aliases inside Add; this exported entry point exists
+// so tests can seed aliases without a full Document and is not called from
+// non-test code.
 func (c *Corpus) AddAlias(alias string, id DocumentID) {
 	c.aliases.add(alias, id)
 }
