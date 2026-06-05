@@ -164,6 +164,9 @@ func BuildView(res application.Result) View {
 				v.Ambiguous = append(v.Ambiguous, f)
 			case analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap:
 				// Carried via the dedicated View slices above, not the finding lists.
+			case analysis.DeadLink:
+				// Opt-in (--check-external) only; surfaced via findings.json, not
+				// the deterministic human View slices.
 			}
 		}
 	}

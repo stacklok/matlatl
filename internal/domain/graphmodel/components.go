@@ -120,36 +120,83 @@ type tarjan struct {
 	sccs    [][]identity.DocumentID
 }
 
-func (t *tarjan) strongConnect(v identity.DocumentID) {
+// frame is one node's state on the explicit DFS work stack: the node and the
+// index of the next neighbor (in sorted projAdj order) still to visit.
+type frame struct {
+	v    identity.DocumentID
+	next int
+}
+
+// strongConnect runs Tarjan's SCC visit from a root using an EXPLICIT stack
+// instead of native recursion, so an arbitrarily long link chain (e.g. 20k
+// documents in one path) cannot overflow the goroutine stack (P6
+// concurrency-readiness). It is the faithful iterative transcription of the
+// recursive algorithm: a frame is pushed when a node is first discovered, its
+// neighbors are advanced one at a time, the low-link is propagated back to the
+// parent on each return, and an SCC is popped from the value stack when a node's
+// low-link equals its own index. Neighbor iteration order (sorted projAdj) and
+// the resulting low-link values are identical to the recursive version, so the
+// SCCs are byte-for-byte the same after finalizeComponents sorts them.
+func (t *tarjan) strongConnect(root identity.DocumentID) {
+	work := []frame{{v: root}}
+	t.visit(root)
+
+	for len(work) > 0 {
+		top := &work[len(work)-1]
+		v := top.v
+		adj := t.g.projAdj[v]
+
+		if top.next < len(adj) {
+			w := adj[top.next]
+			top.next++
+			switch {
+			case t.indexUnset(w):
+				// Descend into w: push a new frame (recursion's call).
+				t.visit(w)
+				work = append(work, frame{v: w})
+			case t.onStack[w]:
+				t.low[v] = min(t.low[v], t.indices[w])
+			}
+			continue
+		}
+
+		// All neighbors of v processed (recursion's return point).
+		if t.low[v] == t.indices[v] {
+			t.popSCC(v)
+		}
+		work = work[:len(work)-1]
+		// Propagate v's low-link up to its parent (recursion's
+		// low[parent] = min(low[parent], low[v])).
+		if len(work) > 0 {
+			parent := work[len(work)-1].v
+			t.low[parent] = min(t.low[parent], t.low[v])
+		}
+	}
+}
+
+// visit assigns v its discovery index/low-link and pushes it onto the value
+// stack (the shared part of the recursive call's preamble).
+func (t *tarjan) visit(v identity.DocumentID) {
 	t.indices[v] = t.index
 	t.low[v] = t.index
 	t.index++
 	t.stack = append(t.stack, v)
 	t.onStack[v] = true
+}
 
-	for _, w := range t.g.projAdj[v] { // sorted neighbors
-		switch {
-		case t.indexUnset(w):
-			t.strongConnect(w)
-			t.low[v] = min(t.low[v], t.low[w])
-		case t.onStack[w]:
-			t.low[v] = min(t.low[v], t.indices[w])
+// popSCC pops the value stack down to and including root, forming one SCC.
+func (t *tarjan) popSCC(root identity.DocumentID) {
+	var scc []identity.DocumentID
+	for {
+		w := t.stack[len(t.stack)-1]
+		t.stack = t.stack[:len(t.stack)-1]
+		t.onStack[w] = false
+		scc = append(scc, w)
+		if w == root {
+			break
 		}
 	}
-
-	if t.low[v] == t.indices[v] {
-		var scc []identity.DocumentID
-		for {
-			w := t.stack[len(t.stack)-1]
-			t.stack = t.stack[:len(t.stack)-1]
-			t.onStack[w] = false
-			scc = append(scc, w)
-			if w == v {
-				break
-			}
-		}
-		t.sccs = append(t.sccs, scc)
-	}
+	t.sccs = append(t.sccs, scc)
 }
 
 func (t *tarjan) indexUnset(v identity.DocumentID) bool {

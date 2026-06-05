@@ -48,6 +48,11 @@ const (
 	DetailComponentB      = "componentB"
 	DetailRepresentativeA = "representativeA"
 	DetailRepresentativeB = "representativeB"
+	// DetailStatusCode is the final HTTP status of a failed external link
+	// (DeadLink). DetailBlocked is "true" when the SSRF guard refused the URL.
+	// Present only on --check-external runs (kept out of the default output).
+	DetailStatusCode = "statusCode"
+	DetailBlocked    = "blocked"
 )
 
 // findingsFromReferences turns resolved references into analysis Findings. Only

@@ -1,6 +1,9 @@
 package corpus
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestCorpus_AddDuplicate(t *testing.T) {
 	c := NewCorpus()
@@ -155,5 +158,47 @@ func TestCorpus_AddNilRootNoPanic(t *testing.T) {
 	}
 	if c.HeadingCount() != 0 {
 		t.Errorf("HeadingCount() = %d, want 0", c.HeadingCount())
+	}
+}
+
+func TestCorpus_FreezeRejectsMutation(t *testing.T) {
+	c := NewCorpus()
+	if err := c.Add(&Document{ID: "a.md"}); err != nil {
+		t.Fatalf("Add before freeze: %v", err)
+	}
+	if c.Frozen() {
+		t.Fatal("corpus reported frozen before Freeze()")
+	}
+	c.Freeze()
+	if !c.Frozen() {
+		t.Fatal("corpus not frozen after Freeze()")
+	}
+	if err := c.Add(&Document{ID: "b.md"}); err == nil {
+		t.Fatal("Add after Freeze() should return ErrFrozen, got nil")
+	} else if !errors.Is(err, ErrFrozen) {
+		t.Fatalf("Add after Freeze() = %v, want ErrFrozen", err)
+	}
+	// The frozen document set is unchanged.
+	if c.Len() != 1 {
+		t.Fatalf("Len() = %d after rejected Add, want 1", c.Len())
+	}
+	// Freeze is idempotent.
+	c.Freeze()
+	// Test-only mutators panic on a frozen corpus (programming-error contract).
+	for _, mut := range []struct {
+		name string
+		fn   func()
+	}{
+		{"AddHeading", func() { c.AddHeading("a.md", "x") }},
+		{"AddAlias", func() { c.AddAlias("y", "a.md") }},
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("%s on frozen corpus did not panic", mut.name)
+				}
+			}()
+			mut.fn()
+		}()
 	}
 }

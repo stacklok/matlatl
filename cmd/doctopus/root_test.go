@@ -62,14 +62,20 @@ func TestCheckEmptyDirExitsOK(t *testing.T) {
 	}
 }
 
-func TestServeStillStubbed(t *testing.T) {
-	dir := t.TempDir()
-	out, _, err := runCmd(t, "serve", dir)
+// TestServeCommandRegistered checks that `serve` is a real, registered command
+// with usable help (it now runs the MCP server over stdio; the stdio loop itself
+// is exercised in the mcpserver package's in-process tests, not here, to avoid
+// blocking on stdin).
+func TestServeCommandRegistered(t *testing.T) {
+	out, _, err := runCmd(t, "serve", "--help")
 	if err != nil {
-		t.Fatalf("serve stub error: %v", err)
+		t.Fatalf("serve --help error: %v", err)
 	}
-	if !strings.Contains(out, "not yet implemented") {
-		t.Errorf("serve output = %q, want 'not yet implemented'", out)
+	if !strings.Contains(out, "MCP") {
+		t.Errorf("serve --help = %q, want mention of MCP", out)
+	}
+	if strings.Contains(out, "not yet implemented") {
+		t.Errorf("serve is still a stub: %q", out)
 	}
 }
 

@@ -60,6 +60,11 @@ const (
 	Ambiguous
 	// KnowledgeGap is a detected documentation gap.
 	KnowledgeGap
+	// DeadLink is an external (http/https) link that failed an opt-in liveness
+	// check (--check-external): unreachable, an error status, or refused by the
+	// SSRF guard. It is produced only when external checking is enabled, so it is
+	// kept OUT of the default deterministic output (ADR 0003).
+	DeadLink
 )
 
 // String returns the canonical name of the finding kind.
@@ -77,6 +82,8 @@ func (k FindingKind) String() string {
 		return "ambiguous"
 	case KnowledgeGap:
 		return "knowledge-gap"
+	case DeadLink:
+		return "dead-link"
 	default:
 		return "unknown"
 	}
@@ -84,7 +91,7 @@ func (k FindingKind) String() string {
 
 // Valid reports whether k is a defined FindingKind.
 func (k FindingKind) Valid() bool {
-	return k >= BrokenLink && k <= KnowledgeGap
+	return k >= BrokenLink && k <= DeadLink
 }
 
 // Location pins a finding to a source position.

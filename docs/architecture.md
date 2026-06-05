@@ -58,8 +58,61 @@ cmd/doctopus → internal/application → internal/domain
 - **Security first** — root containment, resource caps, output-path sanitization,
   label escaping (ADR 0003), tested with adversarial fixtures.
 - **Dual audience** — every analysis result has a human shape and a machine shape.
-- **Concurrency is earned** — the pipeline is single-threaded until a 5k-doc
-  benchmark justifies fan-out parsing (merge single-threaded; per-worker parser).
+- **Concurrency is earned** — only the **parse** stage fans out (P6). Scan
+  produces a file list; a bounded worker pool (default `GOMAXPROCS`, capped at
+  16, configurable via `Config.ParseWorkers`) parses files in parallel, each
+  worker using its **own** parser from `DocumentParserFactory.Clone()` (goldmark
+  instances are not safe to share). Results are **sorted by `DocumentID` and
+  merged on a single goroutine**, so the corpus, heading inventory, and every
+  artifact are **byte-identical** to the single-threaded path at any worker
+  count (proven by `TestPipeline_Determinism_AcrossWorkerCounts` at 1/2/8
+  workers, run under `-race`). Resolution, graph build and analysis stay
+  single-threaded over the **frozen** corpus (`Corpus.Freeze()` enforces it).
+
+## 4a. Performance (P6 benchmark)
+
+`BenchmarkPipeline_5kDocs` measures a full scan→analyze over ~5,000 synthetic
+cross-linked docs (~27k references). On a 12-core arm64 machine:
+
+| workers           | wall-time / op | total alloc / op | allocs / op |
+| ----------------- | -------------- | ---------------- | ----------- |
+| 1 (single-thread) | ~280 ms        | ~249 MB          | ~1.43 M     |
+| auto (GOMAXPROCS) | ~235 ms        | ~249 MB          | ~1.43 M     |
+
+Peak resident heap for the run is ~32 MiB (`TestPipeline_5kDocs_MemoryCeiling`,
+asserted under a 1 GiB total-allocation ceiling) — the model is **linear**
+(O(V+E)), not the feared in-memory-everything blow-up. Wall-time is `O(V+E)`:
+5k docs analyze in ~0.24 s end-to-end (`time doctopus <5k-dir>`).
+
+**Recommendation.** Fan-out parsing yields a **modest ~15–20%** wall-time
+improvement at 5k docs (parsing is a minority of the total, and the
+single-threaded merge + analysis dominate); allocation/memory is unchanged
+(merge is sequential). The win grows with corpus size and parse cost, and there
+is **no determinism or memory cost**, so concurrency is **ON by default**
+(`ParseWorkers: 0` → `GOMAXPROCS`). `ParseWorkers: 1` forces the sequential path
+for debugging or pathological small corpora.
+
+## 4b. Opt-in external link checking (`--check-external`)
+
+OFF by default (determinism + speed). When enabled, an infrastructure HTTP
+checker (`internal/infrastructure/linkcheck`, the only outbound-network package)
+validates `HealthExternal` http(s) links with bounded concurrency, per-host rate
+limiting, a redirect cap, and URL de-duplication, producing `DeadLink` findings
+that are kept **out** of the default deterministic output. A **mandatory SSRF
+guard** (ADR 0003) refuses loopback/link-local/metadata (`169.254.169.254`) and
+private RFC1918/ULA ranges and non-http(s) schemes, re-checks every redirect
+target, and resolves the host and checks the **resolved IP** (defeating
+DNS-rebinding-to-internal). The resolver and transport are injectable so tests
+prove internal targets are refused **without a network call**.
+
+## 4c. MCP server (`doctopus serve`)
+
+`doctopus serve [path]` runs the analysis once and exposes read-only MCP tools
+over stdio (`github.com/mark3labs/mcp-go`, isolated in
+`internal/infrastructure/mcpserver` — the only package importing the MCP lib):
+`what-links-to`, `list-orphans`, `path-between`, `get-section`, and
+`corpus-summary` (the graph.json manifest). Tools reuse the `emit.View` +
+`emit/graphjson` layers and validate every `DocumentID` against the corpus.
 
 ## 5. Delivery
 

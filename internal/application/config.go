@@ -31,6 +31,16 @@ type Config struct {
 	Quiet bool
 	// Verbose enables detailed logging.
 	Verbose bool
+	// ParseWorkers bounds the parse-stage worker pool. 0 means autodetect
+	// (GOMAXPROCS, capped). 1 forces the single-threaded path. The merge into
+	// the Corpus is always single-threaded and deterministic regardless of this
+	// value (P6 fan-out parsing).
+	ParseWorkers int
+	// ExternalChecker, when non-nil and CheckExternal is set, validates
+	// HealthExternal http(s) links. It is an application port (interface) so the
+	// domain stays free of net/http; the CLI injects the infrastructure
+	// implementation. nil disables external checking even under CheckExternal.
+	ExternalChecker ExternalLinkChecker
 }
 
 // DefaultConfig returns a Config with sane defaults: scan the current
@@ -47,5 +57,7 @@ func DefaultConfig() Config {
 		CheckExternal:    false,
 		Quiet:            false,
 		Verbose:          false,
+		ParseWorkers:     0, // autodetect
+		ExternalChecker:  nil,
 	}
 }

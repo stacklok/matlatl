@@ -89,7 +89,13 @@ func TestPipeline_Run_ScansAndParses(t *testing.T) {
 		Files: []ScannedFile{sf("a.md"), sf("dir/b.md")},
 	}}
 	parser := &fakeParser{}
-	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(parser), nil)
+	// ParseWorkers:1 forces the sequential path, which drives the single shared
+	// parser from Factory.New so this test can assert its per-file call count.
+	// (The concurrent path Clones an independent parser per worker by contract;
+	// determinism across worker counts is covered by TestPipeline_Determinism.)
+	cfg := DefaultConfig()
+	cfg.ParseWorkers = 1
+	p := NewPipeline(cfg, scanner, newFakeFactory(parser), nil)
 
 	code, res, err := p.Run(context.Background())
 	if err != nil {
@@ -195,7 +201,12 @@ func TestPipeline_Run_CanceledMidParse(t *testing.T) {
 	}}
 	ctx, cancel := context.WithCancel(context.Background())
 	parser := &fakeParser{onParse: func(_ ScannedFile) { cancel() }}
-	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(parser), nil)
+	// Force the sequential path so the per-iteration ctx check is the one under
+	// test (the concurrent path's cancellation is covered separately and cannot
+	// guarantee "exactly one parse" before workers observe Done).
+	cfg := DefaultConfig()
+	cfg.ParseWorkers = 1
+	p := NewPipeline(cfg, scanner, newFakeFactory(parser), nil)
 
 	code, _, err := p.Run(ctx)
 	if err == nil {

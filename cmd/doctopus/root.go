@@ -10,6 +10,7 @@ import (
 	"github.com/stacklok/doctopus/internal/infrastructure/emit"
 	"github.com/stacklok/doctopus/internal/infrastructure/emit/report"
 	"github.com/stacklok/doctopus/internal/infrastructure/fsscanner"
+	"github.com/stacklok/doctopus/internal/infrastructure/linkcheck"
 	"github.com/stacklok/doctopus/internal/infrastructure/mdparser"
 	"github.com/stacklok/doctopus/internal/platform"
 )
@@ -102,7 +103,7 @@ func newRootCommand() *cobra.Command {
 		newEmitCommand(),
 		newReportCommand(),
 		newOrphansCommand(),
-		newStubCommand("serve", "Run the MCP server", "P6"),
+		newServeCommand(),
 		newVersionCommand(),
 	)
 
@@ -132,6 +133,12 @@ func configFromFlags(cmd *cobra.Command, args []string) application.Config {
 func buildPipeline(cfg application.Config, logSink io.Writer) *application.Pipeline {
 	scanner := fsscanner.New(fsscanner.Config{OutputDir: cfg.OutputDir})
 	parserFac := mdparser.NewFactory(mdparser.Config{})
+	// Wire the external link checker only when --check-external is set so a
+	// default run pays nothing for it and stays deterministic (ADR 0003). The
+	// checker carries the mandatory SSRF guard.
+	if cfg.CheckExternal && cfg.ExternalChecker == nil {
+		cfg.ExternalChecker = linkcheck.New(linkcheck.Config{})
+	}
 	return application.NewPipeline(cfg, scanner, parserFac, logSink)
 }
 
@@ -144,23 +151,6 @@ func usageArgs(inner cobra.PositionalArgs) cobra.PositionalArgs {
 			return exitCodeError{code: platform.ExitUsage, err: err}
 		}
 		return nil
-	}
-}
-
-// newStubCommand returns a wired-but-unimplemented subcommand that accepts an
-// optional path, prints a planned-phase notice, and returns cleanly.
-func newStubCommand(name, short, phase string) *cobra.Command {
-	return &cobra.Command{
-		Use:           name + " [path]",
-		Short:         short,
-		Args:          usageArgs(cobra.MaximumNArgs(1)),
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, err := fmt.Fprintf(cmd.OutOrStdout(),
-				"doctopus %s: not yet implemented (planned: %s)\n", name, phase)
-			return err
-		},
 	}
 }
 

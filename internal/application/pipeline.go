@@ -82,6 +82,9 @@ type Result struct {
 	OrphanCount       int
 	UnreachableCount  int
 	KnowledgeGapCount int
+	// DeadLinkCount is the number of failed external links (only non-zero when
+	// --check-external is enabled). It does not affect the default run.
+	DeadLinkCount int
 	// Report is the frozen analysis report (all finding kinds).
 	Report *analysis.AnalysisReport
 	// Metrics is the frozen P3 graph-analysis carrier (graph, components, HITS,
@@ -118,14 +121,6 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		return platform.ExitRuntime, Result{}, fmt.Errorf("pipeline canceled: %w", err)
 	}
 
-	// --check-external is accepted but not yet implemented (planned: P6). Surface
-	// a notice when set so the flag is never silently a no-op, matching the
-	// reachability-indeterminate notice pattern below (ADR 0003 external checks).
-	if p.cfg.CheckExternal {
-		_, _ = fmt.Fprintln(p.log,
-			"doctopus: notice [check-external-noop] --check-external is not yet implemented (planned: P6)")
-	}
-
 	// Stage 1: Scan.
 	scan, err := p.scanner.Scan(ctx, p.cfg.RootPath)
 	if err != nil {
@@ -133,27 +128,31 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	}
 	p.reportNotices(scan.Notices)
 
-	// Stage 2: Parse + merge into the Corpus (single-threaded merge seam).
-	// One parser is obtained from the factory for the whole sequential pass; P6
-	// fan-out will instead Clone one per worker.
-	docParser := p.parserFac.New()
+	// Stage 2: Parse (fan-out worker pool) + merge into the Corpus
+	// (single-threaded, DETERMINISTIC). Workers parse with their own cloned
+	// parser; results are sorted by DocumentID and merged on this goroutine so
+	// the Corpus, heading inventory and all downstream output are byte-identical
+	// to the single-threaded path regardless of worker count (P6).
 	c := corpus.NewCorpus()
-	for _, file := range scan.Files {
-		if cerr := ctx.Err(); cerr != nil {
-			return platform.ExitRuntime, Result{}, fmt.Errorf("pipeline canceled during parse: %w", cerr)
-		}
-		doc, perr := docParser.Parse(ctx, file)
-		if perr != nil {
+	parsed, perr := p.parseFiles(ctx, scan.Files)
+	if perr != nil {
+		return platform.ExitRuntime, Result{}, perr
+	}
+	for _, pr := range parsed { // sorted by DocumentID
+		if pr.err != nil {
 			// A single unparseable file is a notice, not a fatal error: the scan
 			// continues so one hostile/broken file cannot abort the whole run.
-			_, _ = fmt.Fprintf(p.log, "doctopus: notice [parse-error] %s: %v\n", file.ID, perr)
+			_, _ = fmt.Fprintf(p.log, "doctopus: notice [parse-error] %s: %v\n", pr.id, pr.err)
 			continue
 		}
-		if aerr := c.Add(doc); aerr != nil {
-			_, _ = fmt.Fprintf(p.log, "doctopus: notice [merge-error] %s: %v\n", file.ID, aerr)
+		if aerr := c.Add(pr.doc); aerr != nil {
+			_, _ = fmt.Fprintf(p.log, "doctopus: notice [merge-error] %s: %v\n", pr.id, aerr)
 			continue
 		}
 	}
+	// Freeze the corpus at the parse/merge boundary: resolution and analysis run
+	// over a read-only corpus (the freeze contract is now enforced, ADR 0004).
+	c.Freeze()
 
 	// Stage 3: Resolve. Turn every raw reference into a health-classified edge
 	// using the corpus as the catalog and a root-confined asset-existence lookup
@@ -196,6 +195,13 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 
 	findings := findingsFromReferences(refs)
 	findings = append(findings, findingsFromMetrics(metrics)...)
+	// Opt-in external link checking (--check-external). OFF by default so the
+	// deterministic output is unchanged. DeadLink findings are appended only when
+	// the checker is wired and enabled (ADR 0003); they never affect the default
+	// run. The SSRF guard lives in the injected checker (infrastructure).
+	if p.cfg.CheckExternal {
+		findings = append(findings, p.checkExternalLinks(ctx, refs)...)
+	}
 	report := analysis.NewAnalysisReport(findings)
 	brokenEdges := brokenEdgesFromReferences(refs)
 
@@ -209,6 +215,7 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		OrphanCount:       report.CountByKind(analysis.Orphan),
 		UnreachableCount:  report.CountByKind(analysis.Unreachable),
 		KnowledgeGapCount: report.CountByKind(analysis.KnowledgeGap),
+		DeadLinkCount:     report.CountByKind(analysis.DeadLink),
 		Report:            report,
 		Metrics:           metrics,
 		Corpus:            c,

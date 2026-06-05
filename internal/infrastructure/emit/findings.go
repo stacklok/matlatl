@@ -91,6 +91,10 @@ var remediationByKind = map[string]string{
 	analysis.KnowledgeGap.String(): "Two clusters of documentation (`details.componentA` and `details.componentB`) have no " +
 		"navigational links between them. This is an experimental heuristic, not an error. If the two areas " +
 		"are related, add a link between `details.representativeA` and `details.representativeB` to connect them.",
+	analysis.DeadLink.String(): "An external (http/https) link failed an opt-in liveness check (--check-external): it was " +
+		"unreachable, returned an error status (`details.statusCode`), or was refused by the SSRF guard " +
+		"(`details.blocked`). Verify the URL is correct and reachable; if it moved, update it, otherwise " +
+		"remove or replace the link. Dead-link findings appear only under --check-external.",
 }
 
 // remediationGuideFor returns the remediation entries for exactly the kinds
@@ -100,7 +104,7 @@ func remediationGuideFor(report *analysis.AnalysisReport) map[string]string {
 	guide := make(map[string]string)
 	for _, k := range []analysis.FindingKind{
 		analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
-		analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap,
+		analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap, analysis.DeadLink,
 	} {
 		if report.CountByKind(k) > 0 {
 			guide[k.String()] = remediationByKind[k.String()]

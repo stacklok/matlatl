@@ -130,3 +130,32 @@ type Artifact struct {
 type ArtifactWriter interface {
 	Write(ctx context.Context, artifacts []Artifact) error
 }
+
+// ExternalLinkChecker validates a batch of external (http/https) URLs for
+// liveness, applying the SSRF guard, bounded concurrency, per-host rate
+// limiting, redirect caps and result de-duplication (ADR 0003). It is the
+// opt-in --check-external seam: OFF by default so the deterministic pipeline
+// output is unchanged. The domain never imports net/http; this interface keeps
+// the checker in infrastructure (internal/infrastructure/linkcheck). The result
+// map is keyed by the exact input URL string.
+type ExternalLinkChecker interface {
+	Check(ctx context.Context, urls []string) map[string]ExternalResult
+}
+
+// ExternalResult is the outcome of checking one external URL.
+type ExternalResult struct {
+	// URL is the checked URL (the map key, repeated for convenience).
+	URL string
+	// OK is true when the URL responded with a non-error status and passed the
+	// SSRF guard.
+	OK bool
+	// StatusCode is the final HTTP status (0 when no request was made, e.g. a
+	// guard refusal or a transport error).
+	StatusCode int
+	// Blocked is true when the SSRF guard refused the URL (internal/metadata
+	// host, disallowed scheme, redirect to an internal host). No network request
+	// was made for a blocked URL.
+	Blocked bool
+	// Err is a human-readable failure reason (empty when OK).
+	Err string
+}

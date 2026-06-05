@@ -2,6 +2,7 @@ package corpus
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -25,7 +26,19 @@ type Corpus struct {
 	docs     map[DocumentID]*Document
 	headings headingInventory
 	aliases  aliasTable
+	// frozen, once set by Freeze, makes every mutator (Add, AddHeading,
+	// AddAlias) reject further writes. This enforces the "built once, read-only
+	// thereafter" lifecycle contract as code, not just documentation: the
+	// pipeline freezes the corpus after the parse-and-merge stage so the
+	// concurrent fan-out path cannot mutate it during resolution/analysis
+	// (ADR 0004; P6 concurrency-readiness).
+	frozen bool
 }
+
+// ErrFrozen is returned by mutators called after Freeze. It signals a
+// programming error (a write attempted past the corpus lifecycle boundary),
+// surfaced as an error (not a panic) so the pipeline can degrade gracefully.
+var ErrFrozen = errors.New("corpus: frozen (no mutations allowed after Freeze)")
 
 // NewCorpus returns an empty Corpus with initialized indices.
 func NewCorpus() *Corpus {
@@ -36,10 +49,23 @@ func NewCorpus() *Corpus {
 	}
 }
 
+// Freeze marks the corpus read-only: subsequent Add/AddHeading/AddAlias calls
+// return ErrFrozen. The pipeline calls Freeze once parsing and the
+// single-threaded merge complete, before resolution/analysis, so the read-only
+// accessors are then safe for concurrent readers (ADR 0004). Freeze is
+// idempotent.
+func (c *Corpus) Freeze() { c.frozen = true }
+
+// Frozen reports whether Freeze has been called.
+func (c *Corpus) Frozen() bool { return c.frozen }
+
 // Add inserts a document. It returns an error if a document with the same
 // DocumentID is already present (identities are unique, ADR 0001) or if doc is
 // nil or has an empty ID.
 func (c *Corpus) Add(doc *Document) error {
+	if c.frozen {
+		return ErrFrozen
+	}
 	if doc == nil {
 		return fmt.Errorf("corpus: cannot add nil document")
 	}
@@ -135,8 +161,12 @@ func (c *Corpus) HeadingCount() int { return c.headings.count() }
 // Test-only seam: the production path populates the heading inventory directly
 // from a Document's section tree inside Add; this exported entry point exists so
 // tests can build a heading inventory without a full Document and is not called
-// from non-test code.
+// from non-test code. It panics if the corpus is frozen (a programming error:
+// the only legitimate callers run before Freeze).
 func (c *Corpus) AddHeading(id DocumentID, slug string) {
+	if c.frozen {
+		panic(ErrFrozen)
+	}
 	c.headings.add(id, slug)
 }
 
@@ -153,8 +183,12 @@ func (c *Corpus) HasHeading(id DocumentID, slug string) bool {
 // Test-only seam: the production path populates the alias table directly from a
 // Document's front-matter aliases inside Add; this exported entry point exists
 // so tests can seed aliases without a full Document and is not called from
-// non-test code.
+// non-test code. It panics if the corpus is frozen (a programming error: the
+// only legitimate callers run before Freeze).
 func (c *Corpus) AddAlias(alias string, id DocumentID) {
+	if c.frozen {
+		panic(ErrFrozen)
+	}
 	c.aliases.add(alias, id)
 }
 
