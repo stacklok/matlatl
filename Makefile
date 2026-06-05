@@ -50,6 +50,17 @@ tidy: ## Tidy and verify modules
 fmt: ## Format the codebase
 	gofmt -s -w .
 
+.PHONY: docs
+docs: build ## Doc link-rot gate: doctopus checks its own repo docs (strict)
+	./$(BIN_DIR)/$(BINARY) check . --strict
+
+.PHONY: llms
+llms: build ## Regenerate the repo-root llms.txt from the project's own docs
+	./$(BIN_DIR)/$(BINARY) index . --llms --title "$(BINARY)" > llms.txt
+
+.PHONY: dogfood
+dogfood: llms docs ## Eat the dog food: regenerate llms.txt + run the strict doc gate
+
 .PHONY: check
 check: fmt vet lint test ## Run the full local verification suite
 

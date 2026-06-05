@@ -1,0 +1,26 @@
+# doctopus
+
+> A markdown documentation corpus of 16 document(s) across 1 component(s), with 99 heading(s) and 46 resolved reference(s). Entries are ordered by importance (most-connected first).
+
+## Documentation
+
+- [Architecture Decision Records](docs/adr/README.md): Architecture Decision Records
+- [1. Document identity is the canonical repository-relative path](docs/adr/0001-document-identity.md): 1. Document identity is the canonical repository-relative path
+- [2. Library choices](docs/adr/0002-library-choices.md): 2. Library choices
+- [3. Security model for untrusted repositories](docs/adr/0003-security-model.md): 3. Security model for untrusted repositories
+- [4. DDD layering and full-fat v1 scope](docs/adr/0004-ddd-layering-and-scope.md): 4. DDD layering and full-fat v1 scope
+- [5. check exit-code contract](docs/adr/0005-exit-code-contract.md): 5. check exit-code contract
+- [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md): 6. Canonical anchor-slug dialect
+- [7. Graph node semantics and the document projection](docs/adr/0007-graph-node-semantics.md): 7. Graph node semantics and the document projection
+- [8. Directory links resolve and confer navigational reachability](docs/adr/0008-directory-links.md): 8. Directory links resolve and confer navigational reachability
+- [doctopus architecture](docs/architecture.md): doctopus architecture
+- [doctopus developer guide](docs/dev-guide.md): doctopus developer guide
+- [doctopus user guide](docs/user-guide.md): doctopus user guide
+- [Agent guide](AGENTS.md): Agent guide
+- [Changelog](CHANGELOG.md): Changelog
+- [Contributing to doctopus](CONTRIBUTING.md): Contributing to doctopus
+- [🐙 doctopus](README.md): 🐙 doctopus
+
+## Known gaps
+
+- None: every document is reachable and all links resolve.

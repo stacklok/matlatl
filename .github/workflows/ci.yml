@@ -50,3 +50,19 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+
+  docs:
+    name: docs (link-rot gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: Build doctopus
+        run: go build -o bin/doctopus ./cmd/doctopus
+      # Dogfood: doctopus checks its OWN docs for broken links/anchors and
+      # orphaned/unreachable pages. Fixtures under testdata/ are excluded by the
+      # repo-root .doctopusignore, so this gate sees only the real docs.
+      - name: Doc link-rot gate (doctopus check . --strict)
+        run: ./bin/doctopus check . --strict
