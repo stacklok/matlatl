@@ -46,14 +46,15 @@ func TestIntegration_ScanParseFixture(t *testing.T) {
 		}
 	}
 
-	// 4 documents: README.md, docs/README.md, docs/guide.md, docs/sub/overview.md
+	// 7 documents: README.md, docs/README.md, docs/guide.md, docs/sub/overview.md,
+	// docs/links.md, docs/team/notes.md, docs/project/notes.md
 	// (ignored/secret.md and draft-notes.md are excluded by .doctopusignore).
-	if c.Len() != 4 {
+	if c.Len() != 7 {
 		var got []string
 		for _, d := range c.Documents() {
 			got = append(got, d.ID.String())
 		}
-		t.Fatalf("document count = %d, want 4; got %v", c.Len(), got)
+		t.Fatalf("document count = %d, want 7; got %v", c.Len(), got)
 	}
 
 	// The two READMEs are DISTINCT identities (ADR 0001).
