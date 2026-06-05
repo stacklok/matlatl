@@ -21,12 +21,6 @@ import (
 //     of the build, and gives total control over deterministic ordering.
 // The domain stays free of any graph library either way (ADR 0004 / 0007).
 
-// dotComponentColors is a deterministic fill palette indexed by component.
-var dotComponentColors = []string{
-	"#e3f2fd", "#f1f8e9", "#fff3e0", "#f3e5f5", "#e0f7fa", "#fce4ec",
-	"#ede7f6", "#e8f5e9",
-}
-
 // DOT renders the document-projection reference graph as Graphviz DOT. Vertex
 // size scales with in-degree, fill color is the document's weakly-connected
 // component, and unresolved broken-link targets are red placeholder nodes. Every
@@ -65,8 +59,8 @@ func DOT(v emit.View) []byte {
 		}
 		bid := brokenNodeIDFor(e.Target)
 		if _, done := emitted[bid]; !done {
-			fmt.Fprintf(&b, "  %q [label=\"%s\", fillcolor=\"#ffcdd2\", color=\"#b71c1c\", penwidth=2];\n",
-				bid, escapeDOTString(e.Target+" (missing)"))
+			fmt.Fprintf(&b, "  %q [label=\"%s\", fillcolor=%q, color=%q, penwidth=2];\n",
+				bid, escapeDOTString(e.Target+" (missing)"), brokenFill, brokenStroke)
 			emitted[bid] = struct{}{}
 		}
 		fmt.Fprintf(&b, "  %q -> %q [style=dashed, color=\"#b71c1c\"];\n", nodeIDFor(e.Origin), bid)
@@ -94,14 +88,14 @@ func dotNodeAttrs(v emit.View, d emit.DocView, cls map[identity.DocumentID]docCl
 	if label != d.ID.String() {
 		label = label + "\n" + d.ID.String()
 	}
-	fill := dotComponentColors[colorIdx[d.Component]%len(dotComponentColors)]
-	stroke := "#90a4ae"
+	fill := componentFillPalette[colorIdx[d.Component]%len(componentFillPalette)]
+	stroke := componentStroke
 	penwidth := 1.0
 	switch cls[d.ID] {
 	case classOrphan:
-		fill, stroke, penwidth = "#ffebee", "#c62828", 2
+		fill, stroke, penwidth = orphanFill, orphanStroke, 2
 	case classUnreachable:
-		fill, stroke, penwidth = "#fff8e1", "#ff8f00", 2
+		fill, stroke, penwidth = unreachableFill, unreachableStroke, 2
 	case classNormal:
 	}
 	// Width scales gently with in-degree so hubs/authorities are visually larger

@@ -36,7 +36,6 @@ type Pipeline struct {
 	cfg       Config
 	scanner   FileScanner
 	parserFac DocumentParserFactory
-	writer    ArtifactWriter
 	// log is where stage progress / notices are written; io.Discard if nil.
 	log io.Writer
 }
@@ -44,7 +43,12 @@ type Pipeline struct {
 // NewPipeline constructs a Pipeline from a config, its ports, and a log sink.
 // The parser is obtained from a DocumentParserFactory (the P6 fan-out seam: one
 // parser today, one-per-worker later). A nil log sink discards output.
-func NewPipeline(cfg Config, scanner FileScanner, parserFac DocumentParserFactory, writer ArtifactWriter, log io.Writer) *Pipeline {
+//
+// Emit (stage 6) is the command layer's job, so the pipeline takes no artifact
+// writer: it returns a frozen Result the caller renders/writes. The
+// ArtifactWriter port will be wired back in P6 when the pipeline owns real write
+// paths.
+func NewPipeline(cfg Config, scanner FileScanner, parserFac DocumentParserFactory, log io.Writer) *Pipeline {
 	if log == nil {
 		log = io.Discard
 	}
@@ -52,7 +56,6 @@ func NewPipeline(cfg Config, scanner FileScanner, parserFac DocumentParserFactor
 		cfg:       cfg,
 		scanner:   scanner,
 		parserFac: parserFac,
-		writer:    writer,
 		log:       log,
 	}
 }

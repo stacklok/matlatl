@@ -9,11 +9,28 @@ import (
 
 // HitsScores holds per-document hub and authority scores plus the iteration
 // metadata, for determinism auditing.
+//
+// Concurrency / freeze boundary: the hub and authority maps are built once by
+// ComputeHITS and frozen thereafter. They are unexported and reached only
+// through the read accessors (HubScore/AuthorityScore/Score, TopHubs/
+// TopAuthorities) so a downstream consumer cannot mutate the shared maps. After
+// construction the value is safe for concurrent reads (the P6 fan-out boundary).
 type HitsScores struct {
-	Hub        map[identity.DocumentID]float64
-	Authority  map[identity.DocumentID]float64
+	hub        map[identity.DocumentID]float64
+	authority  map[identity.DocumentID]float64
 	Iterations int
 	Converged  bool
+}
+
+// HubScore returns the hub score for id (0 if unknown). Read-only.
+func (h HitsScores) HubScore(id identity.DocumentID) float64 { return h.hub[id] }
+
+// AuthorityScore returns the authority score for id (0 if unknown). Read-only.
+func (h HitsScores) AuthorityScore(id identity.DocumentID) float64 { return h.authority[id] }
+
+// Score returns both the hub and authority scores for id (0 if unknown).
+func (h HitsScores) Score(id identity.DocumentID) (hub, authority float64) {
+	return h.hub[id], h.authority[id]
 }
 
 // HitsOptions tunes the HITS power iteration.
@@ -45,7 +62,7 @@ func (g *ReferenceGraph) ComputeHITS(opts HitsOptions) HitsScores {
 		auth[id] = 1
 	}
 	if len(docs) == 0 {
-		return HitsScores{Hub: hub, Authority: auth, Converged: true}
+		return HitsScores{hub: hub, authority: auth, Converged: true}
 	}
 
 	var iter int
@@ -83,7 +100,7 @@ func (g *ReferenceGraph) ComputeHITS(opts HitsOptions) HitsScores {
 		}
 	}
 
-	return HitsScores{Hub: hub, Authority: auth, Iterations: iter, Converged: converged}
+	return HitsScores{hub: hub, authority: auth, Iterations: iter, Converged: converged}
 }
 
 // normalizeL2 scales the scores so their L2 norm is 1, iterating in sorted order.
@@ -122,13 +139,13 @@ type RankedDocument struct {
 // TopAuthorities returns documents ranked by authority score descending, ties
 // broken by DocumentID ascending (deterministic). n<=0 returns all.
 func (h HitsScores) TopAuthorities(n int) []RankedDocument {
-	return rankDesc(h.Authority, n)
+	return rankDesc(h.authority, n)
 }
 
 // TopHubs returns documents ranked by hub score descending, ties broken by
 // DocumentID ascending. n<=0 returns all.
 func (h HitsScores) TopHubs(n int) []RankedDocument {
-	return rankDesc(h.Hub, n)
+	return rankDesc(h.hub, n)
 }
 
 func rankDesc(scores map[identity.DocumentID]float64, n int) []RankedDocument {

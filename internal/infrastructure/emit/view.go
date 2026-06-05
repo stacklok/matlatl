@@ -128,7 +128,7 @@ func BuildView(res application.Result) View {
 
 	for _, doc := range c.Documents() { // sorted by ID
 		title, desc := titleAndDescription(doc)
-		deg := m.Degrees[doc.ID]
+		deg := m.Degrees.Degree(doc.ID)
 		dv := DocView{
 			ID:          doc.ID,
 			Title:       title,

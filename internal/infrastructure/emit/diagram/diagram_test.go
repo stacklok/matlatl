@@ -68,6 +68,17 @@ func TestMermaid_HostileLabelEscaped(t *testing.T) {
 	if !strings.HasPrefix(out, "```mermaid\n") || !strings.HasSuffix(out, "```\n") {
 		t.Errorf("mermaid block not well-formed:\n%s", out)
 	}
+	// A ';' is a statement separator only in Mermaid's UNQUOTED syntax. Our labels
+	// are double-quoted and the '"' that would close the quoted context is itself
+	// replaced, so the hostile title's ';' must survive verbatim inside the quoted
+	// label (escapeMermaidLabel deliberately does not touch it). This pins the
+	// assumption behind removing the old ';' -> ';' no-op.
+	if !strings.Contains(hostileTitle, ";") {
+		t.Fatal("hostileTitle must contain ';' to exercise the semicolon assumption")
+	}
+	if !strings.Contains(out, ";") {
+		t.Errorf("expected the label's ';' to be preserved verbatim inside the quoted label:\n%s", out)
+	}
 	// Every line inside must be a comment, node, class, edge, or classDef — no
 	// stray line from an injected newline (each content line is indented; the
 	// fences and the `flowchart` directive are the only unindented lines).

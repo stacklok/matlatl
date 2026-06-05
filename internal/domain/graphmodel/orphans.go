@@ -12,7 +12,17 @@ type Degree struct {
 }
 
 // DegreeIndex maps each document to its projection in/out degree.
+//
+// Freeze boundary: a DegreeIndex is built once by BuildDegreeIndex and is
+// treated as immutable thereafter (it is embedded by value in the shared
+// *GraphMetrics). Read it through the Degree accessor rather than mutating the
+// map; after construction it is safe for concurrent reads (the P6 fan-out
+// boundary).
 type DegreeIndex map[identity.DocumentID]Degree
+
+// Degree returns the in/out projection degree of id (the zero Degree if id is
+// unknown). Read-only accessor over the frozen index.
+func (d DegreeIndex) Degree(id identity.DocumentID) Degree { return d[id] }
 
 // BuildDegreeIndex computes in/out degree for every document from the projection.
 func (g *ReferenceGraph) BuildDegreeIndex() DegreeIndex {

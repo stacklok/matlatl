@@ -1,8 +1,10 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stacklok/doctopus/internal/domain/corpus"
@@ -42,15 +44,21 @@ func (f *fakeParser) Parse(_ context.Context, file ScannedFile) (*corpus.Documen
 	return &corpus.Document{ID: file.ID}, nil
 }
 
-// fakeFactory hands out a single shared fakeParser so tests can inspect its
-// call count after the run.
+// fakeFactory hands out the shared fakeParser from New so tests can inspect its
+// call count after the (single-threaded) run.
 type fakeFactory struct {
 	parser *fakeParser
 	news   int
 }
 
-func (f *fakeFactory) New() DocumentParser   { f.news++; return f.parser }
-func (f *fakeFactory) Clone() DocumentParser { f.news++; return f.parser }
+func (f *fakeFactory) New() DocumentParser { f.news++; return f.parser }
+
+// Clone returns an INDEPENDENT fakeParser (its own call counter), honoring the
+// per-worker contract: the real goldmark-backed parser is not concurrency-safe,
+// so the factory must mint a fresh parser per worker rather than returning the
+// same instance. Returning the shared parser here would let the fake silently
+// pass a test that the real factory would fail under fan-out.
+func (f *fakeFactory) Clone() DocumentParser { f.news++; return &fakeParser{} }
 
 func newFakeFactory(p *fakeParser) *fakeFactory { return &fakeFactory{parser: p} }
 
@@ -81,7 +89,7 @@ func TestPipeline_Run_ScansAndParses(t *testing.T) {
 		Files: []ScannedFile{sf("a.md"), sf("dir/b.md")},
 	}}
 	parser := &fakeParser{}
-	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(parser), nil, nil)
+	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(parser), nil)
 
 	code, res, err := p.Run(context.Background())
 	if err != nil {
@@ -102,7 +110,7 @@ func TestPipeline_Run_ScansAndParses(t *testing.T) {
 }
 
 func TestPipeline_Run_EmptyCorpus(t *testing.T) {
-	p := NewPipeline(DefaultConfig(), &fakeScanner{}, newFakeFactory(&fakeParser{}), nil, nil)
+	p := NewPipeline(DefaultConfig(), &fakeScanner{}, newFakeFactory(&fakeParser{}), nil)
 	code, res, err := p.Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run() unexpected error: %v", err)
@@ -119,7 +127,7 @@ func TestPipeline_Run_ParseErrorIsNonFatal(t *testing.T) {
 	// A failing parser must not abort the whole run; the document is dropped.
 	scanner := &fakeScanner{result: ScanResult{Files: []ScannedFile{sf("a.md")}}}
 	parser := &fakeParser{err: errors.New("boom")}
-	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(parser), nil, nil)
+	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(parser), nil)
 
 	code, res, err := p.Run(context.Background())
 	if err != nil {
@@ -135,7 +143,7 @@ func TestPipeline_Run_ParseErrorIsNonFatal(t *testing.T) {
 
 func TestPipeline_Run_ScanErrorIsFatal(t *testing.T) {
 	scanner := &fakeScanner{err: errors.New("io failure")}
-	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(&fakeParser{}), nil, nil)
+	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(&fakeParser{}), nil)
 
 	code, _, err := p.Run(context.Background())
 	if err == nil {
@@ -150,7 +158,7 @@ func TestPipeline_Run_PropagatesNotices(t *testing.T) {
 	scanner := &fakeScanner{result: ScanResult{
 		Notices: []Notice{{Kind: NoticeSkippedSymlink, Path: "/x", Detail: "skipped"}},
 	}}
-	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(&fakeParser{}), nil, nil)
+	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(&fakeParser{}), nil)
 
 	_, res, err := p.Run(context.Background())
 	if err != nil {
@@ -162,7 +170,7 @@ func TestPipeline_Run_PropagatesNotices(t *testing.T) {
 }
 
 func TestPipeline_Run_CanceledContextBeforeScan(t *testing.T) {
-	p := NewPipeline(DefaultConfig(), &fakeScanner{}, newFakeFactory(&fakeParser{}), nil, nil)
+	p := NewPipeline(DefaultConfig(), &fakeScanner{}, newFakeFactory(&fakeParser{}), nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -187,7 +195,7 @@ func TestPipeline_Run_CanceledMidParse(t *testing.T) {
 	}}
 	ctx, cancel := context.WithCancel(context.Background())
 	parser := &fakeParser{onParse: func(_ ScannedFile) { cancel() }}
-	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(parser), nil, nil)
+	p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(parser), nil)
 
 	code, _, err := p.Run(ctx)
 	if err == nil {
@@ -202,6 +210,26 @@ func TestPipeline_Run_CanceledMidParse(t *testing.T) {
 	// Only the first file should have been parsed before the cancel was observed.
 	if parser.calls != 1 {
 		t.Errorf("parser called %d times, want 1 (aborted after cancel)", parser.calls)
+	}
+}
+
+// TestPipeline_Run_BadRootGlobNotice pins the bad-root-glob notice the analyze
+// stage emits when a configured --root pattern is malformed (ResolveRootSet
+// collects it in BadGlobs). The notice must name the offending pattern so it is
+// never silently ignored.
+func TestPipeline_Run_BadRootGlobNotice(t *testing.T) {
+	scanner := &fakeScanner{result: ScanResult{Files: []ScannedFile{sf("a.md")}}}
+	cfg := DefaultConfig()
+	cfg.Roots = []string{"["} // unterminated character class -> ErrBadPattern
+	var log bytes.Buffer
+	p := NewPipeline(cfg, scanner, newFakeFactory(&fakeParser{}), &log)
+
+	if _, _, err := p.Run(context.Background()); err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
+	}
+	out := log.String()
+	if !strings.Contains(out, "[bad-root-glob]") || !strings.Contains(out, `"["`) {
+		t.Errorf("expected a bad-root-glob notice naming the pattern, got:\n%s", out)
 	}
 }
 

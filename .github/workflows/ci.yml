@@ -31,9 +31,11 @@ jobs:
         run: go build ./...
 
       - name: Test (race + coverage)
-        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+        # -tags=integration so integration/golden-only code is exercised and not
+        # reported as 0% — honest coverage (this run also covers the golden tests).
+        run: go test -race -tags=integration -covermode=atomic -coverprofile=coverage.out ./...
 
-      - name: Integration / golden tests
+      - name: Integration / golden tests (no-coverage sanity run)
         run: go test -race -tags=integration ./...
 
   lint:

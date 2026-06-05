@@ -49,7 +49,7 @@ func buildCorpusView(t *testing.T) emit.View {
 	cfg.RootPath = root
 	scanner := fsscanner.New(fsscanner.Config{})
 	parserFac := mdparser.NewFactory(mdparser.Config{})
-	pipe := application.NewPipeline(cfg, scanner, parserFac, nil, nil)
+	pipe := application.NewPipeline(cfg, scanner, parserFac, nil)
 	_, res, err := pipe.Run(context.Background())
 	if err != nil {
 		t.Fatalf("pipeline run: %v", err)
@@ -132,6 +132,15 @@ func TestGolden_ByteStable(t *testing.T) {
 		{"graph.dot", diagram.DOT},
 		{"hierarchy.mmd", diagram.MermaidHierarchy},
 		{"index.md", idxemit.Markdown},
+		// report.txt: the terminal emitter writes to an io.Writer, so adapt it to
+		// the []byte generator shape (color forced off for a stable comparison).
+		{"report.txt", func(v emit.View) []byte {
+			var buf bytes.Buffer
+			if err := report.Terminal(&buf, v, report.TerminalOptions{Color: report.ColorNever}); err != nil {
+				t.Fatalf("terminal emit: %v", err)
+			}
+			return buf.Bytes()
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

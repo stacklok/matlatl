@@ -183,8 +183,8 @@ func TestDeterminism_ShuffledInput(t *testing.T) {
 		}
 		// HITS scores identical to within float tolerance.
 		for _, id := range m1.Graph.Documents() {
-			if d := m1.HITS.Authority[id] - m.HITS.Authority[id]; d > 1e-12 || d < -1e-12 {
-				t.Errorf("authority for %s differs across order: %v vs %v", id, m1.HITS.Authority[id], m.HITS.Authority[id])
+			if d := m1.HITS.AuthorityScore(id) - m.HITS.AuthorityScore(id); d > 1e-12 || d < -1e-12 {
+				t.Errorf("authority for %s differs across order: %v vs %v", id, m1.HITS.AuthorityScore(id), m.HITS.AuthorityScore(id))
 			}
 		}
 	}

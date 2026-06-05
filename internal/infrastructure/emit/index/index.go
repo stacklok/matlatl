@@ -8,7 +8,7 @@ package index
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,8 +21,10 @@ const IndexMarkdownName = "index.md"
 // Markdown renders index.md from the View. Documents are grouped by category
 // (their directory), categories sorted, documents within a category sorted by
 // DocumentID — fully deterministic. Each entry lists the canonical DocumentID,
-// its description, and its mod-date. Cell content is escaped so a hostile
-// title/path cannot break the GFM table (ADR 0003).
+// its description, and its mod-date. Every emitted string is escaped via the
+// shared emit escape helpers (the SAME ones the Markdown report uses) so a
+// hostile title/path/category cannot break the GFM table or inject markdown
+// (ADR 0003).
 func Markdown(v emit.View) []byte {
 	var b strings.Builder
 	b.WriteString("# Documentation index\n\n")
@@ -43,16 +45,19 @@ func Markdown(v emit.View) []byte {
 	for cat := range byCat {
 		cats = append(cats, cat)
 	}
-	sort.Strings(cats)
+	slices.Sort(cats)
 
 	for _, cat := range cats {
-		fmt.Fprintf(&b, "## %s\n\n", escapeText(categoryLabel(cat)))
+		// The category label is an attacker-influenced directory name and is
+		// rendered as a Markdown heading, so it gets the same flowing-text escaping
+		// the report uses (a hostile category must not render as live markdown).
+		fmt.Fprintf(&b, "## %s\n\n", emit.EscapeMarkdownText(categoryLabel(cat)))
 		b.WriteString("| Document | Description | Modified |\n| --- | --- | --- |\n")
 		for _, d := range byCat[cat] {
 			fmt.Fprintf(&b, "| `%s` | %s | %s |\n",
-				escapeInlineCode(d.ID.String()),
-				escapeCell(d.Description),
-				escapeCell(formatModTime(d.ModTime)))
+				emit.EscapeInlineCode(d.ID.String()),
+				emit.EscapeTableCell(d.Description),
+				emit.EscapeTableCell(formatModTime(d.ModTime)))
 		}
 		b.WriteString("\n")
 	}
@@ -74,51 +79,4 @@ func formatModTime(t time.Time) string {
 		return "-"
 	}
 	return t.UTC().Format(time.RFC3339)
-}
-
-// escapeCell mirrors the report package's GFM-cell escaping (kept local so the
-// index package has no cross-emitter dependency): neutralize the pipe, newlines
-// and inline-markdown characters that could break the table or inject markdown.
-func escapeCell(s string) string {
-	if s == "" {
-		return ""
-	}
-	r := strings.NewReplacer(
-		`\`, `\\`,
-		"\r\n", " ",
-		"\n", " ",
-		"\r", " ",
-		"|", `\|`,
-		"`", "\\`",
-		"*", `\*`,
-		"_", `\_`,
-		"<", `\<`,
-		">", `\>`,
-		"[", `\[`,
-		"]", `\]`,
-	)
-	return r.Replace(s)
-}
-
-func escapeText(s string) string {
-	r := strings.NewReplacer(
-		"\r\n", " ",
-		"\n", " ",
-		"\r", " ",
-		"<", `\<`,
-		">", `\>`,
-	)
-	return r.Replace(s)
-}
-
-// escapeInlineCode neutralizes backticks and newlines so a path cannot break a
-// single-backtick code span.
-func escapeInlineCode(s string) string {
-	r := strings.NewReplacer(
-		"`", "ʼ",
-		"\r\n", " ",
-		"\n", " ",
-		"\r", " ",
-	)
-	return r.Replace(s)
 }

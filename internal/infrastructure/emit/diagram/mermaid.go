@@ -140,28 +140,35 @@ func mermaidClassName(id identity.DocumentID, cls map[identity.DocumentID]docCla
 }
 
 func writeMermaidClassDefs(b *strings.Builder, colorIdx map[identity.DocumentID]int) {
-	// Component fill classes.
-	fills := []string{"#e3f2fd", "#f1f8e9", "#fff3e0", "#f3e5f5", "#e0f7fa", "#fce4ec"}
+	// Component fill classes, drawn from the shared palette (Mermaid caps at
+	// mermaidComponentClasses so the legend stays short).
 	used := mermaidComponentClasses
 	if len(colorIdx) < used {
 		used = len(colorIdx)
 	}
 	for i := 0; i < used; i++ {
-		fmt.Fprintf(b, "  classDef c%d fill:%s,stroke:#90a4ae,color:#000;\n", i, fills[i])
+		fmt.Fprintf(b, "  classDef c%d fill:%s,stroke:%s,color:#000;\n", i, componentFillPalette[i], componentStroke)
 	}
-	// Distinct, accessible styles for the actionable classes.
-	b.WriteString("  classDef orphan fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000;\n")
-	b.WriteString("  classDef unreachable fill:#fff8e1,stroke:#ff8f00,stroke-width:2px,color:#000;\n")
-	b.WriteString("  classDef broken fill:#ffcdd2,stroke:#b71c1c,stroke-width:2px,color:#000;\n")
+	// Distinct, accessible styles for the actionable classes (shared semantic hexes).
+	fmt.Fprintf(b, "  classDef orphan fill:%s,stroke:%s,stroke-width:2px,color:#000;\n", orphanFill, orphanStroke)
+	fmt.Fprintf(b, "  classDef unreachable fill:%s,stroke:%s,stroke-width:2px,color:#000;\n", unreachableFill, unreachableStroke)
+	fmt.Fprintf(b, "  classDef broken fill:%s,stroke:%s,stroke-width:2px,color:#000;\n", brokenFill, brokenStroke)
 }
 
 // escapeMermaidLabel sanitizes a label for a Mermaid node. Mermaid node text is
 // fragile: double quotes terminate a quoted label, newlines break the line-based
-// parser, square brackets and parens are shape delimiters, and `<`/`>`/`#`/`;`
-// can inject HTML or directives. We neutralize all of them so a hostile
+// parser, square brackets and parens are shape delimiters, and `<`/`>`/`#` can
+// inject HTML or directives. We neutralize all of them so a hostile
 // DocumentID/title cannot break or inject into the diagram (ADR 0003). The
 // transformation is lossy-but-safe (visible substitutes), which is acceptable
 // for a label.
+//
+// We do NOT touch ';'. A semicolon is only a statement separator in Mermaid's
+// unquoted syntax; every label we emit is wrapped in double quotes ("..."), and
+// the '"' that would close the quoted context is itself replaced below, so a ';'
+// inside the label stays inert. (The previous code mapped ';' to itself — a
+// verified no-op with a misleading comment; removed.) The hostile-label test
+// pins this by asserting a ';' in the title does not produce an injection.
 func escapeMermaidLabel(s string) string {
 	r := strings.NewReplacer(
 		`\`, "∖", // set-minus look-alike; a trailing '\' could escape our closing quote
@@ -181,7 +188,6 @@ func escapeMermaidLabel(s string) string {
 		")", "❩",
 		"|", "¦",
 		"`", "ʼ",
-		";", ";", // greek question mark look-alike to avoid statement separation
 	)
 	return r.Replace(s)
 }

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/stacklok/doctopus/internal/platform"
 )
@@ -21,7 +22,9 @@ func main() {
 // installs a SIGINT/SIGTERM-cancellable context so an interrupt propagates to
 // the pipeline and artifact writer (which honor ctx).
 func run() platform.ExitCode {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// Register SIGTERM alongside SIGINT so a container/orchestrator stop signal
+	// cancels the context and lets the pipeline + writer shut down cleanly.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return runArgs(ctx, os.Args[1:], os.Stdout, os.Stderr)
 }

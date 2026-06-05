@@ -124,7 +124,15 @@ func (p *Parser) Parse(ctx context.Context, file application.ScannedFile) (*corp
 // ParseBytes parses raw markdown bytes into a Document with the given identity.
 // It is the testable core of Parse (no filesystem). It never fails on malformed
 // front matter — that degrades to "no front matter".
-func (p *Parser) ParseBytes(_ context.Context, id identity.DocumentID, src []byte) (*corpus.Document, error) {
+func (p *Parser) ParseBytes(ctx context.Context, id identity.DocumentID, src []byte) (*corpus.Document, error) {
+	// Respect cancellation before doing any (potentially non-trivial) parse work.
+	// Parsing one file is cheap today, but P6 fan-out parses many concurrently and
+	// must abort promptly when the run is canceled; checking here makes ParseBytes
+	// itself a cancellation point rather than relying solely on the caller's loop.
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("mdparser: canceled before parsing %q: %w", id, err)
+	}
+
 	// Front-matter size guard (ADR 0003): if the leading block exceeds the cap,
 	// strip it before handing the source to goldmark so the bomb is never decoded.
 	src, guarded := guardFrontMatter(src, p.cfg.MaxFrontMatterBytes)

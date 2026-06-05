@@ -15,6 +15,33 @@ import (
 	"github.com/stacklok/doctopus/internal/infrastructure/emit"
 )
 
+// componentFillPalette is the deterministic component fill palette shared by the
+// DOT and Mermaid emitters (indexed by component-color index). Both formats cycle
+// through the same colors so the two renderings of one corpus are visually
+// consistent. DOT uses the full palette; Mermaid caps at mermaidComponentClasses
+// (its legend stays short).
+var componentFillPalette = []string{
+	"#e3f2fd", "#f1f8e9", "#fff3e0", "#f3e5f5", "#e0f7fa", "#fce4ec",
+	"#ede7f6", "#e8f5e9",
+}
+
+// Semantic styling constants shared by both diagram emitters: the actionable
+// node classes (orphan / unreachable / broken-link target) and the default
+// component node stroke. Kept here so the two emitters cannot drift on color.
+const (
+	// orphanFill / orphanStroke style an isolated-orphan node (red).
+	orphanFill   = "#ffebee"
+	orphanStroke = "#c62828"
+	// unreachableFill / unreachableStroke style an unreachable node (amber).
+	unreachableFill   = "#fff8e1"
+	unreachableStroke = "#ff8f00"
+	// brokenFill / brokenStroke style a broken-link target placeholder (red).
+	brokenFill   = "#ffcdd2"
+	brokenStroke = "#b71c1c"
+	// componentStroke is the default stroke for a normal component node.
+	componentStroke = "#90a4ae"
+)
+
 // LargeGraphThreshold is the document-vertex count above which the diagram
 // emitters switch to a focused subgraph (orphans/broken + their neighborhoods)
 // rather than a giant unreadable blob. No silent truncation: a truncation note

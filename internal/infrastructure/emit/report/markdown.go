@@ -15,8 +15,8 @@ const ReportMarkdownName = "report.md"
 // Markdown renders a committable GitHub-flavored Markdown report from the View:
 // a corpus-overview table, a broken-link/anchor table (file, line, target,
 // suggested fix), orphan and unreachable lists with remediation, a hub/authority
-// table, and a knowledge-gap section. Every cell is escaped (escapeCell) so a
-// hostile document title/path cannot break a GFM table or inject markdown
+// table, and a knowledge-gap section. Every cell is escaped (emit.EscapeTableCell)
+// so a hostile document title/path cannot break a GFM table or inject markdown
 // (ADR 0003). Output is deterministic (the View is sorted).
 func Markdown(v emit.View) []byte {
 	var b strings.Builder
@@ -51,11 +51,11 @@ func Markdown(v emit.View) []byte {
 		b.WriteString("| --- | --- | --- | --- | --- |\n")
 		for _, f := range broken {
 			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n",
-				escapeCell(f.Location.Document.String()),
-				escapeCell(lineCell(f.Location.Line)),
-				escapeCell(f.Kind.String()),
-				escapeCell(f.Message),
-				escapeCell(f.SuggestedFix))
+				emit.EscapeTableCell(f.Location.Document.String()),
+				emit.EscapeTableCell(lineCell(f.Location.Line)),
+				emit.EscapeTableCell(f.Kind.String()),
+				emit.EscapeTableCell(f.Message),
+				emit.EscapeTableCell(f.SuggestedFix))
 		}
 		b.WriteString("\n")
 	}
@@ -67,10 +67,10 @@ func Markdown(v emit.View) []byte {
 		b.WriteString("| --- | --- | --- | --- |\n")
 		for _, f := range v.Ambiguous {
 			fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
-				escapeCell(f.Location.Document.String()),
-				escapeCell(lineCell(f.Location.Line)),
-				escapeCell(f.Message),
-				escapeCell(f.SuggestedFix))
+				emit.EscapeTableCell(f.Location.Document.String()),
+				emit.EscapeTableCell(lineCell(f.Location.Line)),
+				emit.EscapeTableCell(f.Message),
+				emit.EscapeTableCell(f.SuggestedFix))
 		}
 		b.WriteString("\n")
 	}
@@ -110,7 +110,7 @@ func Markdown(v emit.View) []byte {
 			if i < len(v.TopAuthorities) {
 				auth = fmt.Sprintf("%s (%.3f)", v.TitleOf(v.TopAuthorities[i].ID), v.TopAuthorities[i].Score)
 			}
-			fmt.Fprintf(&b, "| %d | %s | %s |\n", i+1, escapeCell(hub), escapeCell(auth))
+			fmt.Fprintf(&b, "| %d | %s | %s |\n", i+1, emit.EscapeTableCell(hub), emit.EscapeTableCell(auth))
 		}
 		b.WriteString("\n")
 	}
@@ -124,8 +124,8 @@ func Markdown(v emit.View) []byte {
 		b.WriteString("| Cluster A | Cluster B |\n| --- | --- |\n")
 		for _, g := range v.Gaps {
 			fmt.Fprintf(&b, "| %s | %s |\n",
-				escapeCell(g.RepresentativeA.String()),
-				escapeCell(g.RepresentativeB.String()))
+				emit.EscapeTableCell(g.RepresentativeA.String()),
+				emit.EscapeTableCell(g.RepresentativeB.String()))
 		}
 		if v.GapsTruncated {
 			b.WriteString("\n_Note: the gap list was truncated (the corpus has many disconnected clusters)._\n")
@@ -136,7 +136,7 @@ func Markdown(v emit.View) []byte {
 }
 
 func writeRow(b *strings.Builder, label string, n int) {
-	fmt.Fprintf(b, "| %s | %d |\n", escapeCell(label), n)
+	fmt.Fprintf(b, "| %s | %d |\n", emit.EscapeTableCell(label), n)
 }
 
 func lineCell(line int) string {
@@ -154,70 +154,6 @@ func writeDocList(b *strings.Builder, v emit.View, ids []identity.DocumentID) {
 		return
 	}
 	for _, id := range ids {
-		fmt.Fprintf(b, "- `%s` — %s\n", escapeInlineCode(id.String()), escapeText(v.TitleOf(id)))
+		fmt.Fprintf(b, "- `%s` — %s\n", emit.EscapeInlineCode(id.String()), emit.EscapeMarkdownText(v.TitleOf(id)))
 	}
-}
-
-// escapeCell escapes a string for safe inclusion in a GFM table cell. A hostile
-// title/path must not break the table (a literal `|` ends a cell) or inject
-// markdown. We:
-//   - escape backslashes first so our own escapes are not double-interpreted;
-//   - replace newlines (which would end the table row) with a visible <br> so
-//     multi-line messages stay inside one cell;
-//   - backslash-escape the GFM-significant inline characters, crucially `|`.
-func escapeCell(s string) string {
-	if s == "" {
-		return ""
-	}
-	r := strings.NewReplacer(
-		`\`, `\\`,
-		"\r\n", " ",
-		"\n", " ",
-		"\r", " ",
-		"|", `\|`,
-		"`", "\\`",
-		"*", `\*`,
-		"_", `\_`,
-		"<", `\<`,
-		">", `\>`,
-		"[", `\[`,
-		"]", `\]`,
-	)
-	return r.Replace(s)
-}
-
-// escapeText escapes a string for safe inclusion in flowing markdown (not a
-// table): newlines collapse to spaces and markdown-significant characters are
-// backslash-escaped so a hostile title cannot inject formatting or HTML.
-func escapeText(s string) string {
-	if s == "" {
-		return ""
-	}
-	r := strings.NewReplacer(
-		`\`, `\\`,
-		"\r\n", " ",
-		"\n", " ",
-		"\r", " ",
-		"`", "\\`",
-		"*", `\*`,
-		"_", `\_`,
-		"<", `\<`,
-		">", `\>`,
-		"[", `\[`,
-		"]", `\]`,
-	)
-	return r.Replace(s)
-}
-
-// escapeInlineCode escapes a string for inclusion inside a single-backtick code
-// span: a literal backtick would close the span, and a newline would break it,
-// so both are neutralized.
-func escapeInlineCode(s string) string {
-	r := strings.NewReplacer(
-		"`", "ʼ", // replace backtick with a modifier-letter apostrophe (cannot close the span)
-		"\r\n", " ",
-		"\n", " ",
-		"\r", " ",
-	)
-	return r.Replace(s)
 }

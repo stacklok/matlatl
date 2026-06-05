@@ -135,6 +135,35 @@ func knownAnswerCorpus(t *testing.T) (*corpus.Corpus, []reference.Reference) {
 	return c, refs
 }
 
+// TestResolveRootSet_BadGlobs pins the malformed-glob branch P5/the CLI surface
+// as a notice: a glob that path.Match rejects (ErrBadPattern, e.g. an unclosed
+// "[") is collected in BadGlobs, matches nothing, and is sorted — while a valid
+// glob alongside it still matches and seeds the root set.
+func TestResolveRootSet_BadGlobs(t *testing.T) {
+	c := buildCorpus(t,
+		doc("guide.md", "guide", nil),
+		doc("api.md", "api", nil),
+	)
+	// "[" and "[a-" are unterminated character classes -> ErrBadPattern.
+	// "guide.md" is a valid pattern matching exactly one doc. Passing the two bad
+	// globs out of order checks that BadGlobs is sorted.
+	rs := ResolveRootSet(c, []string{"[a-", "guide.md", "["})
+
+	wantBad := []string{"[", "[a-"} // sorted
+	if !slices.Equal(rs.BadGlobs, wantBad) {
+		t.Errorf("BadGlobs = %v, want %v (sorted)", rs.BadGlobs, wantBad)
+	}
+	if rs.Indeterminate {
+		t.Errorf("Indeterminate = true, but the valid glob matched a root")
+	}
+	if !slices.Contains(rs.Roots, identity.DocumentID("guide.md")) {
+		t.Errorf("Roots = %v, want it to contain guide.md from the valid glob", rs.Roots)
+	}
+	if slices.Contains(rs.Roots, identity.DocumentID("api.md")) {
+		t.Errorf("api.md should not be a root (no convention, no matching glob)")
+	}
+}
+
 func TestKnownAnswer_RootsAndOrphans(t *testing.T) {
 	c, refs := knownAnswerCorpus(t)
 	g := BuildReferenceGraph(c, refs, BuildOptions{})
@@ -222,8 +251,30 @@ func TestKnownAnswer_HITS(t *testing.T) {
 	if top := h.TopAuthorities(1); len(top) == 0 || top[0].ID != "api.md" {
 		t.Errorf("top authority = %v, want api.md", top)
 	}
-	if h.Hub["README.md"] < h.Hub["guide.md"] {
-		t.Errorf("README hub %.4f should exceed guide hub %.4f", h.Hub["README.md"], h.Hub["guide.md"])
+	if h.HubScore("README.md") < h.HubScore("guide.md") {
+		t.Errorf("README hub %.4f should exceed guide hub %.4f", h.HubScore("README.md"), h.HubScore("guide.md"))
+	}
+}
+
+// TestKnownAnswer_HITS_NonConvergence pins the non-convergence path that P5's
+// graph.json will surface: with the iteration cap set to 1, power iteration
+// cannot reach the convergence threshold on a non-trivial graph, so the result
+// reports Converged=false and Iterations == MaxIterations (the cap). This is the
+// contract a consumer reads to know the scores are an unconverged snapshot.
+func TestKnownAnswer_HITS_NonConvergence(t *testing.T) {
+	c, refs := knownAnswerCorpus(t)
+	g := BuildReferenceGraph(c, refs, BuildOptions{})
+
+	h := g.ComputeHITS(HitsOptions{MaxIterations: 1, Epsilon: 1e-12})
+	if h.Converged {
+		t.Errorf("Converged = true, want false (capped at 1 iteration)")
+	}
+	if h.Iterations != 1 {
+		t.Errorf("Iterations = %d, want 1 (the cap)", h.Iterations)
+	}
+	// Scores are still populated (an unconverged snapshot, not empty).
+	if h.AuthorityScore("api.md") == 0 {
+		t.Errorf("expected non-zero authority for api.md even when unconverged")
 	}
 }
 

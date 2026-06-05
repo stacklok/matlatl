@@ -35,46 +35,45 @@ func newOrphansCommand() *cobra.Command {
 				}
 			}
 			cfg := configFromFlags(cmd, args)
-			logSink := cmd.ErrOrStderr()
-			if cfg.Quiet {
-				logSink = nil
-			}
 
-			pipeline := buildPipeline(cfg, logSink)
-			code, res, err := pipeline.Run(cmd.Context())
+			// Go through the same analyze→View path every other render command uses
+			// (report, index). The View is the single place intentional-orphan
+			// suppression and the sorted/presentation projection are applied, so
+			// reading it here keeps `orphans` consistent with the rest of the CLI
+			// and cannot drift from what the report shows.
+			view, err := analyzeToView(cmd, cfg)
 			if err != nil {
-				return exitCodeError{code: code, err: err}
+				return err
 			}
 
 			out := cmd.OutOrStdout()
-			if res.DocumentCount == 0 {
+			if view.Counts.Documents == 0 {
 				_, _ = fmt.Fprintln(out, "doctopus orphans: no markdown documents found")
 				return nil
 			}
-			m := res.Metrics
 
 			showIsolated := !unreachableOnly
 			showUnreachable := !isolatedOnly
 
 			if showIsolated {
-				_, _ = fmt.Fprintf(out, "Isolated orphans (%d):\n", len(m.Orphans.Isolated))
-				if len(m.Orphans.Isolated) == 0 {
+				_, _ = fmt.Fprintf(out, "Isolated orphans (%d):\n", len(view.Orphans))
+				if len(view.Orphans) == 0 {
 					_, _ = fmt.Fprintln(out, "  (none)")
 				}
-				for _, id := range m.Orphans.Isolated {
+				for _, id := range view.Orphans {
 					_, _ = fmt.Fprintf(out, "  %s\n", id)
 				}
 			}
 			if showUnreachable {
-				if m.Orphans.Indeterminate {
+				if view.ReachabilityIndeterminate {
 					_, _ = fmt.Fprintln(out,
 						"Unreachable: indeterminate (no root set found; see notice on stderr)")
 				} else {
-					_, _ = fmt.Fprintf(out, "Unreachable (%d):\n", len(m.Orphans.Unreachable))
-					if len(m.Orphans.Unreachable) == 0 {
+					_, _ = fmt.Fprintf(out, "Unreachable (%d):\n", len(view.Unreachable))
+					if len(view.Unreachable) == 0 {
 						_, _ = fmt.Fprintln(out, "  (none)")
 					}
-					for _, id := range m.Orphans.Unreachable {
+					for _, id := range view.Unreachable {
 						_, _ = fmt.Fprintf(out, "  %s\n", id)
 					}
 				}

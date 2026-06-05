@@ -77,6 +77,47 @@ func TestIndex_HostilePathAndDescriptionEscaped(t *testing.T) {
 	}
 }
 
+// TestIndex_HostileCategoryEscaped pins the MUST-FIX divergence: a hostile
+// directory/category name (which becomes a Markdown heading) must be neutralized
+// with the SAME shared escaper the report uses, so it cannot render as live
+// markdown in index.md. The category is the document's directory, so we place a
+// doc under a hostile directory path and assert every markdown-significant
+// metacharacter is backslash-escaped in the emitted "## ..." heading — exactly
+// as emit.EscapeMarkdownText (used by report.md) would produce.
+func TestIndex_HostileCategoryEscaped(t *testing.T) {
+	const hostileDir = "a*b_c[d]e\\f`g|h"
+	doc := &corpus.Document{
+		ID:          corpus.DocumentID(hostileDir + "/page.md"),
+		FrontMatter: corpus.FrontMatter{Title: "Page"},
+	}
+	out := string(Markdown(buildView(t, doc)))
+
+	// The heading line for the category must equal what the shared escaper yields.
+	wantHeading := "## " + emit.EscapeMarkdownText(hostileDir)
+	if !strings.Contains(out, wantHeading) {
+		t.Errorf("category heading not escaped via the shared helper.\nwant line: %q\ngot:\n%s", wantHeading, out)
+	}
+	// Defense-in-depth: the raw, unescaped metacharacters must not survive in the
+	// heading (they would render as live markdown). We check the emphasis pair and
+	// the link brackets specifically.
+	headingLine := ""
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "## ") {
+			headingLine = line
+			break
+		}
+	}
+	// The markdown-significant metacharacters must be neutralized. A bare pipe is
+	// intentionally NOT escaped here: this is a heading, not a table cell, so '|'
+	// is inert (EscapeMarkdownText escapes the cell-breaking pipe only via
+	// EscapeTableCell). That asymmetry is the whole point of having two helpers.
+	for _, raw := range []string{"a*b", "b_c", "c[d", "d]e", `e\f`, "f`g"} {
+		if strings.Contains(headingLine, raw) {
+			t.Errorf("hostile category heading leaked unescaped %q: %q", raw, headingLine)
+		}
+	}
+}
+
 func TestIndex_Empty(t *testing.T) {
 	out := string(Markdown(buildView(t)))
 	if !strings.Contains(out, "No documents") {

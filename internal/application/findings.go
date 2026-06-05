@@ -83,10 +83,10 @@ func brokenLinkFinding(r reference.Reference) analysis.Finding {
 }
 
 func brokenAnchorFinding(r reference.Reference) analysis.Finding {
+	// The resolver always sets Target.DocumentID on a BrokenAnchor (the document
+	// resolved; only the anchor was missing), so it is non-empty here. For a
+	// same-document anchor it is the origin itself (resolver.go).
 	doc := r.Target.DocumentID
-	if doc == "" {
-		doc = r.Origin
-	}
 	return analysis.Finding{
 		ID:       findingID(analysis.BrokenAnchor, r.Origin, r.Line, rawTargetText(r)),
 		Kind:     analysis.BrokenAnchor,

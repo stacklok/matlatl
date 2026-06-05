@@ -14,8 +14,9 @@ import (
 
 func TestEscapeCell_NeutralizesPipeAndNewline(t *testing.T) {
 	// A hostile title containing a pipe and a newline must not break the table:
-	// the pipe is escaped and the newline collapses to a space.
-	got := escapeCell("a | b\nc")
+	// the pipe is escaped and the newline collapses to a space. This exercises the
+	// shared emit.EscapeTableCell helper the report and index both use.
+	got := emit.EscapeTableCell("a | b\nc")
 	if strings.Contains(got, "\n") {
 		t.Errorf("newline survived cell escaping: %q", got)
 	}

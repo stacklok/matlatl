@@ -126,12 +126,12 @@ func configFromFlags(cmd *cobra.Command, args []string) application.Config {
 }
 
 // buildPipeline wires the concrete scanner + parser factory into a Pipeline.
-// The artifact writer is nil: artifacts are rendered/written by the command
-// layer (e.g. check) after Run, so the pipeline stays emitter-agnostic.
+// Artifacts are rendered/written by the command layer (e.g. check) after Run, so
+// the pipeline stays emitter-agnostic.
 func buildPipeline(cfg application.Config, logSink io.Writer) *application.Pipeline {
 	scanner := fsscanner.New(fsscanner.Config{OutputDir: cfg.OutputDir})
 	parserFac := mdparser.NewFactory(mdparser.Config{})
-	return application.NewPipeline(cfg, scanner, parserFac, nil, logSink)
+	return application.NewPipeline(cfg, scanner, parserFac, logSink)
 }
 
 // usageArgs wraps a cobra positional-args validator so that an arg-count

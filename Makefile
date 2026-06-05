@@ -29,8 +29,8 @@ test-integration: ## Run integration / golden tests
 	go test $(GOFLAGS) -race -count=1 -tags=integration $(PKG)
 
 .PHONY: cover
-cover: ## Run tests with coverage report
-	go test $(GOFLAGS) -race -covermode=atomic -coverprofile=coverage.out $(PKG)
+cover: ## Run tests with coverage report (includes integration/golden code)
+	go test $(GOFLAGS) -tags=integration -race -covermode=atomic -coverprofile=coverage.out $(PKG)
 	go tool cover -func=coverage.out | tail -1
 
 .PHONY: vet
