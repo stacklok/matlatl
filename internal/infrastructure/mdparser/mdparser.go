@@ -22,6 +22,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 	"go.abhg.dev/goldmark/frontmatter"
 
 	"github.com/stacklok/doctopus/internal/application"
@@ -89,7 +90,14 @@ func New(cfg Config) *Parser {
 		cfg.MaxFrontMatterBytes = DefaultMaxFrontMatterBytes
 	}
 	md := goldmark.New(
-		goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+			// Register the custom wikilink/embed inline parser ahead of the
+			// standard link parser (lower priority number = higher precedence)
+			// so [[...]] / ![[...]] are recognized before '[' becomes a
+			// CommonMark link.
+			parser.WithInlineParsers(util.Prioritized(wikilinkParser{}, 100)),
+		),
 		goldmark.WithExtensions(&frontmatter.Extender{
 			Formats: frontmatter.DefaultFormats, // YAML (---) and TOML (+++)
 		}),
@@ -398,8 +406,9 @@ func firstH1Text(root *corpus.Section) string {
 	return ""
 }
 
-// extractReferences collects standard-markdown outbound edges (links, anchors,
-// images, external links) from the AST. Wikilinks are out of scope until P2.
+// extractReferences collects outbound edges from the AST: standard markdown
+// links/images/autolinks (P1) plus the custom [[wikilink]] / ![[embed]] nodes
+// (P2).
 func extractReferences(root ast.Node, src []byte, origin identity.DocumentID, lines *lineIndex) []reference.RawReference {
 	var refs []reference.RawReference
 	_ = ast.Walk(root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -414,10 +423,33 @@ func extractReferences(root ast.Node, src []byte, origin identity.DocumentID, li
 		case *ast.AutoLink:
 			// <https://...> / bare-URL autolinks are always external.
 			refs = append(refs, makeRef(string(node.URL(src)), reference.External, node, src, origin, lines))
+		case *wikilinkNode:
+			refs = append(refs, makeWikilinkRef(node, origin, lines))
 		}
 		return ast.WalkContinue, nil
 	})
 	return refs
+}
+
+// makeWikilinkRef converts a parsed wikilink/embed node into a RawReference.
+// Embeds (![[...]]) classify as Transclusion; plain [[...]] as Wikilink. An
+// anchor-only wikilink ([[#frag]]) is classified as Anchor (resolves within the
+// origin document, like [](#frag)).
+func makeWikilinkRef(n *wikilinkNode, origin identity.DocumentID, lines *lineIndex) reference.RawReference {
+	typ := reference.Wikilink
+	switch {
+	case n.Embed:
+		typ = reference.Transclusion
+	case n.Target == "" && n.Fragment != "":
+		typ = reference.Anchor
+	}
+	return reference.RawReference{
+		Origin:    origin,
+		RawTarget: n.Target,
+		Fragment:  n.Fragment,
+		Type:      typ,
+		Line:      lines.lineAt(n.Offset),
+	}
 }
 
 // makeRef builds a RawReference, classifying target/fragment and resolving the
