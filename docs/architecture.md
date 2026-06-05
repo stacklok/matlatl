@@ -19,12 +19,16 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    classified edge (valid / broken / broken-anchor / non-note / ambiguous / external),
    using the `HeadingInventory` and `AliasTable`.
 4. **Build** — assemble the directed `ReferenceGraph` (documents + sections as
-   vertices, typed edges) and the `HierarchyTree`.
+   vertices, typed edges) and the `HierarchyTree`. Node/edge semantics and the
+   document projection that analysis runs over are pinned in
+   [ADR 0007](adr/0007-graph-node-semantics.md); directory links (`adr/`) resolve
+   and confer reachability per [ADR 0008](adr/0008-directory-links.md).
 5. **Analyze** — reachability from the root set, orphan vs. unreachable
    classification, weak + strong components, HITS hub/authority, knowledge-gap
-   detection → a frozen `AnalysisReport`.
+   detection → a frozen `AnalysisReport`
+   ([ADR 0007](adr/0007-graph-node-semantics.md)).
 6. **Emit** — render the report for humans (terminal, Markdown, Mermaid, DOT,
-   index.md) and LLMs (graph.json, llms.txt family, findings.json + JUnit).
+   index.md) and LLMs (graph.json, llms.txt family, findings.json; JUnit via `check`).
 
 ## 2. Layering
 

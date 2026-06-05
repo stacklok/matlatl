@@ -54,8 +54,11 @@ that prior art leaves open.
 - [Developer guide](docs/dev-guide.md) — layout, rules, testing, how to contribute
 - [Architecture](docs/architecture.md)
 - [Architecture Decision Records](docs/adr/)
-- [graph.json schema](docs/schemas/graph.schema.json)
+- [graph.json schema](docs/schemas/graph.schema.json) · [findings.json schema](docs/schemas/findings.schema.json)
+- [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Agent guide](AGENTS.md)
 
 ## License
 
-TBD.
+Apache-2.0 © 2026 Stacklok, Inc. See [`LICENSE`](LICENSE).
+
+`SPDX-License-Identifier: Apache-2.0`

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stacklok.com/doctopus/schemas/findings.schema.json",
+  "title": "doctopus findings.json",
+  "description": "The machine- and CI-consumable findings report emitted by `doctopus check --out <dir>` and `doctopus emit --out <dir>`. Every finding is self-contained and actionable: structured `details` plus a top-level `remediationGuide` keyed by finding kind. This schema is the published contract; the emitter type internal/infrastructure/emit.findingsDocument is kept in lockstep and a test validates emitted bytes against this document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "tool",
+    "summary",
+    "remediationGuide",
+    "findings"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 2 },
+    "tool": { "type": "string" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total", "brokenLink", "brokenAnchor", "ambiguous",
+        "orphan", "unreachable", "knowledgeGap"
+      ],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "brokenLink": { "type": "integer", "minimum": 0 },
+        "brokenAnchor": { "type": "integer", "minimum": 0 },
+        "ambiguous": { "type": "integer", "minimum": 0 },
+        "orphan": { "type": "integer", "minimum": 0 },
+        "unreachable": { "type": "integer", "minimum": 0 },
+        "knowledgeGap": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "remediationGuide": {
+      "description": "Maps each finding kind present in this report to a standalone, one-paragraph how-to so an agent can act using only this document. Keyed by the finding kind string; a clean report yields an empty object.",
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "severity", "document", "line", "message"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "broken-link", "broken-anchor", "ambiguous",
+              "orphan", "unreachable", "knowledge-gap", "dead-link"
+            ]
+          },
+          "severity": { "type": "string", "enum": ["info", "warning", "error"] },
+          "document": { "type": "string" },
+          "line": { "type": "integer", "minimum": 0 },
+          "message": { "type": "string" },
+          "suggestedFix": { "type": "string" },
+          "details": {
+            "description": "Structured, machine-actionable context for the finding (e.g. target, candidates, expectedSlug). Keys are stable per ADR-aligned contract; omitted when empty.",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

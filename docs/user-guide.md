@@ -45,6 +45,7 @@ $ doctopus emit --out ai  # write the full human + LLM artifact bundle to ./ai
 | `--out <dir>` | Write artifacts into `<dir>` (paths are sanitized to stay inside it). |
 | `--strict` | Promote orphan/ambiguous **warnings** to **failures** (affects `check`'s exit code). |
 | `--check-external` | Opt in to HTTP liveness checks of external links (off by default; see below). |
+| `--root <glob>` | Add reachability root(s) on top of the autodetected ones (`README.md`/`index.md`/`type: index`). Repeatable and/or comma-separated; matched against document paths with `path.Match` (a single `*` does **not** cross `/`, and `**` is unsupported — e.g. `docs/*.md`, not `docs/**`). |
 | `--no-color` | Disable ANSI color. `NO_COLOR` env and non-TTY output are also honored. |
 | `--quiet` / `--verbose` | Less / more output. |
 | `--resolution <policy>` | (`check`) `exact` \| `longest-suffix` (default) \| `basename`. |
@@ -113,7 +114,9 @@ fail — so dashboards get structured results either way.
 - **`llms-full.txt` / `llms-small.txt`** — concatenated clean bodies (each with a
   short context header) / a tight hubs-only subset for small context windows.
 - **`findings.json`** — every finding is self-contained and actionable, plus a
-  `remediationGuide` so an agent can fix issues without extra context.
+  `remediationGuide` so an agent can fix issues without extra context. Validated
+  against [`docs/schemas/findings.schema.json`](schemas/findings.schema.json)
+  (schema version 2) and byte-stable run to run.
 
 ### Live queries for agents (MCP)
 
@@ -136,6 +139,34 @@ default** to keep runs fast and deterministic. When on, doctopus applies an SSRF
 guard (refuses loopback, link-local, cloud-metadata, and private addresses, and
 re-checks redirects against the resolved IP) — see
 [ADR 0003](adr/0003-security-model.md).
+
+## Troubleshooting
+
+**"reachability indeterminate (no root found)"** — doctopus prints this notice
+when it can't find any reachability root: no `README.md`/`index.md` at any depth
+and no `type: index` front-matter doc, and you didn't pass `--root`. Rather than
+flag *every* document as unreachable (which would be noise), doctopus skips
+reachability analysis entirely and says so. Orphan (isolated) detection still
+runs. Fix it by adding a `README.md`/`index.md`, marking an entry doc with
+`type: index` front matter, or passing an explicit `--root <glob>`. This notice
+alone never fails `check` (per [ADR 0005](adr/0005-exit-code-contract.md)).
+
+**Orphan vs. unreachable** — they are distinct findings with distinct fixes. An
+**orphan** has *no* navigational links at all (in-degree 0 **and** out-degree 0):
+link it in from a relevant page, or delete it. An **unreachable** doc *does* link
+out (or is linked from another unreachable cluster) but no path leads to it from
+a root: give it an inbound link from a page that is itself reachable. A doc that
+is both is reported only as the more specific orphan. To silence either
+intentionally, add `doctopus: orphan-intentional` front matter.
+
+**`--strict` and directory links** — a directory link like `[the ADRs](adr/)`
+always *resolves* (it is never a broken link). Under the default policy it also
+confers reachability on the folder's direct children, so they aren't flagged. But
+under `--strict` a directory link does **not** vouch for the folder's non-index
+siblings ([ADR 0008](adr/0008-directory-links.md)): those docs surface as
+orphans/unreachable and `check --strict` exits 1. The fix is to link the
+individual docs explicitly (e.g. from an index or from prose) rather than relying
+on the bare directory link.
 
 ## See also
 

@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/stacklok/doctopus/internal/application"
@@ -116,6 +118,153 @@ func TestRemediationGuide_CoversAllKinds(t *testing.T) {
 	if remediationByKind[analysis.DeadLink.String()] == "" {
 		t.Error("remediationByKind missing the DeadLink entry")
 	}
+}
+
+// TestFindingsJSON_ValidatesAgainstSchema validates emitted findings.json against
+// the committed JSON Schema (docs/schemas/findings.schema.json) using a minimal,
+// dependency-free Draft-2020-12 subset checker (the same approach the graphjson
+// package uses for graph.schema.json). It enforces required, const, enum, type,
+// and additionalProperties (both the `false` form on the top-level objects and
+// the schema-object form used for the `details`/`remediationGuide` string maps),
+// so a shape drift between findingsDocument and the published schema fails here.
+func TestFindingsJSON_ValidatesAgainstSchema(t *testing.T) {
+	b, err := FindingsJSON(sampleReport())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data any
+	if err := json.Unmarshal(b, &data); err != nil {
+		t.Fatal(err)
+	}
+	schemaPath, err := filepath.Abs(filepath.Join("..", "..", "..", "docs", "schemas", "findings.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(sb, &schema); err != nil {
+		t.Fatalf("parse schema: %v", err)
+	}
+	if errs := validateFindingsNode(data, schema, "$"); len(errs) > 0 {
+		sort.Strings(errs)
+		t.Errorf("findings.json does not satisfy findings.schema.json:\n  %v", errs)
+	}
+}
+
+// TestFindingsJSON_CleanValidatesAgainstSchema asserts a clean (zero-finding)
+// report — an empty findings list and empty remediationGuide — still satisfies
+// the schema (round-trip on the most common emitted shape).
+func TestFindingsJSON_CleanValidatesAgainstSchema(t *testing.T) {
+	b, err := FindingsJSON(analysis.NewAnalysisReport(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data any
+	if err := json.Unmarshal(b, &data); err != nil {
+		t.Fatal(err)
+	}
+	schemaPath, _ := filepath.Abs(filepath.Join("..", "..", "..", "docs", "schemas", "findings.schema.json"))
+	sb, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(sb, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if errs := validateFindingsNode(data, schema, "$"); len(errs) > 0 {
+		sort.Strings(errs)
+		t.Errorf("clean findings.json does not satisfy schema:\n  %v", errs)
+	}
+}
+
+// validateFindingsNode is a minimal JSON-Schema (Draft 2020-12 subset) checker:
+// type, required, const, enum, properties recursion, array items, minimum, and
+// additionalProperties in both forms (bool false → no unknown keys; object →
+// schema applied to every otherwise-unmatched value). It is intentionally small,
+// just enough to assert the published shape contract.
+func validateFindingsNode(data, schema any, path string) []string {
+	s, ok := schema.(map[string]any)
+	if !ok {
+		return nil
+	}
+	var errs []string
+	switch s["type"] {
+	case "object":
+		m, ok := data.(map[string]any)
+		if !ok {
+			return []string{fmt.Sprintf("%s: want object", path)}
+		}
+		props, _ := s["properties"].(map[string]any)
+		if req, ok := s["required"].([]any); ok {
+			for _, r := range req {
+				if _, present := m[r.(string)]; !present {
+					errs = append(errs, fmt.Sprintf("%s: missing required %q", path, r))
+				}
+			}
+		}
+		ap := s["additionalProperties"]
+		for k, v := range m {
+			if ps, ok := props[k]; ok {
+				errs = append(errs, validateFindingsNode(v, ps, path+"."+k)...)
+				continue
+			}
+			switch apt := ap.(type) {
+			case bool:
+				if !apt {
+					errs = append(errs, fmt.Sprintf("%s: unexpected property %q", path, k))
+				}
+			case map[string]any:
+				errs = append(errs, validateFindingsNode(v, apt, path+"."+k)...)
+			}
+		}
+	case "array":
+		arr, ok := data.([]any)
+		if !ok {
+			return []string{fmt.Sprintf("%s: want array", path)}
+		}
+		if items, ok := s["items"]; ok {
+			for i, e := range arr {
+				errs = append(errs, validateFindingsNode(e, items, fmt.Sprintf("%s[%d]", path, i))...)
+			}
+		}
+	case "string":
+		if _, ok := data.(string); !ok {
+			errs = append(errs, fmt.Sprintf("%s: want string", path))
+		}
+	case "integer":
+		f, ok := data.(float64)
+		if !ok || f != float64(int64(f)) {
+			errs = append(errs, fmt.Sprintf("%s: want integer", path))
+		} else if min, ok := s["minimum"].(float64); ok && f < min {
+			errs = append(errs, fmt.Sprintf("%s: %v < minimum %v", path, f, min))
+		}
+	}
+	if c, ok := s["const"]; ok {
+		if cf, okc := c.(float64); okc {
+			if df, okd := data.(float64); !okd || df != cf {
+				errs = append(errs, fmt.Sprintf("%s: const mismatch (want %v)", path, c))
+			}
+		} else if data != c {
+			errs = append(errs, fmt.Sprintf("%s: const mismatch (want %v)", path, c))
+		}
+	}
+	if en, ok := s["enum"].([]any); ok {
+		matched := false
+		for _, e := range en {
+			if data == e {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			errs = append(errs, fmt.Sprintf("%s: %v not in enum", path, data))
+		}
+	}
+	return errs
 }
 
 func TestFindingsJSON_Deterministic(t *testing.T) {

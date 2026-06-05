@@ -13,3 +13,5 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0004 | DDD layering and full-fat scope         | Accepted |
 | 0005 | `check` exit-code contract              | Accepted |
 | 0006 | Canonical anchor-slug dialect           | Accepted |
+| 0007 | Graph node semantics and the document projection | Accepted |
+| 0008 | Directory links resolve and confer navigational reachability | Accepted |
