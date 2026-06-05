@@ -17,12 +17,14 @@ and builds two overlaid structures:
 
 From those it detects **orphans** (truly isolated docs) and **unreachable** docs
 (no path from a root such as `README.md`), **broken links**, and **broken anchors**,
-then renders the result for two audiences:
+then renders the result for three audiences:
 
 - **Humans** — a colorized terminal report, a committable Markdown report, Mermaid and
   Graphviz/DOT diagrams, and a navigable `index.md`.
-- **LLMs** — a compact, queryable `graph.json`, an `llms.txt` family, and a
+- **LLMs (reading)** — a compact, queryable `graph.json`, an `llms.txt` family, and a
   `findings.json` where every finding is a self-contained, actionable fix instruction.
+- **Acting agents** — `fix-prompt` emits a self-contained, agent-agnostic prompt
+  that turns the findings into fixes: `matlatl fix-prompt . | claude -p`.
 
 ## Status
 
@@ -41,6 +43,7 @@ $ matlatl check .           # CI lint mode: non-zero exit on broken links/anchor
 $ matlatl graph . --format mermaid
 $ matlatl index .           # emit index.md + llms.txt
 $ matlatl orphans .         # list orphans / unreachable docs
+$ matlatl fix-prompt . | claude -p   # agent-ready prompt to fix the findings
 $ matlatl serve .           # MCP server exposing graph queries to agents
 ```
 

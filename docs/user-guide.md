@@ -35,6 +35,7 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 | `matlatl index [path]` | Emit a navigation surface: `index.md`, or an `llms.txt` family artifact (`--llms`, `--full`, `--small`, `--graph`). |
 | `matlatl orphans [path]` | List orphaned (`--isolated-only`) and unreachable (`--unreachable-only`) docs. |
 | `matlatl emit [path] --out <dir>` | Write the whole bundle: `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `findings.json`. |
+| `matlatl fix-prompt [path]` | Emit an agent-agnostic prompt (findings embedded inline) that tells an LLM coding agent how to fix them. Pipe it to any agent; `--errors-only` for broken links/anchors only; `--out` to write `fix-prompt.md`. |
 | `matlatl serve [path]` | Run the read-only MCP server (streamable HTTP) so an agent can query the graph. |
 | `matlatl version` | Print version information. |
 
@@ -118,6 +119,26 @@ fail — so dashboards get structured results either way.
   against [`docs/schemas/findings.schema.json`](schemas/findings.schema.json)
   (schema version 2) and byte-stable run to run.
 
+### Fixing findings with an agent
+
+`matlatl fix-prompt` writes a single, self-contained prompt that tells an LLM
+coding agent how to fix the findings — the findings (and a per-kind how-to) are
+embedded inline, so the prompt needs no other context. Pipe it straight into any
+agent:
+
+```console
+$ matlatl fix-prompt . | claude -p
+$ matlatl fix-prompt . --errors-only   # only broken links/anchors (severity=error)
+$ matlatl fix-prompt . --out ai        # write ai/fix-prompt.md instead of stdout
+```
+
+The prompt is **agent-agnostic** — it names no harness-specific tools — and bakes
+its guardrails into the text: fix only the listed findings, don't invent files/
+headings/facts, skip intentional orphans and links into code/directories, prefer
+skipping when a target is ambiguous, and verify with `matlatl check` afterward.
+`fix-prompt` is a generator, not a gate: it always exits 0 (a clean corpus yields
+a short no-op prompt). The hosting agent/harness still owns sandboxing.
+
 ### Live queries for agents (MCP)
 
 ```console
@@ -133,7 +154,11 @@ runs until interrupted and drains in-flight requests on shutdown.
 ## Ignoring files
 
 Create a `.matlatlignore` (gitignore syntax). `.git`, `node_modules`, and
-`vendor` are ignored by default.
+`vendor` are ignored by default (matched by directory name, anywhere in the
+tree), as is `.claude/worktrees/` (Claude Code agent worktrees — each is a full
+copy of the repo, which would otherwise multiply the corpus many times over;
+matched only at the scan root, so `.claude/rules/` and the rest of `.claude/`
+stay in the graph).
 
 ## Checking external links (opt-in)
 

@@ -97,15 +97,22 @@ var remediationByKind = map[string]string{
 		"remove or replace the link. Dead-link findings appear only under --check-external.",
 }
 
+// kindPresentationOrder is the single source of truth for the order finding
+// kinds are presented in across the emit package: the findings.json
+// remediationGuide (remediationGuideFor) and the fix-prompt "How to fix each
+// kind" section (kindsPresent) both iterate it, so a newly-added FindingKind
+// cannot slip past one and be ordered inconsistently in the other.
+var kindPresentationOrder = []analysis.FindingKind{
+	analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
+	analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap, analysis.DeadLink,
+}
+
 // remediationGuideFor returns the remediation entries for exactly the kinds
 // present in the report, so the guide is scoped to what was emitted. A clean
 // report yields an empty (but non-nil) guide.
 func remediationGuideFor(report *analysis.AnalysisReport) map[string]string {
 	guide := make(map[string]string)
-	for _, k := range []analysis.FindingKind{
-		analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
-		analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap, analysis.DeadLink,
-	} {
+	for _, k := range kindPresentationOrder {
 		if report.CountByKind(k) > 0 {
 			guide[k.String()] = remediationByKind[k.String()]
 		}

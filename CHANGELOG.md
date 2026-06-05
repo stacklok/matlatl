@@ -21,6 +21,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`matlatl fix-prompt [path]`** — emits a self-contained, agent-agnostic prompt
+  (findings and per-kind how-to embedded inline) that instructs an LLM coding
+  agent to fix the documentation findings: `matlatl fix-prompt . | claude -p`.
+  `--errors-only` narrows it to broken links/anchors; `--out` writes
+  `fix-prompt.md`. It is a generator, not a gate (always exits 0). See
+  [ADR 0009](docs/adr/0009-fix-prompt-acting-agents.md).
 - Persistent `--root <glob>` flag to designate extra reachability roots on top of
   the autodetected ones (`README.md`/`index.md`/`type: index`), feeding
   `graphmodel.ResolveRootSet` (ADR 0007).

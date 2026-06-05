@@ -40,6 +40,7 @@ linked docs rather than re-deriving them.
 matlatl .              # terminal report
 matlatl check .        # CI gate (exit codes per ADR 0005); --strict to harden
 matlatl emit --out ai  # full human + LLM artifact bundle
+matlatl fix-prompt .   # agent-agnostic prompt to fix the findings (pipe to any agent)
 matlatl serve .        # read-only MCP server over streamable HTTP (127.0.0.1:8080/mcp)
 ```
 

@@ -599,6 +599,107 @@ func TestIntegration_EmitRequiresOut(t *testing.T) {
 	}
 }
 
+// --- fix-prompt integration tests ---
+
+// TestIntegration_FixPromptStdout: `fix-prompt` prints an agent-ready prompt to
+// stdout (exit 0) with the title, a guardrail phrase, a broken-link document
+// path, and a remediation substring.
+func TestIntegration_FixPromptStdout(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"fix-prompt", corpusFixture(t)}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("fix-prompt code = %v, want ExitOK (stderr=%q)", code, errOut.String())
+	}
+	s := out.String()
+	if !strings.Contains(s, "# matlatl fix-prompt") {
+		t.Errorf("fix-prompt missing title:\n%s", s)
+	}
+	if !strings.Contains(s, "orphan-intentional") {
+		t.Errorf("fix-prompt missing guardrail phrase:\n%s", s)
+	}
+	if !strings.Contains(s, "docs/links.md") {
+		t.Errorf("fix-prompt missing a broken-link document path:\n%s", s)
+	}
+	if !strings.Contains(s, "does not resolve to any document in the corpus") {
+		t.Errorf("fix-prompt missing the broken-link remediation text:\n%s", s)
+	}
+}
+
+// TestIntegration_FixPromptErrorsOnly: `fix-prompt --errors-only` excludes
+// warning-severity entries (the ambiguous/orphan/unreachable findings) while
+// keeping the error-severity broken link/anchor findings.
+func TestIntegration_FixPromptErrorsOnly(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"fix-prompt", corpusFixture(t), "--errors-only"}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("fix-prompt --errors-only code = %v, want ExitOK", code)
+	}
+	s := out.String()
+	if !strings.Contains(s, "Scope: errors only") {
+		t.Errorf("fix-prompt --errors-only missing the errors-only scope line:\n%s", s)
+	}
+	// Error-severity findings (broken link AND anchor) remain.
+	if !strings.Contains(s, "**broken-link**") {
+		t.Errorf("fix-prompt --errors-only dropped broken-link findings:\n%s", s)
+	}
+	if !strings.Contains(s, "**broken-anchor**") {
+		t.Errorf("fix-prompt --errors-only dropped broken-anchor findings:\n%s", s)
+	}
+	// Non-error severities are filtered out: warnings (ambiguous/orphan/
+	// unreachable) AND info (knowledge-gap). The corpus fixture produces both, so
+	// a `Severity != Warning` regression that leaked info findings would be caught.
+	if strings.Contains(s, "(warning)") {
+		t.Errorf("fix-prompt --errors-only should not contain warning entries:\n%s", s)
+	}
+	if strings.Contains(s, "(info)") {
+		t.Errorf("fix-prompt --errors-only should not contain info entries:\n%s", s)
+	}
+}
+
+// TestIntegration_FixPromptClean: a fully-resolvable corpus yields the no-op
+// message and still exits 0.
+func TestIntegration_FixPromptClean(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"fix-prompt", cleanFixture(t)}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("fix-prompt clean code = %v, want ExitOK", code)
+	}
+	if !strings.Contains(out.String(), "No documentation findings to fix") {
+		t.Errorf("fix-prompt on a clean corpus should emit the no-op message:\n%s", out.String())
+	}
+}
+
+// TestIntegration_FixPromptDeterministic: stdout is byte-stable across runs.
+func TestIntegration_FixPromptDeterministic(t *testing.T) {
+	run := func() string {
+		var out, errOut bytes.Buffer
+		runArgs(context.Background(), []string{"fix-prompt", corpusFixture(t)}, &out, &errOut)
+		return out.String()
+	}
+	if run() != run() {
+		t.Error("fix-prompt output is not deterministic across runs")
+	}
+}
+
+// TestIntegration_FixPromptToOut: `fix-prompt --out` writes fix-prompt.md under
+// the out dir and nothing escapes it.
+func TestIntegration_FixPromptToOut(t *testing.T) {
+	outDir := t.TempDir()
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"fix-prompt", corpusFixture(t), "--out", outDir}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("fix-prompt --out code = %v, want ExitOK (stderr=%q)", code, errOut.String())
+	}
+	b, err := os.ReadFile(filepath.Join(outDir, "fix-prompt.md"))
+	if err != nil {
+		t.Fatalf("fix-prompt.md not written: %v", err)
+	}
+	if !strings.Contains(string(b), "# matlatl fix-prompt") {
+		t.Errorf("fix-prompt.md missing expected content:\n%s", b)
+	}
+	assertNothingEscaped(t, outDir, []string{"fix-prompt.md"})
+}
+
 // assertNothingEscaped verifies that the out dir contains only the expected
 // files (plus directories) — nothing was written outside --out (ADR 0003).
 func assertNothingEscaped(t *testing.T, outDir string, want []string) {

@@ -15,3 +15,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0006 | Canonical anchor-slug dialect           | Accepted |
 | 0007 | Graph node semantics and the document projection | Accepted |
 | 0008 | Directory links resolve and confer navigational reachability | Accepted |
+| 0009 | `fix-prompt` serves acting agents with an embedded prompt | Accepted |

@@ -79,6 +79,21 @@ func TestServeCommandRegistered(t *testing.T) {
 	}
 }
 
+// TestFixPromptCommandRegistered checks that `fix-prompt` is a real, registered
+// command whose help explains the agent-agnostic pipe usage.
+func TestFixPromptCommandRegistered(t *testing.T) {
+	out, _, err := runCmd(t, "fix-prompt", "--help")
+	if err != nil {
+		t.Fatalf("fix-prompt --help error: %v", err)
+	}
+	if !strings.Contains(out, "claude -p") {
+		t.Errorf("fix-prompt --help = %q, want the pipe-usage example", out)
+	}
+	if !strings.Contains(out, "errors-only") {
+		t.Errorf("fix-prompt --help = %q, want mention of --errors-only", out)
+	}
+}
+
 // TestGraphMermaidStdout: graph now renders a Mermaid block on stdout.
 func TestGraphMermaidStdout(t *testing.T) {
 	dir := t.TempDir()

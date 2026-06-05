@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/analysis"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/diagram"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
@@ -68,6 +69,27 @@ func buildCorpusView(t *testing.T) emit.View {
 		t.Fatalf("pipeline run: %v", err)
 	}
 	return emit.BuildView(res)
+}
+
+// buildCorpusReport runs the same real pipeline as buildCorpusView but returns
+// the frozen AnalysisReport (which carries the per-finding Details the View
+// drops), needed by the fix-prompt emitter.
+func buildCorpusReport(t *testing.T) *analysis.AnalysisReport {
+	t.Helper()
+	root, err := filepath.Abs(filepath.Join("..", "..", "..", "testdata", "corpus"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := application.DefaultConfig()
+	cfg.RootPath = root
+	scanner := fsscanner.New(fsscanner.Config{})
+	parserFac := mdparser.NewFactory(mdparser.Config{})
+	pipe := application.NewPipeline(cfg, scanner, parserFac, nil)
+	_, res, err := pipe.Run(context.Background())
+	if err != nil {
+		t.Fatalf("pipeline run: %v", err)
+	}
+	return res.Report
 }
 
 func goldenPath(name string) string {
@@ -149,6 +171,12 @@ func TestGolden_Artifacts(t *testing.T) {
 	t.Run("llms-small.txt", func(t *testing.T) {
 		assertGolden(t, "llms-small.txt", llmstxt.LLMSSmall(v, reader, opts), nil)
 	})
+
+	// fix-prompt consumes the full report (not the View), so build it separately.
+	t.Run("fix-prompt.md", func(t *testing.T) {
+		rep := buildCorpusReport(t)
+		assertGolden(t, "fix-prompt.md", emit.FixPrompt(rep, emit.FixPromptOptions{}), nil)
+	})
 }
 
 // TestGolden_ByteStable runs every emitter twice and asserts identical bytes,
@@ -194,4 +222,16 @@ func TestGolden_ByteStable(t *testing.T) {
 			}
 		})
 	}
+
+	// fix-prompt is report-driven (not View-driven), so check it on its own.
+	t.Run("fix-prompt.md", func(t *testing.T) {
+		r1 := buildCorpusReport(t)
+		r2 := buildCorpusReport(t)
+		if !bytes.Equal(
+			emit.FixPrompt(r1, emit.FixPromptOptions{}),
+			emit.FixPrompt(r2, emit.FixPromptOptions{}),
+		) {
+			t.Error("fix-prompt.md is not byte-stable across two pipeline runs")
+		}
+	})
 }
