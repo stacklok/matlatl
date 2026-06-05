@@ -23,9 +23,9 @@ go list -deps ./internal/domain/... | \
   grep -E 'dominikbraun|goldmark|spf13|sabhiram|mark3labs|net/http|internal/(application|infrastructure)'
 ```
 
-`make check` runs fmt + vet + lint + unit tests; `make test-integration` runs the
+`task check` runs fmt + vet + lint + unit tests; `task test-integration` runs the
 integration/golden suite. If you touch markdown with links, keep the doc gate
-green: `make dogfood` regenerates `llms.txt` and runs `matlatl check . --strict`.
+green: `task dogfood` regenerates `llms.txt` and runs `matlatl check . --strict`.
 
 ## Conventions
 

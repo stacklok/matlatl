@@ -50,12 +50,12 @@ testdata/                fixture corpora + golden artifacts
 ## Build, test, lint
 
 ```console
-$ make build              # ./bin/matlatl
-$ make test               # unit + smoke, under -race
-$ make test-integration   # golden + integration (-tags=integration)
-$ make cover              # coverage (includes integration-tagged code)
-$ make lint               # golangci-lint
-$ make check              # fmt + vet + lint + test (run before pushing)
+$ task build              # ./bin/matlatl
+$ task test               # unit + smoke, under -race
+$ task test-integration   # golden + integration (-tags=integration)
+$ task cover              # coverage (includes integration-tagged code)
+$ task lint               # golangci-lint
+$ task check              # fmt + vet + lint + test (run before pushing)
 ```
 
 ### The checks every change must pass

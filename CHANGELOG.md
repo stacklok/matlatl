@@ -24,7 +24,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `findings.json` artifact, validated against emitted output in tests.
 - `LICENSE` (Apache-2.0), `CONTRIBUTING.md`, `AGENTS.md`, and this changelog.
 - Repo-root `.matlatlignore` (excludes test fixtures) and a committed `llms.txt`
-  generated from the project's own docs; `make llms` / `make dogfood` regenerate
+  generated from the project's own docs; `task llms` / `task dogfood` regenerate
   it and run the strict doc-link-rot gate, mirrored in CI.
 
 ## [0.1.0] - 2026-06-05

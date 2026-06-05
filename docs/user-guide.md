@@ -12,7 +12,7 @@ what's **lost** (orphans and unreachable pages), and how the docs are
 ```console
 $ go install github.com/stacklok/matlatl/cmd/matlatl@latest
 # or, from a clone:
-$ make build   # produces ./bin/matlatl
+$ task build   # produces ./bin/matlatl
 ```
 
 ## The 30-second tour

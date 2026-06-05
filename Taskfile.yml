@@ -1,0 +1,94 @@
+# matlatl developer Taskfile — https://taskfile.dev
+version: "3"
+
+vars:
+  BINARY: matlatl
+  PKG: ./...
+  BIN_DIR: bin
+  GOFLAGS: '{{.GOFLAGS | default ""}}'
+
+tasks:
+  default:
+    desc: Show this help
+    cmds:
+      - task --list
+    silent: true
+
+  build:
+    desc: Build the matlatl binary into ./bin
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build {{.GOFLAGS}} -o {{.BIN_DIR}}/{{.BINARY}} ./cmd/matlatl
+
+  install:
+    desc: Install matlatl into GOBIN
+    cmds:
+      - go install {{.GOFLAGS}} ./cmd/matlatl
+
+  test:
+    desc: Run unit + smoke tests
+    cmds:
+      - go test {{.GOFLAGS}} -race -count=1 {{.PKG}}
+
+  test-integration:
+    desc: Run integration / golden tests
+    cmds:
+      - go test {{.GOFLAGS}} -race -count=1 -tags=integration {{.PKG}}
+
+  cover:
+    desc: Run tests with coverage report (includes integration/golden code)
+    cmds:
+      - go test {{.GOFLAGS}} -tags=integration -race -covermode=atomic -coverprofile=coverage.out {{.PKG}}
+      - go tool cover -func=coverage.out | tail -1
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet {{.PKG}}
+
+  lint:
+    desc: Run golangci-lint (must be installed)
+    cmds:
+      - golangci-lint run
+
+  tidy:
+    desc: Tidy and verify modules
+    cmds:
+      - go mod tidy
+      - go mod verify
+
+  fmt:
+    desc: Format the codebase
+    cmds:
+      - gofmt -s -w .
+
+  docs:
+    desc: "Doc link-rot gate: matlatl checks its own repo docs (strict)"
+    deps: [build]
+    cmds:
+      - ./{{.BIN_DIR}}/{{.BINARY}} check . --strict
+
+  llms:
+    desc: Regenerate the repo-root llms.txt from the project's own docs
+    deps: [build]
+    cmds:
+      - ./{{.BIN_DIR}}/{{.BINARY}} index . --llms --title "{{.BINARY}}" > llms.txt
+
+  dogfood:
+    desc: "Eat the dog food: regenerate llms.txt + run the strict doc gate"
+    cmds:
+      - task: llms
+      - task: docs
+
+  check:
+    desc: Run the full local verification suite
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: test
+
+  clean:
+    desc: Remove build and coverage artifacts
+    cmds:
+      - rm -rf {{.BIN_DIR}} coverage.out out

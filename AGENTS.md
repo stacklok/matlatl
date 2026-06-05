@@ -50,7 +50,7 @@ artifacts yourself.
 
 ## Dogfooding
 
-This repo eats its own dog food: `make dogfood` regenerates the repo-root
+This repo eats its own dog food: `task dogfood` regenerates the repo-root
 `llms.txt` and runs `matlatl check . --strict` (also a CI gate). `testdata/` is
 excluded via `.matlatlignore` so the gate sees only real docs. If you add
 markdown with links, keep that gate green — don't introduce doc-link rot.
