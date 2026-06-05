@@ -231,6 +231,167 @@ func TestGuard_IPClassification(t *testing.T) {
 	}
 }
 
+// TestSSRF_DenyCIDRBlocksResolvedIP pins the Deny-path CIDR branch of parseACL +
+// ipDenied/ipInAny: a public-looking host that resolves INTO a denied CIDR
+// (10.0.0.0/8) must be Blocked, and — because the deny verdict is reached during
+// the guard, before any request — WITHOUT touching the network. This is the
+// fail-open regression guard for the Deny path (previously untested).
+func TestSSRF_DenyCIDRBlocksResolvedIP(t *testing.T) {
+	res := &fakeResolver{m: map[string][]net.IP{
+		"inside-deny.example.com": {net.IPv4(10, 5, 6, 7)}, // resolves into 10.0.0.0/8
+	}}
+	tr := &countingTransport{inner: http.DefaultTransport}
+	c := New(Config{PerHostInterval: 0, Deny: []string{"10.0.0.0/8"}},
+		WithResolver(res), WithTransport(tr))
+
+	// Sanity: parseACL must have produced a CIDR net, not a literal-host entry.
+	if len(c.denyNets) != 1 {
+		t.Fatalf("parseACL(Deny CIDR): denyNets=%d, want 1 (CIDR not parsed)", len(c.denyNets))
+	}
+	if len(c.denyHost) != 0 {
+		t.Fatalf("parseACL(Deny CIDR): denyHost=%d, want 0 (CIDR leaked into host map)", len(c.denyHost))
+	}
+
+	const u = "http://inside-deny.example.com/x"
+	out := c.Check(context.Background(), []string{u})
+	r := out[u]
+	if !r.Blocked {
+		t.Fatalf("denied-CIDR host: Blocked=false, want true (FAIL-OPEN: Err=%q OK=%v)", r.Err, r.OK)
+	}
+	if r.OK {
+		t.Errorf("denied-CIDR host: OK=true, want false")
+	}
+	if n := tr.calls.Load(); n != 0 {
+		t.Errorf("denied-CIDR host reached the network %d time(s); want 0", n)
+	}
+}
+
+// TestSSRF_DenyBareIP pins the bare-IP -> /32 conversion branch of parseACL: a
+// bare-IP Deny entry ("192.168.1.5") must block exactly that resolved IP. We use
+// a 192.168/16 address (RFC1918) but a sibling that the range guard would ALSO
+// block, so to prove the bare-IP deny branch specifically we additionally assert
+// the entry parsed into denyNets (a /32), not denyHost.
+func TestSSRF_DenyBareIP(t *testing.T) {
+	res := &fakeResolver{m: map[string][]net.IP{
+		"host.example.com": {net.IPv4(192, 168, 1, 5)},
+	}}
+	tr := &countingTransport{inner: http.DefaultTransport}
+	c := New(Config{PerHostInterval: 0, Deny: []string{"192.168.1.5"}},
+		WithResolver(res), WithTransport(tr))
+
+	if len(c.denyNets) != 1 || len(c.denyHost) != 0 {
+		t.Fatalf("parseACL(bare IP): denyNets=%d denyHost=%d, want 1 and 0 (bare IP not -> /32)",
+			len(c.denyNets), len(c.denyHost))
+	}
+	// The /32 must contain the exact IP and not its neighbor.
+	if !c.ipDenied(net.IPv4(192, 168, 1, 5)) {
+		t.Errorf("ipDenied(192.168.1.5) = false, want true (bare-IP /32 deny not effective)")
+	}
+	if c.ipDenied(net.IPv4(192, 168, 1, 6)) {
+		t.Errorf("ipDenied(192.168.1.6) = true, want false (bare-IP deny widened beyond /32)")
+	}
+
+	const u = "http://host.example.com/x"
+	out := c.Check(context.Background(), []string{u})
+	if r := out[u]; !r.Blocked {
+		t.Errorf("bare-IP denied host: Blocked=false, want true (Err=%q)", r.Err)
+	}
+	if n := tr.calls.Load(); n != 0 {
+		t.Errorf("bare-IP denied host reached the network %d time(s); want 0", n)
+	}
+}
+
+// TestSSRF_AllowCIDRPermitsHostStillRangeChecksIP pins the Allow CIDR branch:
+//   - a host whose resolved IP is inside an Allow CIDR is permitted past the
+//     private-range guard (the operator vouches for the range) — proven by
+//     allowing a loopback test-server's /8 and getting a real 200; and
+//   - the resolved IP is STILL range-checked: a host inside the literal-host
+//     allow but resolving OUTSIDE the allow CIDR to a private IP is refused.
+func TestSSRF_AllowCIDRPermitsHostStillRangeChecksIP(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	host := mustHost(t, srv.URL) // 127.0.0.1:PORT
+
+	// Allow the loopback /8 by CIDR. The test server's IP (127.0.0.1) is inside it,
+	// so the otherwise-internal loopback address is permitted via the allow CIDR.
+	c := New(Config{PerHostInterval: 0, Allow: []string{"127.0.0.0/8"}},
+		WithResolver(&fakeResolver{m: map[string][]net.IP{}}))
+	if len(c.allowNets) != 1 {
+		t.Fatalf("parseACL(Allow CIDR): allowNets=%d, want 1", len(c.allowNets))
+	}
+	out := c.Check(context.Background(), []string{srv.URL + "/ok"})
+	if r := out[srv.URL+"/ok"]; !r.OK || r.StatusCode != http.StatusOK {
+		t.Errorf("allow-CIDR host: OK=%v status=%d, want true/200 (Err=%q Blocked=%v)",
+			r.OK, r.StatusCode, r.Err, r.Blocked)
+	}
+	_ = host
+
+	// Now prove the resolved IP is still range-checked when only the literal host
+	// (not the resolved IP) is allowlisted: a public-looking name that the resolver
+	// rebinds to a private IP OUTSIDE the allow CIDR must still be Blocked.
+	res2 := &fakeResolver{m: map[string][]net.IP{
+		"vouched.example.com": {net.IPv4(10, 9, 8, 7)}, // private, outside 8.8.8.0/24 allow
+	}}
+	tr2 := &countingTransport{inner: http.DefaultTransport}
+	c2 := New(Config{PerHostInterval: 0, Allow: []string{"8.8.8.0/24"}},
+		WithResolver(res2), WithTransport(tr2))
+	const u2 = "http://vouched.example.com/x"
+	got := c2.Check(context.Background(), []string{u2})
+	if r := got[u2]; !r.Blocked {
+		t.Errorf("allow-CIDR not matching resolved IP: Blocked=false, want true "+
+			"(resolved IP must still be range-checked; Err=%q)", r.Err)
+	}
+	if n := tr2.calls.Load(); n != 0 {
+		t.Errorf("range-checked-after-allow-CIDR reached the network %d time(s); want 0", n)
+	}
+}
+
+// TestParseACL_MalformedEntriesAreSafe pins that a malformed ACL entry neither
+// panics nor silently becomes a wildcard. A garbage entry like "not a cidr" is
+// not a CIDR and not an IP, so it lands in the literal-host map as an exact key
+// only — it must NOT widen the deny/allow nets, and it must NOT match unrelated
+// hosts. An empty entry is dropped entirely.
+func TestParseACL_MalformedEntriesAreSafe(t *testing.T) {
+	nets, hosts := parseACL([]string{"", "not a cidr", "10.0.0.0/33", "garbage:99999"})
+	// "10.0.0.0/33" is an invalid CIDR (bits>32) and not a bare IP -> literal host.
+	// "garbage:99999" is neither CIDR nor IP -> literal host.
+	if len(nets) != 0 {
+		t.Errorf("malformed entries produced %d nets, want 0 (no fail-open widening)", len(nets))
+	}
+	// The empty entry is dropped; the three non-empty malformed entries are kept as
+	// exact literal-host keys (matched verbatim, never as wildcards).
+	if _, ok := hosts[""]; ok {
+		t.Errorf("empty ACL entry was retained as a host key")
+	}
+	for _, want := range []string{"not a cidr", "10.0.0.0/33", "garbage:99999"} {
+		if _, ok := hosts[want]; !ok {
+			t.Errorf("malformed entry %q not retained as an exact host key", want)
+		}
+	}
+	if _, ok := hosts["unrelated.example.com"]; ok {
+		t.Errorf("malformed ACL matched an unrelated host (fail-open wildcard)")
+	}
+
+	// End-to-end: a malformed Deny entry must not block an unrelated public host
+	// (no panic, no wildcard), and a guard with a malformed Allow must still block
+	// a genuinely-internal target (the bad entry didn't disable the range guard).
+	res := &fakeResolver{m: map[string][]net.IP{
+		"public.example.com":   {net.IPv4(93, 184, 216, 34)},
+		"internal.example.com": {net.IPv4(10, 0, 0, 1)},
+	}}
+	tr := &countingTransport{inner: http.DefaultTransport}
+	c := New(Config{PerHostInterval: 0, Deny: []string{"not a cidr"}, Allow: []string{"also bad"}},
+		WithResolver(res), WithTransport(tr))
+	out := c.Check(context.Background(), []string{
+		"http://internal.example.com/x", // must still be blocked despite malformed Allow
+	})
+	if r := out["http://internal.example.com/x"]; !r.Blocked {
+		t.Errorf("malformed Allow disabled the range guard: internal host Blocked=false, want true")
+	}
+}
+
 func mustHost(t *testing.T, raw string) string {
 	t.Helper()
 	// raw is like http://127.0.0.1:PORT

@@ -126,6 +126,54 @@ func TestCheckExternalLinks_DeduplicatesURLs(t *testing.T) {
 	}
 }
 
+// TestDeadLinkFinding_DetailKeys pins the Details map keys CI consumers parse
+// out of findings.json: a BLOCKED (SSRF) result must set DetailBlocked="true"
+// and (since no status was reached) MUST NOT set DetailStatusCode; a dead
+// status-code result must set DetailStatusCode (and NOT DetailBlocked). Both
+// always carry DetailTarget and DetailLinkType.
+func TestDeadLinkFinding_DetailKeys(t *testing.T) {
+	t.Run("blocked SSRF result", func(t *testing.T) {
+		r := extRef("a.md", "http://169.254.169.254/latest/", 7)
+		res := ExternalResult{URL: rawTargetText(r), Blocked: true, Err: "ssrf guard: ..."}
+		f := deadLinkFinding(r, res)
+
+		if f.Kind != analysis.DeadLink {
+			t.Fatalf("Kind = %v, want DeadLink", f.Kind)
+		}
+		if got := f.Details[DetailBlocked]; got != "true" {
+			t.Errorf("Details[%q] = %q, want \"true\"", DetailBlocked, got)
+		}
+		if _, present := f.Details[DetailStatusCode]; present {
+			t.Errorf("Details[%q] present for a blocked result, want absent (no status reached)", DetailStatusCode)
+		}
+		if f.Details[DetailTarget] != "http://169.254.169.254/latest/" {
+			t.Errorf("Details[%q] = %q, want the raw URL", DetailTarget, f.Details[DetailTarget])
+		}
+		if f.Details[DetailLinkType] != r.Type.String() {
+			t.Errorf("Details[%q] = %q, want %q", DetailLinkType, f.Details[DetailLinkType], r.Type.String())
+		}
+	})
+
+	t.Run("dead status-code result", func(t *testing.T) {
+		r := extRef("docs/b.md", "https://example.com/gone", 42)
+		res := ExternalResult{URL: rawTargetText(r), OK: false, StatusCode: 404, Err: "HTTP 404"}
+		f := deadLinkFinding(r, res)
+
+		if got := f.Details[DetailStatusCode]; got != "404" {
+			t.Errorf("Details[%q] = %q, want \"404\"", DetailStatusCode, got)
+		}
+		if _, present := f.Details[DetailBlocked]; present {
+			t.Errorf("Details[%q] present for a non-blocked result, want absent", DetailBlocked)
+		}
+		if f.Details[DetailTarget] != "https://example.com/gone" {
+			t.Errorf("Details[%q] = %q, want the raw URL", DetailTarget, f.Details[DetailTarget])
+		}
+		if f.Severity != analysis.Warning {
+			t.Errorf("Severity = %v, want Warning (dead links never gate CI, ADR 0005)", f.Severity)
+		}
+	})
+}
+
 func TestIsHTTPURL(t *testing.T) {
 	cases := map[string]bool{
 		"http://x":    true,

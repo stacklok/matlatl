@@ -11,8 +11,55 @@ import (
 
 	"github.com/stacklok/doctopus/internal/domain/corpus"
 	"github.com/stacklok/doctopus/internal/domain/identity"
+	"github.com/stacklok/doctopus/internal/domain/reference"
 	"github.com/stacklok/doctopus/internal/platform"
 )
+
+// brokenRef builds a broken (unresolved-to-corpus) reference at origin->target.
+func brokenRef(origin, target string, line int) reference.Reference {
+	return reference.Reference{
+		RawReference: reference.RawReference{
+			Origin:    identity.DocumentID(origin),
+			RawTarget: target,
+			Type:      reference.RelativeLink,
+			Line:      line,
+		},
+		Health: reference.Broken,
+	}
+}
+
+// TestBrokenEdgesFromReferences_DedupAndSort pins two properties of
+// brokenEdgesFromReferences: (1) two IDENTICAL broken refs collapse to a single
+// BrokenEdge (the diagram emitters must not draw duplicate placeholder edges),
+// and (2) the output is deterministically sorted by (Origin, Target), so
+// same-origin/different-target edges always appear in a stable order regardless
+// of input order. Non-broken refs are ignored.
+func TestBrokenEdgesFromReferences_DedupAndSort(t *testing.T) {
+	refs := []reference.Reference{
+		// Same origin, targets given out of order -> must sort to (zeta, then alpha? no: alpha < zeta).
+		brokenRef("a.md", "zeta.md", 5),
+		brokenRef("a.md", "alpha.md", 9),
+		// Exact duplicate of the first edge (different line, same Origin+Target) -> deduped.
+		brokenRef("a.md", "zeta.md", 5),
+		// A non-broken ref must be excluded entirely.
+		{RawReference: reference.RawReference{Origin: "a.md", RawTarget: "fine.md"}, Health: reference.Valid},
+	}
+
+	got := brokenEdgesFromReferences(refs)
+
+	want := []BrokenEdge{
+		{Origin: "a.md", Target: "alpha.md"},
+		{Origin: "a.md", Target: "zeta.md"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d edges, want %d (dedup failed?): %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("edge[%d] = %+v, want %+v (sort order wrong)", i, got[i], want[i])
+		}
+	}
+}
 
 // The fakes below double as a compile-time proof that the ports are real,
 // satisfiable seams, and track call counts so tests can assert the pipeline

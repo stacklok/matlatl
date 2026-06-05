@@ -41,6 +41,72 @@ func TestNewDocumentID(t *testing.T) {
 	}
 }
 
+// TestEscapesRoot pins the single root-containment predicate: empty, ".", "..",
+// and any "../"-prefixed cleaned path escape; ordinary in-root paths do not.
+func TestEscapesRoot(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"", true},
+		{".", true},
+		{"..", true},
+		{"../x", true},
+		{"../../x", true},
+		{"a", false},
+		{"a/b", false},
+		{"a/..", false}, // NOTE: EscapesRoot expects an ALREADY-CLEANED path; "a/.."
+		// is not cleaned (it would clean to "."), so as written it does not match the
+		// escape patterns. This pins the documented contract: callers must pre-clean.
+		{"a..b", false},   // ".." only escapes as a whole segment / prefix
+		{"..a/b", false},  // not a "../" prefix
+		{"x/../y", false}, // uncleaned interior ".." is not a leading "../"
+	}
+	for _, tt := range tests {
+		if got := EscapesRoot(tt.in); got != tt.want {
+			t.Errorf("EscapesRoot(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestContains pins the shared root-containment join used by the scanner, the
+// llms-full body reader and the artifact writer. It checks the documented
+// absolute-path rejection, the ".." escape rejection, and that an in-root path
+// (cleaned, even with interior "..") returns the right OS-separator destination.
+func TestContains(t *testing.T) {
+	const root = "/repo"
+	tests := []struct {
+		name    string
+		root    string
+		rel     string
+		wantOK  bool
+		wantOut string // only checked when wantOK
+	}{
+		// The doc-comment's explicit claim: an absolute relPath is ALWAYS rejected,
+		// even though filepath.Join(root, "/etc/passwd") would otherwise look contained.
+		{name: "absolute rejected", root: root, rel: "/etc/passwd", wantOK: false},
+		{name: "dotdot escapes", root: root, rel: "../x", wantOK: false},
+		{name: "deep dotdot escapes", root: root, rel: "../../etc/passwd", wantOK: false},
+		{name: "in-root nested", root: root, rel: "a/b", wantOK: true, wantOut: "/repo/a/b"},
+		{name: "interior dotdot cleans in-root", root: root, rel: "a/../b", wantOK: true, wantOut: "/repo/b"},
+		{name: "slash form", root: root, rel: "a/b/c.md", wantOK: true, wantOut: "/repo/a/b/c.md"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, ok := Contains(tt.root, tt.rel)
+			if ok != tt.wantOK {
+				t.Fatalf("Contains(%q, %q) ok = %v, want %v (out=%q)", tt.root, tt.rel, ok, tt.wantOK, out)
+			}
+			if tt.wantOK && out != tt.wantOut {
+				t.Errorf("Contains(%q, %q) out = %q, want %q", tt.root, tt.rel, out, tt.wantOut)
+			}
+			if !ok && out != "" {
+				t.Errorf("Contains(%q, %q) rejected but out = %q, want empty", tt.root, tt.rel, out)
+			}
+		})
+	}
+}
+
 func TestNewDocumentID_DuplicateBasenamesDistinct(t *testing.T) {
 	a, err := NewDocumentID(".", "alpha/README.md")
 	if err != nil {
