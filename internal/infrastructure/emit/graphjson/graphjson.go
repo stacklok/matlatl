@@ -265,7 +265,7 @@ func Build(v emit.View) Document {
 	}
 
 	reachable, indeterminate := emit.ReachableSet(m)
-	orphanSet := idSet(v.Orphans)
+	orphanSet := identity.IDSet(v.Orphans)
 
 	for _, d := range v.Docs { // sorted by ID
 		hub, auth := m.HITS.Score(d.ID)
@@ -333,14 +333,6 @@ func JSON(v emit.View) ([]byte, error) {
 		return nil, fmt.Errorf("graphjson: marshal graph.json: %w", err)
 	}
 	return append(b, '\n'), nil
-}
-
-func idSet(ids []identity.DocumentID) map[identity.DocumentID]struct{} {
-	set := make(map[identity.DocumentID]struct{}, len(ids))
-	for _, id := range ids {
-		set[id] = struct{}{}
-	}
-	return set
 }
 
 // edgesFrom returns the document-projection navigational edges in sorted (From,

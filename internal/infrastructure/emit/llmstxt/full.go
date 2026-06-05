@@ -87,14 +87,14 @@ func concatDocs(v emit.View, r Reader, opts Options, docs []rankedDoc) []byte {
 // smallSet is the high-signal document set for llms-small: the top HITS hubs
 // plus every root / getting-started document. Returns IDs to keep.
 func smallSet(v emit.View) map[identity.DocumentID]struct{} {
-	keep := make(map[identity.DocumentID]struct{})
+	var keep map[identity.DocumentID]struct{}
+	if v.Metrics != nil && !v.Metrics.RootSet.Indeterminate {
+		keep = identity.IDSet(v.Metrics.RootSet.Roots)
+	} else {
+		keep = make(map[identity.DocumentID]struct{})
+	}
 	for _, h := range v.TopHubs { // already top-N, importance-ordered
 		keep[h.ID] = struct{}{}
-	}
-	if v.Metrics != nil && !v.Metrics.RootSet.Indeterminate {
-		for _, id := range v.Metrics.RootSet.Roots {
-			keep[id] = struct{}{}
-		}
 	}
 	// Getting-started heuristic: a doc whose path basename signals onboarding.
 	for _, d := range v.Docs {

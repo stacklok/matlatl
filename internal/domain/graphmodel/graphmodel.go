@@ -186,6 +186,10 @@ func BuildReferenceGraph(c *corpus.Corpus, refs []reference.Reference, opts Buil
 		g.nodes[docNode] = Node{ID: docNode, Kind: NodeKindDocument, Document: doc.ID}
 		g.addContainsTree(doc)
 	}
+	// Defensive: c.Documents() already returns IDs in sorted order, so this is a
+	// no-op today. Kept (cheap) so g.documents stays sorted by contract even if
+	// Documents() iteration order ever changes — downstream BFS/projection rely
+	// on it for determinism.
 	slices.Sort(g.documents)
 
 	// REFERENCE edges from resolved references.

@@ -45,37 +45,46 @@ type Config struct {
 
 // Parser parses markdown into corpus.Documents.
 //
-// Concurrency (P6 note): each Parse/ParseBytes call allocates its own
-// parser.Context (the per-call mutable state goldmark threads front matter and
-// IDs through), so a single Parser instance is fine for sequential use. The
-// underlying goldmark parser is, however, NOT documented as safe for concurrent
-// Parse calls on one instance. For fan-out parsing, do not share a Parser across
-// goroutines: obtain one parser per worker via the Factory (New/Clone) and merge
-// results single-threaded.
+// Concurrency (P6): a Parser is a thin VIEW over a single, shared
+// goldmark.Markdown built once at factory time (see newGoldmark / NewFactory).
+// Each ParseBytes call allocates its own parser.Context via parser.NewContext()
+// — that Context (which goldmark threads front matter and auto-heading IDs
+// through) is the ONLY per-call mutable state. The shared goldmark parser itself
+// is safe for concurrent Parse calls once warmed: see the verification note on
+// newGoldmark. So Factory.New/Clone hand each worker a Parser sharing the same
+// goldmark.Markdown, and fan-out parsing is data-race-free without re-building
+// (and re-registering the inline parser/extension on) goldmark per worker.
 type Parser struct {
 	md  goldmark.Markdown
 	cfg Config
 }
 
-// Factory mints Parsers. It implements application.DocumentParserFactory so the
-// pipeline can request a fresh parser per worker in P6 without a layering change.
+// Factory mints Parsers backed by ONE shared, pre-built goldmark.Markdown. It
+// implements application.DocumentParserFactory so the pipeline can request a
+// parser per worker in P6 without re-constructing goldmark per worker.
 type Factory struct {
 	cfg Config
+	md  goldmark.Markdown // canonical configured instance, shared by all parsers
 }
 
 // NewFactory returns a parser Factory with the given config (defaults filled).
+// The single canonical goldmark.Markdown is built and WARMED here, so every
+// worker shares one immutable parser (see newGoldmark for the safety argument).
 func NewFactory(cfg Config) *Factory {
 	if cfg.MaxFrontMatterBytes <= 0 {
 		cfg.MaxFrontMatterBytes = DefaultMaxFrontMatterBytes
 	}
-	return &Factory{cfg: cfg}
+	return &Factory{cfg: cfg, md: newGoldmark()}
 }
 
-// New returns a freshly configured DocumentParser.
-func (f *Factory) New() application.DocumentParser { return New(f.cfg) }
+// New returns a DocumentParser that shares the Factory's goldmark instance.
+func (f *Factory) New() application.DocumentParser { return &Parser{md: f.md, cfg: f.cfg} }
 
-// Clone returns an independent DocumentParser safe to use on its own goroutine.
-func (f *Factory) Clone() application.DocumentParser { return New(f.cfg) }
+// Clone returns a DocumentParser safe to use on its own goroutine. It does NOT
+// rebuild goldmark: each clone is a view over the Factory's single shared,
+// already-warmed goldmark.Markdown (concurrency-safe — see newGoldmark), with
+// per-call state isolated to the parser.Context allocated in ParseBytes.
+func (f *Factory) Clone() application.DocumentParser { return &Parser{md: f.md, cfg: f.cfg} }
 
 // compile-time assertions for the port + factory.
 var (
@@ -83,12 +92,40 @@ var (
 	_ application.DocumentParserFactory = (*Factory)(nil)
 )
 
-// New returns a Parser with a single goldmark.Markdown configured for the
-// canonical slug dialect (ADR 0006) and YAML/TOML front matter.
+// New returns a Parser owning its own freshly-built goldmark.Markdown. Prefer
+// the Factory for fan-out parsing (it shares one warmed instance across workers);
+// this standalone constructor is kept for direct, single-parser use (tests, the
+// sequential fast path) and remains valid because each Parser still allocates a
+// per-call parser.Context.
 func New(cfg Config) *Parser {
 	if cfg.MaxFrontMatterBytes <= 0 {
 		cfg.MaxFrontMatterBytes = DefaultMaxFrontMatterBytes
 	}
+	return &Parser{md: newGoldmark(), cfg: cfg}
+}
+
+// newGoldmark builds and WARMS the canonical goldmark.Markdown for the
+// project's slug dialect (ADR 0006) and YAML/TOML front matter.
+//
+// Concurrency safety, verified against goldmark v1.8.2 source
+// (parser/parser.go func (*parser) Parse, struct parser):
+//   - The parser's mutable build-time state (block/inline parser tables,
+//     transformers, escapedSpace) is populated EXACTLY ONCE, guarded by a
+//     `sync.Once` (p.initSync) on the FIRST Parse; that init then sets
+//     `p.config = nil`. After it completes, Parse only READS those tables — it
+//     never writes parser fields again.
+//   - The only per-call mutable state is the ParseConfig/Context (pc): Parse
+//     does `if c.Context == nil { c.Context = NewContext() }` and threads pc
+//     plus a fresh root AST through the walk. We pass our own parser.NewContext()
+//     per ParseBytes, so no Context is ever shared across goroutines.
+//
+// Therefore a single goldmark.Markdown is safe for concurrent Parse calls: the
+// one-time init is serialized by sync.Once and everything after is read-only +
+// per-call. To remove any reliance on the race detector blessing the very first
+// concurrent init, we WARM the instance here with one throwaway parse so the
+// sync.Once has already fired before any worker touches it — after newGoldmark
+// returns, the parser tables are strictly immutable.
+func newGoldmark() goldmark.Markdown {
 	md := goldmark.New(
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
@@ -102,7 +139,10 @@ func New(cfg Config) *Parser {
 			Formats: frontmatter.DefaultFormats, // YAML (---) and TOML (+++)
 		}),
 	)
-	return &Parser{md: md, cfg: cfg}
+	// Warm: trigger the parser's one-time sync.Once init now (single-threaded)
+	// so all subsequent concurrent Parse calls only read immutable tables.
+	md.Parser().Parse(text.NewReader(nil), parser.WithContext(parser.NewContext()))
+	return md
 }
 
 // Parse reads the scanned file from disk and parses it. The file is assumed to

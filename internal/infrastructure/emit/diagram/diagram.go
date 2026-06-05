@@ -8,8 +8,8 @@
 package diagram
 
 import (
-	"crypto/sha256"
 	"fmt"
+	"hash/fnv"
 
 	"github.com/stacklok/doctopus/internal/domain/identity"
 	"github.com/stacklok/doctopus/internal/infrastructure/emit"
@@ -49,22 +49,30 @@ const (
 const LargeGraphThreshold = 200
 
 // nodeIDFor returns a stable, syntactically-safe identifier for a document node
-// in both Mermaid and DOT. Document IDs contain slashes, dots, dashes and may
-// be hostile, none of which are safe as a bare node identifier, so we derive a
-// deterministic opaque ID ("n_" + short sha256) and carry the real path only in
-// the (escaped) label. Deterministic: the same DocumentID always maps to the
-// same node ID.
+// in both Mermaid and DOT. Document IDs contain slashes, dots, dashes and may be
+// hostile, none of which are safe as a bare node identifier, so we derive a
+// deterministic opaque ID ("n_" + 64-bit FNV-1a hash) and carry the real path
+// only in the (escaped) label. FNV (not a crypto hash): these IDs are opaque
+// label-safe handles, never a security boundary, so a fast non-cryptographic
+// hash signals intent and avoids pulling crypto into the emitter. Deterministic:
+// the same DocumentID always maps to the same node ID.
 func nodeIDFor(id identity.DocumentID) string {
-	sum := sha256.Sum256([]byte(id))
-	return fmt.Sprintf("n_%x", sum[:8])
+	return fmt.Sprintf("n_%016x", fnvHash([]byte(id)))
 }
 
 // brokenNodeIDFor returns the node ID for a broken-link *target* placeholder
 // (a target that is referenced but does not resolve to a corpus document). It is
 // namespaced separately so it never collides with a real document node.
 func brokenNodeIDFor(target string) string {
-	sum := sha256.Sum256([]byte("broken\x00" + target))
-	return fmt.Sprintf("b_%x", sum[:8])
+	return fmt.Sprintf("b_%016x", fnvHash([]byte("broken\x00"+target)))
+}
+
+// fnvHash returns the 64-bit FNV-1a hash of b (a non-cryptographic, deterministic
+// hash used only to derive opaque, stable node identifiers).
+func fnvHash(b []byte) uint64 {
+	h := fnv.New64a()
+	_, _ = h.Write(b)
+	return h.Sum64()
 }
 
 // classifyDoc reports the visual class of a document for both emitters.
@@ -129,10 +137,7 @@ func focusSet(v emit.View) (set map[identity.DocumentID]struct{}, focused bool) 
 		return all, false
 	}
 
-	seed := make(map[identity.DocumentID]struct{})
-	for _, id := range v.Orphans {
-		seed[id] = struct{}{}
-	}
+	seed := identity.IDSet(v.Orphans)
 	for _, id := range v.Unreachable {
 		seed[id] = struct{}{}
 	}

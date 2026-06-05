@@ -60,6 +60,7 @@ func TestSSRF_RefusesInternalWithoutNetwork(t *testing.T) {
 
 	blocked := []string{
 		"http://169.254.169.254/latest/meta-data/", // cloud metadata (link-local)
+		"http://0.0.0.0/",                          // unspecified address (IsUnspecified)
 		"http://127.0.0.1:8080/admin",              // loopback
 		"http://localhost/secret",                  // loopback via name (fake resolver default? no -> add)
 		"http://10.1.2.3/",                         // RFC1918

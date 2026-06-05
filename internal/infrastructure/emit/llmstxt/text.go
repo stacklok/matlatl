@@ -25,8 +25,13 @@ func oneLine(s string) string {
 }
 
 // linkTextReplacer neutralizes the characters that would break or escape a
-// markdown link's [text]: brackets close the text early, and newlines break it.
+// markdown link's [text]: a backslash could escape one of the brackets we rely
+// on (or our replacements), brackets close the text early, and newlines break
+// it. The backslash is neutralized FIRST (to '∖', the set-minus look-alike, the
+// same convention as escapeMermaidLabel) so a title ending in '\' cannot survive
+// to escape a following character — a parser-dependent forge per ADR 0003 inv. 5.
 var linkTextReplacer = strings.NewReplacer(
+	`\`, "∖", // set-minus look-alike; a trailing '\' could escape our brackets
 	"\r\n", " ",
 	"\n", " ",
 	"\r", " ",

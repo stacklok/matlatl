@@ -283,9 +283,13 @@ func (c *Checker) do(ctx context.Context, method, raw string) (int, error) {
 	req.Header.Set("User-Agent", "doctopus-linkcheck/1")
 	resp, err := c.client.Do(req)
 	if err != nil {
-		// Unwrap a guarded redirect refusal so the caller can mark it Blocked.
+		// A guarded redirect refusal already wraps errBlocked (the *url.Error
+		// from client.Do carries our CheckRedirect error), so errors.Is(err,
+		// errBlocked) holds and checkOne marks it Blocked. Return it verbatim:
+		// re-wrapping with "%w: %v" would double-print "ssrf guard" and flatten
+		// the *url.Error so errors.As can no longer reach the redirect context.
 		if errors.Is(err, errBlocked) {
-			return 0, fmt.Errorf("%w: %v", errBlocked, err)
+			return 0, err
 		}
 		return 0, fmt.Errorf("request: %w", err)
 	}

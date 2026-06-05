@@ -123,6 +123,10 @@ func (p *Pipeline) parseFiles(ctx context.Context, files []ScannedFile) ([]parse
 	close(jobs)
 	wg.Wait()
 
+	// On the feedErr (cancellation) path, jobs feeding stopped early, so `results`
+	// is only PARTIALLY filled (trailing entries are zero-value parseResults).
+	// Returning a nil slice here guarantees no caller can mistake that partial,
+	// out-of-contract slice for a complete result set.
 	if feedErr != nil {
 		return nil, feedErr
 	}

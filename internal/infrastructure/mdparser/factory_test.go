@@ -10,10 +10,10 @@ import (
 )
 
 // TestFactory_CloneConcurrent locks the P6 per-worker contract: Factory.Clone
-// returns independent parsers that can run on separate goroutines. Run under
-// -race, this catches any accidental shared mutable state if Clone is ever
-// changed to reuse one goldmark instance. Each worker parses its own bytes via
-// its own parser; the shared Factory is only read.
+// returns parsers that can run concurrently on separate goroutines. Clones share
+// the Factory's single warmed goldmark.Markdown (per-call state is isolated to
+// the parser.Context each ParseBytes allocates); run under -race, this proves
+// concurrent Parse calls on that shared instance are data-race-free.
 func TestFactory_CloneConcurrent(t *testing.T) {
 	fac := NewFactory(Config{})
 

@@ -1,11 +1,43 @@
 package llmstxt
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stacklok/doctopus/internal/domain/identity"
 	"github.com/stacklok/doctopus/internal/infrastructure/emit"
 )
+
+// TestLinkText_NeutralizesBracketsNewlinesAndBackslash asserts the link-text
+// sanitizer (ADR 0003 inv. 5): brackets are turned into parens, newlines into
+// spaces, and a backslash — including a TRAILING one that would otherwise escape
+// a following character in some parsers — is replaced with the set-minus
+// look-alike, matching escapeMermaidLabel's convention.
+func TestLinkText_NeutralizesBracketsNewlinesAndBackslash(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain", "Getting Started", "Getting Started"},
+		{"brackets", "a [b] c", "a (b) c"},
+		{"newline", "a\nb", "a b"},
+		{"trailing backslash", `foo\`, "foo∖"},
+		{"backslash before bracket", `foo\]`, "foo∖)"},
+		{"interior backslash", `a\b`, "a∖b"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := linkText(tc.in); got != tc.want {
+				t.Errorf("linkText(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			// The result must never contain a raw backslash (the forge vector).
+			if strings.ContainsRune(linkText(tc.in), '\\') {
+				t.Errorf("linkText(%q) leaked a raw backslash: %q", tc.in, linkText(tc.in))
+			}
+		})
+	}
+}
 
 // TestAfterLine covers the first-line predicate that gates front-matter
 // stripping: it returns the remainder only when the first line equals want

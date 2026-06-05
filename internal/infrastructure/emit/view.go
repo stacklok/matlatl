@@ -128,10 +128,7 @@ func BuildView(res application.Result) View {
 	v.TopAuthorities = m.HITS.TopAuthorities(topN)
 	v.BrokenEdges = slices.Clone(res.BrokenEdges)
 
-	intentional := map[identity.DocumentID]struct{}{}
-	for _, id := range graphmodel.IntentionalOrphans(c) {
-		intentional[id] = struct{}{}
-	}
+	intentional := identity.IDSet(graphmodel.IntentionalOrphans(c))
 
 	for _, doc := range c.Documents() { // sorted by ID
 		title, desc := titleAndDescription(doc)
@@ -185,11 +182,7 @@ func ReachableSet(m *graphmodel.GraphMetrics) (set map[identity.DocumentID]struc
 	if m == nil || m.Orphans.Indeterminate {
 		return map[identity.DocumentID]struct{}{}, true
 	}
-	set = make(map[identity.DocumentID]struct{}, len(m.Reachability.Reached))
-	for _, id := range m.Reachability.Reached {
-		set[id] = struct{}{}
-	}
-	return set, false
+	return identity.IDSet(m.Reachability.Reached), false
 }
 
 // Doc returns the DocView for id and whether it exists.

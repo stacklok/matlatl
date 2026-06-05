@@ -147,6 +147,20 @@ func IDStrings(ids []DocumentID) []string {
 	return out
 }
 
+// IDSet turns a slice of DocumentIDs into a membership set. It is the ONE shared
+// helper for the many "have I seen this ID?" / "is this ID in this list?"
+// lookups across the emitters and graph model, so they cannot hand-roll the
+// slice→set loop subtly differently. Order is irrelevant for a set, so
+// determinism of consuming code is unaffected: callers that emit must still sort
+// their output (e.g. via IDStrings or slices.Sort) when iterating the set.
+func IDSet(ids []DocumentID) map[DocumentID]struct{} {
+	set := make(map[DocumentID]struct{}, len(ids))
+	for _, id := range ids {
+		set[id] = struct{}{}
+	}
+	return set
+}
+
 // String returns the identifier as a plain string.
 func (id DocumentID) String() string { return string(id) }
 

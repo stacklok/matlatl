@@ -3,6 +3,7 @@ package llmstxt_test
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -201,5 +202,36 @@ func TestBodyReader_RejectsTraversal(t *testing.T) {
 		if !strings.Contains(err.Error(), "escapes") {
 			t.Errorf("Read(%q) error = %q, want a containment ('escapes') error", id, err)
 		}
+	}
+}
+
+// TestBodyReader_RejectsOversizeFile is the ADR-0003 size-guard test for the
+// scan→emit TOCTOU window: a file that has grown past the cap since scan time
+// must be rejected by the stat-before-read guard rather than read uncapped (an
+// OOM-from-growth vector). A small file under the cap still reads fine.
+func TestBodyReader_RejectsOversizeFile(t *testing.T) {
+	root := t.TempDir()
+	const cap = 1024
+
+	small := filepath.Join(root, "small.md")
+	if err := os.WriteFile(small, []byte("# ok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	big := filepath.Join(root, "big.md")
+	if err := os.WriteFile(big, bytes.Repeat([]byte("A"), cap+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	r := llmstxt.NewBodyReaderWithCap(root, cap)
+
+	if _, err := r.Read("small.md"); err != nil {
+		t.Errorf("under-cap read failed: %v", err)
+	}
+	_, err := r.Read("big.md")
+	if err == nil {
+		t.Fatal("over-cap read should be rejected, got nil error")
+	}
+	if !strings.Contains(err.Error(), "exceeds cap") {
+		t.Errorf("error = %q, want a size-cap ('exceeds cap') error", err)
 	}
 }

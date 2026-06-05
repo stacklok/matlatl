@@ -109,10 +109,7 @@ type OrphanReport struct {
 // is only computed when reachability is determinate. Intentional orphans are
 // excluded from both lists. Results are sorted.
 func (g *ReferenceGraph) DetectOrphans(c *corpus.Corpus, deg DegreeIndex, reach Reachability) OrphanReport {
-	intentional := make(map[identity.DocumentID]struct{})
-	for _, id := range IntentionalOrphans(c) {
-		intentional[id] = struct{}{}
-	}
+	intentional := identity.IDSet(IntentionalOrphans(c))
 
 	var isolated []identity.DocumentID
 	isolatedSet := make(map[identity.DocumentID]struct{})

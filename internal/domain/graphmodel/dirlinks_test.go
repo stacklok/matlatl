@@ -36,21 +36,23 @@ func dirRef(origin, dir, index string, children ...string) reference.Reference {
 }
 
 // dirLinkCorpus: home.md (the sole type:index root) links the folder sub/, which
-// has sub/_index.md as its directory index plus two non-indexed docs. None of the
-// sub/ docs uses a README.md/index.md basename, so they are NOT conventional
-// roots — their reachability depends entirely on the directory link. sub/deep/
-// holds a doc one level deeper, used to prove the one-level scoping (ADR 0008).
+// has sub/README.md as its directory index (a real, IsDirectoryIndex-recognized
+// basename, so the strict-policy assertion exercises the genuine index branch
+// rather than passing vacuously) plus two non-indexed docs. The two siblings do
+// NOT use a README.md/index.md basename, so they are NOT conventional roots —
+// their reachability depends entirely on the directory link. sub/deep/ holds a
+// doc one level deeper, used to prove the one-level scoping (ADR 0008).
 func dirLinkCorpus(t *testing.T) (*corpus.Corpus, []reference.Reference, string) {
 	t.Helper()
 	c := buildCorpus(t,
 		doc("home.md", "home", indexType),
-		doc("sub/_index.md", "subindex", nil),
+		doc("sub/README.md", "subindex", nil),
 		doc("sub/one.md", "one", nil),
 		doc("sub/two.md", "two", nil),
 		doc("sub/deep/buried.md", "buried", nil),
 	)
 	refs := []reference.Reference{
-		dirRef("home.md", "sub", "sub/_index.md", "sub/_index.md", "sub/one.md", "sub/two.md"),
+		dirRef("home.md", "sub", "sub/README.md", "sub/README.md", "sub/one.md", "sub/two.md"),
 	}
 	return c, refs, "home.md"
 }
@@ -63,7 +65,7 @@ func TestDirectoryLink_DefaultPolicyReachesChildren(t *testing.T) {
 	g := BuildReferenceGraph(c, refs, BuildOptions{})
 	m := Analyze(g, c, AnalyzeOptions{})
 
-	wantOut := []string{"sub/_index.md", "sub/one.md", "sub/two.md"}
+	wantOut := []string{"sub/README.md", "sub/one.md", "sub/two.md"}
 	if got := ids(g.ProjectionOut("home.md")); !slices.Equal(got, wantOut) {
 		t.Errorf("home projection out = %v, want %v", got, wantOut)
 	}
@@ -88,12 +90,12 @@ func TestDirectoryLink_StrictPolicyDoesNotVouch(t *testing.T) {
 	g := BuildReferenceGraph(c, refs, BuildOptions{StrictDirectoryLinks: true})
 	m := Analyze(g, c, AnalyzeOptions{})
 
-	if got := ids(g.ProjectionOut("home.md")); !slices.Equal(got, []string{"sub/_index.md"}) {
-		t.Errorf("strict home projection out = %v, want [sub/_index.md]", got)
+	if got := ids(g.ProjectionOut("home.md")); !slices.Equal(got, []string{"sub/README.md"}) {
+		t.Errorf("strict home projection out = %v, want [sub/README.md]", got)
 	}
 
 	reached := ids(m.Reachability.Reached)
-	if !slices.Contains(reached, "sub/_index.md") {
+	if !slices.Contains(reached, "sub/README.md") {
 		t.Error("the index should be reachable even under strict policy")
 	}
 	for _, sibling := range []string{"sub/one.md", "sub/two.md"} {

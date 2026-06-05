@@ -425,6 +425,25 @@ func TestResolve_DirectoryLinks(t *testing.T) {
 			wantChildren: []identity.DocumentID{"plain/a.md", "plain/b.md"},
 		},
 		{
+			// ADR 0008: a fragment on a directory link is not meaningful (a
+			// directory has no headings); it is ignored and the link resolves as
+			// a plain directory link (Valid, children enumerated).
+			name:       "fragment on a directory link is ignored",
+			raw:        RawReference{Origin: "README.md", RawTarget: "docs/adr", Fragment: "anything", Type: RelativeLink},
+			wantHealth: Valid, wantKind: TargetDirectory, wantDir: "docs/adr",
+			wantIndex:    "docs/adr/README.md",
+			wantChildren: []identity.DocumentID{"docs/adr/0001.md", "docs/adr/0002.md", "docs/adr/README.md"},
+		},
+		{
+			// A transclusion (![[dir]]) routes through relative resolution like
+			// the other path-bearing types (ADR 0008), so a directory target
+			// resolves TargetDirectory rather than Broken.
+			name:       "transclusion to a directory resolves TargetDirectory",
+			raw:        RawReference{Origin: "x.md", RawTarget: "plain", Type: Transclusion},
+			wantHealth: Valid, wantKind: TargetDirectory, wantDir: "plain",
+			wantChildren: []identity.DocumentID{"plain/a.md", "plain/b.md"},
+		},
+		{
 			name:       "directory with only a non-markdown asset is Broken",
 			raw:        RawReference{Origin: "README.md", RawTarget: "docs/img/", Type: RelativeLink},
 			wantHealth: Broken, wantKind: TargetNone,
