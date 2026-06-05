@@ -35,7 +35,7 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 | `matlatl index [path]` | Emit a navigation surface: `index.md`, or an `llms.txt` family artifact (`--llms`, `--full`, `--small`, `--graph`). |
 | `matlatl orphans [path]` | List orphaned (`--isolated-only`) and unreachable (`--unreachable-only`) docs. |
 | `matlatl emit [path] --out <dir>` | Write the whole bundle: `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `findings.json`. |
-| `matlatl serve [path]` | Run the read-only MCP server (stdio) so an agent can query the graph. |
+| `matlatl serve [path]` | Run the read-only MCP server (streamable HTTP) so an agent can query the graph. |
 | `matlatl version` | Print version information. |
 
 ## Global flags
@@ -122,10 +122,13 @@ fail — so dashboards get structured results either way.
 
 ```console
 $ matlatl serve .
+$ matlatl serve . --address 0.0.0.0:9000   # bind elsewhere (e.g. for containers)
 ```
 
-Speaks MCP over stdio and exposes read-only tools: `what-links-to`,
-`list-orphans`, `path-between`, `get-section`, and `corpus-summary`.
+Speaks MCP over **streamable HTTP** at `/mcp` on `--address` (default
+`127.0.0.1:8080`) and exposes read-only tools: `what-links-to`,
+`list-orphans`, `path-between`, `get-section`, and `corpus-summary`. The server
+runs until interrupted and drains in-flight requests on shutdown.
 
 ## Ignoring files
 

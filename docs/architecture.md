@@ -112,11 +112,13 @@ prove internal targets are refused **without a network call**.
 ## 4c. MCP server (`matlatl serve`)
 
 `matlatl serve [path]` runs the analysis once and exposes read-only MCP tools
-over stdio (`github.com/mark3labs/mcp-go`, isolated in
+over **streamable HTTP** (`github.com/mark3labs/mcp-go`, isolated in
 `internal/infrastructure/mcpserver` — the only package importing the MCP lib):
 `what-links-to`, `list-orphans`, `path-between`, `get-section`, and
-`corpus-summary` (the graph.json manifest). Tools reuse the `emit.View` +
-`emit/graphjson` layers and validate every `DocumentID` against the corpus.
+`corpus-summary` (the graph.json manifest). The endpoint is served at `/mcp` on
+`--address` (default `127.0.0.1:8080`); the serving context drives a graceful
+drain on shutdown. Tools reuse the `emit.View` + `emit/graphjson` layers and
+validate every `DocumentID` against the corpus.
 
 ## 5. Delivery
 

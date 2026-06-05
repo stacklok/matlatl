@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`matlatl serve` now speaks MCP over streamable HTTP instead of stdio.** The
+  endpoint is served at `/mcp` on `--address` (default `127.0.0.1:8080`); the
+  serving context drives a graceful drain of in-flight requests on shutdown.
+  Containerized deployments should bind `--address 0.0.0.0:PORT`.
 - **Renamed the project from `doctopus` to `matlatl`** (Nahuatl for *net*; the
   tool casts a net over a repo's markdown). The module path is now
   `github.com/stacklok/matlatl`, the binary and command are `matlatl`, the ignore

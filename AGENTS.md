@@ -40,10 +40,11 @@ linked docs rather than re-deriving them.
 matlatl .              # terminal report
 matlatl check .        # CI gate (exit codes per ADR 0005); --strict to harden
 matlatl emit --out ai  # full human + LLM artifact bundle
-matlatl serve .        # read-only MCP server over stdio
+matlatl serve .        # read-only MCP server over streamable HTTP (127.0.0.1:8080/mcp)
 ```
 
-`matlatl serve` is the **MCP entrypoint** for agents: it speaks MCP over stdio
+`matlatl serve` is the **MCP entrypoint** for agents: it speaks MCP over
+streamable HTTP (at `/mcp` on `--address`, default `127.0.0.1:8080`)
 and exposes read-only tools (`what-links-to`, `list-orphans`, `path-between`,
 `get-section`, `corpus-summary`). Prefer it for live graph queries over parsing
 artifacts yourself.

@@ -63,9 +63,9 @@ func TestCheckEmptyDirExitsOK(t *testing.T) {
 }
 
 // TestServeCommandRegistered checks that `serve` is a real, registered command
-// with usable help (it now runs the MCP server over stdio; the stdio loop itself
-// is exercised in the mcpserver package's in-process tests, not here, to avoid
-// blocking on stdin).
+// with usable help (it now runs the MCP server over streamable HTTP; the serve
+// loop itself is exercised in the mcpserver package's tests, not here, to avoid
+// binding a port).
 func TestServeCommandRegistered(t *testing.T) {
 	out, _, err := runCmd(t, "serve", "--help")
 	if err != nil {

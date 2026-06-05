@@ -1,6 +1,6 @@
 // Package mcpserver exposes a matlatl analysis as a read-only MCP server over
-// stdio, for an agent to query a markdown corpus' link graph. It is the ONLY
-// package that imports the MCP library (github.com/mark3labs/mcp-go, ADR 0002):
+// streamable HTTP, for an agent to query a markdown corpus' link graph. It is
+// the ONLY package that imports the MCP library (github.com/mark3labs/mcp-go, ADR 0002):
 // the dependency is quarantined here so the core tool never depends on MCP and a
 // build that does not invoke `serve` pays nothing for it at runtime (the import
 // is reachable only from `matlatl serve`).
@@ -24,7 +24,10 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -41,6 +44,14 @@ import (
 const (
 	serverName    = "matlatl"
 	serverVersion = "1"
+
+	// EndpointPath is the HTTP path the streamable-HTTP MCP endpoint is served
+	// on. It matches mcp-go's default and the convention MCP clients expect.
+	EndpointPath = "/mcp"
+
+	// shutdownTimeout bounds the graceful drain of in-flight requests when the
+	// serving context is canceled (e.g. SIGINT).
+	shutdownTimeout = 5 * time.Second
 )
 
 // Analysis is the frozen, read-only snapshot the tools query. It is built once
@@ -69,8 +80,8 @@ func BuildAnalysis(ctx context.Context, rootPath string) (*Analysis, error) {
 }
 
 // NewServer builds the MCP server with the read-only tools registered against
-// the given analysis. It does not start any transport; call Serve (or
-// server.ServeStdio) to run it.
+// the given analysis. It does not start any transport; call Serve (or wrap it
+// in a server.StreamableHTTPServer) to run it.
 func NewServer(a *Analysis) *server.MCPServer {
 	s := server.NewMCPServer(serverName, serverVersion,
 		server.WithToolCapabilities(false),
@@ -81,21 +92,44 @@ func NewServer(a *Analysis) *server.MCPServer {
 	return s
 }
 
-// Serve builds the analysis over rootPath and serves the MCP tools over stdio
-// until the context is canceled or stdin closes. It is the entry point
-// `matlatl serve` calls.
-func Serve(ctx context.Context, rootPath string) error {
+// Serve builds the analysis over rootPath and serves the MCP tools over
+// streamable HTTP on addr (host:port), at the EndpointPath ("/mcp"), until the
+// context is canceled. On cancellation it drains in-flight requests within
+// shutdownTimeout. It is the entry point `matlatl serve` calls.
+func Serve(ctx context.Context, rootPath, addr string) error {
 	a, err := BuildAnalysis(ctx, rootPath)
 	if err != nil {
 		return err
 	}
-	s := NewServer(a)
-	if err := server.ServeStdio(s, server.WithStdioContextFunc(func(context.Context) context.Context {
-		return ctx
-	})); err != nil {
-		return fmt.Errorf("mcpserver: serve stdio: %w", err)
+	httpSrv := server.NewStreamableHTTPServer(NewServer(a),
+		server.WithEndpointPath(EndpointPath),
+	)
+
+	// Start blocks on ListenAndServe; run it in a goroutine so we can react to
+	// context cancellation with a graceful shutdown.
+	errCh := make(chan error, 1)
+	go func() {
+		if serveErr := httpSrv.Start(addr); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			errCh <- serveErr
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("mcpserver: graceful shutdown: %w", err)
+		}
+		return nil
+	case err := <-errCh:
+		if err != nil {
+			return fmt.Errorf("mcpserver: serve streamable http on %s: %w", addr, err)
+		}
+		return nil
 	}
-	return nil
 }
 
 // Tools returns the read-only tool set bound to this analysis. Exposed so tests
