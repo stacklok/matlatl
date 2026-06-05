@@ -131,6 +131,19 @@ func TestResolve_HealthBranches(t *testing.T) {
 			wantHealth: HealthExternal, wantKind: TargetExternal,
 		},
 		{
+			// file:// is classified External by the parser (ADR 0003 SSRF guard); the
+			// resolver must keep it HealthExternal and never turn it into a read.
+			name:       "external file scheme",
+			raw:        RawReference{Origin: "README.md", RawTarget: "file:///etc/passwd", Type: External},
+			wantHealth: HealthExternal, wantKind: TargetExternal,
+		},
+		{
+			// data: likewise stays HealthExternal (never an in-corpus path).
+			name:       "external data uri",
+			raw:        RawReference{Origin: "README.md", RawTarget: "data:text/plain;base64,SGk=", Type: External},
+			wantHealth: HealthExternal, wantKind: TargetExternal,
+		},
+		{
 			name:       "valid same-page anchor",
 			raw:        RawReference{Origin: "README.md", Fragment: "intro", Type: Anchor},
 			wantHealth: Valid, wantKind: TargetSection, wantDoc: "README.md",

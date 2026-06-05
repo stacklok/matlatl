@@ -253,6 +253,10 @@ func (s *Scanner) shouldSkipDir(realRoot, path, name, absOut string, matcher *ig
 		return true
 	}
 	if absOut != "" {
+		// filepath.Abs (not EvalSymlinks) is sufficient here: WalkDir starts from
+		// realRoot, which was already EvalSymlinks-resolved in Scan, so every walk
+		// path is a real path under a real root — there is no unresolved symlink
+		// component left to canonicalize for this dir-pruning comparison.
 		if abs, err := filepath.Abs(path); err == nil && (abs == absOut || underRoot(absOut, abs)) {
 			return true
 		}
