@@ -1,0 +1,50 @@
+# golangci-lint configuration for doctopus.
+# Tuned for an idiomatic, security-conscious Go CLI.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec        # security: path traversal, file perms, etc.
+    - bodyclose
+    - copyloopvar
+    - misspell
+    - revive
+    - unconvert
+    - unparam
+    - prealloc
+    - gocritic
+  settings:
+    gosec:
+      # G304 (file inclusion via variable) is expected — we read user-named files;
+      # the scanner/resolver enforce the root-containment boundary instead.
+      excludes:
+        - G304
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+  exclusions:
+    rules:
+      # Test files may use less strict patterns.
+      - path: _test\.go
+        linters:
+          - gosec
+          - unparam
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/stacklok/doctopus

@@ -1,0 +1,18 @@
+# Binaries
+/bin/
+/dist/
+doctopus
+*.exe
+
+# Test / coverage artifacts
+*.out
+coverage.*
+/tmp/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+
+# doctopus's own generated output
+/out/

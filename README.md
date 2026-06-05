@@ -1,0 +1,55 @@
+<!-- markdownlint-disable MD041 -->
+# 🐙 doctopus
+
+> Map the markdown in your repo into trees and graphs, find the orphans, and emit
+> artifacts that are equally readable by **humans** and **LLMs**.
+
+`doctopus` recursively reads the markdown documents in a repository, parses their
+front matter, headings, and links (relative links, wikilinks, anchors, embeds),
+and builds two overlaid structures:
+
+- a **tree** — the folder / front-matter hierarchy plus intra-document section nesting, and
+- a **graph** — the typed cross-reference relationships between documents and sections.
+
+From those it detects **orphans** (truly isolated docs) and **unreachable** docs
+(no path from a root such as `README.md`), **broken links**, and **broken anchors**,
+then renders the result for two audiences:
+
+- **Humans** — a colorized terminal report, a committable Markdown report, Mermaid and
+  Graphviz/DOT diagrams, and a navigable `index.md`.
+- **LLMs** — a compact, queryable `graph.json`, an `llms.txt` family, and a
+  `findings.json` where every finding is a self-contained, actionable fix instruction.
+
+## Status
+
+🚧 Early development — built phase by phase (see [`docs/architecture.md`](docs/architecture.md)
+and the [ADRs](docs/adr/)). Not yet released.
+
+## Quick start (planned)
+
+```console
+$ doctopus .                 # scan + analyze, print the terminal report
+$ doctopus check .           # CI lint mode: non-zero exit on broken links/anchors
+$ doctopus graph . --format mermaid
+$ doctopus index .           # emit index.md + llms.txt
+$ doctopus orphans .         # list orphans / unreachable docs
+$ doctopus serve .           # MCP server exposing graph queries to agents
+```
+
+## Why another markdown tool?
+
+Link checkers (lychee, markdown-link-check) validate links but build no graph.
+Knowledge tools (Obsidian, Foam, Dendron, Quartz) visualize a graph but are not
+CI-oriented and emit nothing an LLM can act on. `doctopus` treats a
+**machine-readable, LLM-queryable graph as a first-class output** — the gap all of
+that prior art leaves open.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Architecture Decision Records](docs/adr/)
+- Developer guide and user guide land alongside the relevant phases.
+
+## License
+
+TBD.
