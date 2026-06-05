@@ -61,6 +61,12 @@ type Section struct {
 	// Start and End are the byte offsets of the section's span in the source.
 	Start int
 	End   int
+	// StartLine and EndLine are the 1-based source line span of the section
+	// (heading line through the last line it encloses). Used to attribute a
+	// reference (which carries a line number) to its containing section when
+	// building the graph (ADR 0007). 0 means unset.
+	StartLine int
+	EndLine   int
 }
 
 // Document is one parsed markdown file as a pure-domain value: its identity,

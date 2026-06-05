@@ -21,6 +21,11 @@ func newLineIndex(src []byte) *lineIndex {
 	return &lineIndex{lineStarts: starts}
 }
 
+// lineCount returns the number of lines in the source (>= 1).
+func (l *lineIndex) lineCount() int {
+	return len(l.lineStarts)
+}
+
 // lineAt returns the 1-based line number containing byte offset off.
 func (l *lineIndex) lineAt(off int) int {
 	if off < 0 {

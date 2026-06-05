@@ -141,7 +141,7 @@ func (p *Parser) ParseBytes(_ context.Context, id identity.DocumentID, src []byt
 	doc := &corpus.Document{
 		ID:          id,
 		FrontMatter: fm,
-		Root:        buildSectionTree(root, src),
+		Root:        buildSectionTree(root, src, lines),
 	}
 	doc.RawReferences = extractReferences(root, src, id, lines)
 
@@ -301,10 +301,15 @@ func lookupCI(m map[string]any, key string) (any, bool) {
 }
 
 // buildSectionTree walks the AST headings and builds the nested Section tree
-// rooted at a synthetic Level-0 section spanning the whole document.
-func buildSectionTree(root ast.Node, src []byte) *corpus.Section {
-	docRoot := &corpus.Section{Level: 0, Start: 0, End: len(src)}
+// rooted at a synthetic Level-0 section spanning the whole document. Each
+// section's StartLine is its heading line; EndLine is filled in a post-pass so a
+// section's line span runs up to (but not including) the next heading at the
+// same-or-shallower level (ADR 0007 origin attribution).
+func buildSectionTree(root ast.Node, src []byte, lines *lineIndex) *corpus.Section {
+	totalLines := lines.lineCount()
+	docRoot := &corpus.Section{Level: 0, Start: 0, End: len(src), StartLine: 1, EndLine: totalLines}
 	stack := []*corpus.Section{docRoot}
+	var ordered []*corpus.Section // pre-order list of real sections
 
 	_ = ast.Walk(root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
@@ -316,11 +321,12 @@ func buildSectionTree(root ast.Node, src []byte) *corpus.Section {
 		}
 		start, end := nodeSpan(h, src)
 		sec := &corpus.Section{
-			Level: h.Level,
-			Text:  headingText(h, src),
-			Slug:  headingSlug(h),
-			Start: start,
-			End:   end,
+			Level:     h.Level,
+			Text:      headingText(h, src),
+			Slug:      headingSlug(h),
+			Start:     start,
+			End:       end,
+			StartLine: lines.lineAt(start),
 		}
 		// Pop until the top of the stack is a strictly-higher-level section.
 		for len(stack) > 1 && stack[len(stack)-1].Level >= sec.Level {
@@ -330,8 +336,25 @@ func buildSectionTree(root ast.Node, src []byte) *corpus.Section {
 		sec.Parent = parent
 		parent.Children = append(parent.Children, sec)
 		stack = append(stack, sec)
+		ordered = append(ordered, sec)
 		return ast.WalkSkipChildren, nil
 	})
+
+	// EndLine: each section extends to the line before the next heading whose
+	// level is <= its own (the next sibling-or-shallower boundary); the last
+	// such section runs to the end of the document.
+	for i, sec := range ordered {
+		sec.EndLine = totalLines
+		for j := i + 1; j < len(ordered); j++ {
+			if ordered[j].Level <= sec.Level {
+				sec.EndLine = ordered[j].StartLine - 1
+				break
+			}
+		}
+		if sec.EndLine < sec.StartLine {
+			sec.EndLine = sec.StartLine
+		}
+	}
 	return docRoot
 }
 
@@ -481,10 +504,13 @@ func splitFragment(dest string) (target, fragment string) {
 	return dest, ""
 }
 
-// isExternal reports whether a destination is an off-corpus URL.
+// isExternal reports whether a destination is an off-corpus URL. file:// and
+// data: are included so they classify as External (HealthExternal) rather than
+// being treated as in-corpus relative paths — a latent SSRF/local-file-read
+// hazard for the opt-in P6 --check-external path (ADR 0003).
 func isExternal(dest string) bool {
 	lower := strings.ToLower(dest)
-	for _, p := range []string{"http://", "https://", "mailto:", "ftp://", "//"} {
+	for _, p := range []string{"http://", "https://", "mailto:", "ftp://", "file://", "data:", "//"} {
 		if strings.HasPrefix(lower, p) {
 			return true
 		}

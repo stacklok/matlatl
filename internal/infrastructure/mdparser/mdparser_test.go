@@ -260,6 +260,40 @@ func TestLocalImageClassified(t *testing.T) {
 	}
 }
 
+// TestExternalSchemeClassification asserts the scheme-based external
+// classification (ADR 0003). file:// and data: must classify as External so they
+// are never treated as in-corpus relative paths (a latent SSRF / local-file-read
+// hazard for the opt-in P6 --check-external path) — alongside the usual http(s),
+// mailto, ftp and protocol-relative schemes.
+func TestExternalSchemeClassification(t *testing.T) {
+	tests := []struct {
+		name string
+		dest string
+		want reference.LinkType
+	}{
+		{"http", "http://example.com", reference.External},
+		{"https", "https://example.com", reference.External},
+		{"mailto", "mailto:a@b.com", reference.External},
+		{"ftp", "ftp://host/f", reference.External},
+		{"protocol-relative", "//cdn.example.com/x", reference.External},
+		{"file scheme", "file:///etc/passwd", reference.External},
+		{"file scheme uppercase", "FILE://localhost/etc/passwd", reference.External},
+		{"data uri", "data:text/plain;base64,SGk=", reference.External},
+		{"local relative still in-corpus", "docs/page.md", reference.RelativeLink},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := parse(t, "# T\n\n[x]("+tt.dest+")\n")
+			if len(doc.RawReferences) != 1 {
+				t.Fatalf("got %d refs, want 1", len(doc.RawReferences))
+			}
+			if got := doc.RawReferences[0].Type; got != tt.want {
+				t.Errorf("%q classified as %s, want %s", tt.dest, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGuardFrontMatter_Branches(t *testing.T) {
 	tests := []struct {
 		name       string

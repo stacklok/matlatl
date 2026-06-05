@@ -77,6 +77,26 @@ func IsMarkdownPath(p string) bool {
 	return false
 }
 
+// directoryIndexBasenames are the conventional directory-index filenames
+// (lowercase) recognized at any depth: README.md and index.md (ADR 0007). It is
+// the single source of truth shared by root-set resolution and hierarchy
+// building.
+var directoryIndexBasenames = []string{"readme.md", "index.md"}
+
+// IsDirectoryIndex reports whether base (a path basename) is a conventional
+// directory-index file (README.md / index.md), matched case-insensitively. It
+// is the ONE shared predicate used by both the root-set resolver and the
+// hierarchy builder so the two never diverge on case handling (ADR 0007).
+func IsDirectoryIndex(base string) bool {
+	lower := strings.ToLower(base)
+	for _, b := range directoryIndexBasenames {
+		if lower == b {
+			return true
+		}
+	}
+	return false
+}
+
 // EscapesRoot reports whether a cleaned, slash-separated, root-relative path
 // escapes its root — i.e. it is "..", begins with "../", or is empty/".". It is
 // the single root-containment predicate shared across the codebase (ADR 0003);

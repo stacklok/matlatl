@@ -67,3 +67,25 @@ func TestDocumentID_DirAndBase(t *testing.T) {
 		t.Errorf("Base() = %q, want intro.md", got)
 	}
 }
+
+func TestIsDirectoryIndex(t *testing.T) {
+	tests := []struct {
+		base string
+		want bool
+	}{
+		{"README.md", true},
+		{"readme.md", true}, // case-insensitive
+		{"ReadMe.md", true}, // mixed case
+		{"index.md", true},
+		{"INDEX.MD", true},
+		{"guide.md", false},
+		{"readme.markdown", false}, // only .md basenames are directory indexes
+		{"docs/README.md", false},  // expects a basename, not a path
+		{"", false},
+	}
+	for _, tt := range tests {
+		if got := IsDirectoryIndex(tt.base); got != tt.want {
+			t.Errorf("IsDirectoryIndex(%q) = %v, want %v", tt.base, got, tt.want)
+		}
+	}
+}
