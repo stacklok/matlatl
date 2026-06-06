@@ -120,6 +120,31 @@ text through the parser → `reference.Reference` → `graphmodel.Edge`; we did
   merge-walk (the single division is the only float). Emit a finding when
   `score < 0.20`.
 
+**Two edges are never flagged, regardless of score** (added after dogfooding P11
+on matlatl's own docs surfaced both):
+
+- **Synthetic directory-expansion edges (ADR 0008).** A directory link
+  `[text](somedir/)` expands in `addDirectoryEdges` into one "vouch" `Edge` per
+  directory member, carrying **no anchor text and `Line: 0`**. Scoring those
+  produced one non-actionable empty-anchor finding per member (85 on this repo).
+  A scent finding must point at an *authored* link with a source line, so
+  `ComputeScent` skips any edge with `Line <= 0`. (Consequence: an authored
+  directory link's own text is not scored — acceptable, since its target is a
+  folder, not a titled doc.)
+- **Stable-identifier anchors.** An anchor that names the target's stable
+  identifier — e.g. `[ADR 0010](…/0010-agent-scaffolding.md)` — points the reader
+  at the *exact* doc, so it carries good scent even though its token-overlap with
+  the prose title is ~0. `namesTargetIdentifier(anchor, target)` exempts it:
+  `identifierSegment(target)` is the target basename's first `-`/`_`-delimited
+  segment (ext stripped, lowercased) **iff** that segment has length > 1 and
+  contains a digit (`0010-agent-scaffolding.md` → `0010`, `v1-x.md` → `v1`, but
+  `dev-guide.md`/`README.md` → none). The exemption applies only when the anchor's
+  tokens contain that segment **and** the anchor is **not** path-/filename-like
+  (contains no `/` and no `.md`). The path-like guard is load-bearing: a bare
+  path anchor such as `[docs/dev-guide.md]` or `[adr/0002-bar.md]` is exactly the
+  anti-pattern we WANT flagged, even though it may contain the identifier token,
+  so it stays flagged.
+
 It is a new finding kind `low-scent-anchor`, **Info**, that **NEVER** gates the
 exit code (even `--strict`) — a discoverability hint, not a defect, mirroring
 `suggested-link` (ADR 0013) and `articulation-point`/`bridge` (ADR 0015). The

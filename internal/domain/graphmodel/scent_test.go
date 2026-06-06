@@ -187,3 +187,87 @@ func TestScent_Deterministic(t *testing.T) {
 		t.Errorf("findings not sorted by line: %+v", f1)
 	}
 }
+
+// TestScent_SkipsLinelessEdge: a reference with Line 0 (e.g. a synthetic
+// directory-expansion vouch edge, ADR 0008) is never flagged — a scent finding
+// must point at an authored link with a source line (ADR 0016).
+func TestScent_SkipsLinelessEdge(t *testing.T) {
+	docs := []*corpus.Document{titledDoc("A.md", "Source"), titledDoc("B.md", "Target Page")}
+	// A scent-free anchor (would normally be flagged) but with Line 0 → skipped.
+	refs := []reference.Reference{anchorRef("A.md", "B.md", "click here", 0)}
+	findings := scentFor(t, docs, refs)
+	if _, ok := findScent(findings, "A.md", "B.md"); ok {
+		t.Errorf("a Line-0 (synthetic / lineless) edge must not be flagged: %+v", findings)
+	}
+}
+
+// TestScent_StableIdentifierExempt: an anchor naming the target's stable
+// identifier (e.g. "ADR 0010") is exempt, but a bare path-/filename-like anchor
+// is NOT — the load-bearing distinction (ADR 0016).
+func TestScent_StableIdentifierExempt(t *testing.T) {
+	// "ADR 0010" → docs/adr/0010-agent-scaffolding.md (id segment "0010"): the
+	// anchor names the target's stable ID, so it is NOT flagged even though its
+	// Jaccard vs the title "Agent scaffolding" is ~0.
+	exempt := scentFor(t,
+		[]*corpus.Document{
+			titledDoc("README.md", "Home"),
+			titledDoc("docs/adr/0010-agent-scaffolding.md", "Agent scaffolding"),
+		},
+		[]reference.Reference{anchorRef("README.md", "docs/adr/0010-agent-scaffolding.md", "ADR 0010", 4)},
+	)
+	if _, ok := findScent(exempt, "README.md", "docs/adr/0010-agent-scaffolding.md"); ok {
+		t.Errorf("a stable-ID anchor 'ADR 0010' must be exempt: %+v", exempt)
+	}
+
+	// A bare path anchor "docs/dev-guide.md" → docs/dev-guide.md ("matlatl
+	// developer guide"): path-like, so NOT exempt → still flagged.
+	flagged := scentFor(t,
+		[]*corpus.Document{
+			titledDoc("README.md", "Home"),
+			titledDoc("docs/dev-guide.md", "matlatl developer guide"),
+		},
+		[]reference.Reference{anchorRef("README.md", "docs/dev-guide.md", "docs/dev-guide.md", 7)},
+	)
+	if _, ok := findScent(flagged, "README.md", "docs/dev-guide.md"); !ok {
+		t.Errorf("a bare-path anchor 'docs/dev-guide.md' must stay flagged (not ID-exempt): %+v", flagged)
+	}
+
+	// Path-like guard, exercised genuinely: target "adr/0002-bar.md" HAS a stable
+	// identifier ("0002"), and the anchor "adr/0002-bar.md" CONTAINS that token —
+	// so only the path-like guard (`/` / `.md`) keeps it flagged. Title "Second
+	// Choice Record" shares no token with the path, so the score is low enough to
+	// reach the exemption check. Mutation proof: delete the path-guard in
+	// namesTargetIdentifier and this case flips to exempt (and fails).
+	pathWithID := scentFor(t,
+		[]*corpus.Document{
+			titledDoc("README.md", "Home"),
+			titledDoc("adr/0002-bar.md", "Second Choice Record"),
+		},
+		[]reference.Reference{anchorRef("README.md", "adr/0002-bar.md", "adr/0002-bar.md", 9)},
+	)
+	if _, ok := findScent(pathWithID, "README.md", "adr/0002-bar.md"); !ok {
+		t.Errorf("a path-like anchor containing the ID token ('adr/0002-bar.md') must stay flagged "+
+			"(the path-like guard, not the ID check, decides): %+v", pathWithID)
+	}
+}
+
+// TestIdentifierSegment is a table test for the stable-identifier extraction:
+// a "-"/"_"-delimited leading segment of the basename (ext stripped, lowercased)
+// is the identifier only when it has length > 1 AND contains a digit (ADR 0016).
+func TestIdentifierSegment(t *testing.T) {
+	cases := []struct {
+		target identity.DocumentID
+		want   string
+	}{
+		{"0010-agent-scaffolding.md", "0010"},
+		{"docs/adr/0001-x.md", "0001"},
+		{"dev-guide.md", ""},
+		{"README.md", ""},
+		{"v1-foo.md", "v1"},
+	}
+	for _, tc := range cases {
+		if got := identifierSegment(tc.target); got != tc.want {
+			t.Errorf("identifierSegment(%q) = %q, want %q", tc.target, got, tc.want)
+		}
+	}
+}

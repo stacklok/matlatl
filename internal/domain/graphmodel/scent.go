@@ -2,6 +2,7 @@ package graphmodel
 
 import (
 	"cmp"
+	"path"
 	"slices"
 	"strings"
 	"unicode"
@@ -80,6 +81,16 @@ var scentStopwords = map[string]struct{}{
 //     the single division is the only float). A finding is emitted when
 //     score < LowScentThreshold.
 //
+// Two edges are never flagged, regardless of score:
+//   - Synthetic directory-expansion edges (ADR 0008): a directory link expands
+//     into one anchor-less, line-0 "vouch" edge per directory member. A finding
+//     must point at an authored link with a source line, so edges with Line <= 0
+//     are skipped (this removes the phantom empty-anchor findings).
+//   - Stable-identifier anchors (ADR 0016): an anchor naming the target's stable
+//     identifier (e.g. "ADR 0010" → 0010-*.md) points the reader at the exact doc
+//     and is exempt via namesTargetIdentifier — but a bare path-/filename-like
+//     anchor (e.g. "docs/dev-guide.md") is NOT exempt and stays flagged.
+//
 // Determinism (CLAUDE.md): edges are iterated in sorted order, token sets are
 // sorted, the Jaccard intersection/union are sorted merge-walks (never map
 // ranging), and findings are returned sorted by (Source, Line, Target,
@@ -121,6 +132,15 @@ func (g *ReferenceGraph) ComputeScent(c *corpus.Corpus) []ScentFinding {
 		if from == "" || to == "" {
 			continue
 		}
+		// Skip synthetic directory-expansion edges (ADR 0008): a directory link
+		// `[text](somedir/)` expands in addDirectoryEdges into one "vouch" edge per
+		// directory member, carrying NO anchor text and Line 0. A scent finding must
+		// point at an authored link with a source line, so we skip any edge with no
+		// line (ADR 0016). This also means an authored directory link's own text is
+		// not scored — acceptable, since its target is a folder, not a titled doc.
+		if e.Line <= 0 {
+			continue
+		}
 		raw := e.AnchorText
 		if isBacktickWrapped(raw) {
 			continue // a code identifier label — legitimate, not low-scent
@@ -128,6 +148,14 @@ func (g *ReferenceGraph) ComputeScent(c *corpus.Corpus) []ScentFinding {
 
 		score := scentScore(raw, target(to))
 		if score >= LowScentThreshold {
+			continue
+		}
+		// Stable-identifier exemption (ADR 0016): an anchor that names the target's
+		// stable identifier (e.g. "ADR 0010" → 0010-*.md) points the reader at the
+		// exact doc, so it is NOT low-scent even when the Jaccard score is low. Bare
+		// path-/filename-like anchors are explicitly NOT exempt (see
+		// namesTargetIdentifier) so raw-path anchors stay flagged.
+		if namesTargetIdentifier(raw, to) {
 			continue
 		}
 		out = append(out, ScentFinding{
@@ -156,6 +184,51 @@ func (g *ReferenceGraph) ComputeScent(c *corpus.Corpus) []ScentFinding {
 		return strings.Compare(a.AnchorText, b.AnchorText)
 	})
 	return out
+}
+
+// namesTargetIdentifier reports whether rawAnchor names the target document's
+// stable identifier (ADR 0016) — e.g. "ADR 0010" naming docs/adr/0010-*.md. Such
+// an anchor points the reader at the EXACT doc, so it is exempt from the
+// low-scent finding even when its Jaccard score is low.
+//
+// It FIRST rejects path-/filename-like anchors: if the lowercased raw anchor
+// contains "/" or ".md", it returns false — a bare-path anchor like
+// "docs/dev-guide.md" or "adr/0002-bar.md" is exactly the anti-pattern we WANT
+// flagged, even though it may contain the identifier token. Otherwise it exempts
+// the anchor iff its token set contains the target's identifier segment.
+func namesTargetIdentifier(rawAnchor string, target identity.DocumentID) bool {
+	lower := strings.ToLower(rawAnchor)
+	if strings.Contains(lower, "/") || strings.Contains(lower, ".md") {
+		return false // path-/filename-like anchor: not exempt (stays flagged)
+	}
+	seg := identifierSegment(target)
+	if seg == "" {
+		return false
+	}
+	return slices.Contains(tokenize(rawAnchor), seg)
+}
+
+// identifierSegment returns the target's stable identifier segment, or "" when it
+// has none (ADR 0016). It takes the DocumentID basename, strips the extension,
+// lowercases it, takes the first "-"/"_"-delimited segment, and returns that
+// segment only when it has length > 1 AND contains a digit. So
+// docs/adr/0010-agent-scaffolding.md → "0010", v1-getting-started.md → "v1",
+// while dev-guide.md → "" and README.md → "".
+func identifierSegment(target identity.DocumentID) string {
+	base := path.Base(target.String())
+	base = strings.TrimSuffix(base, path.Ext(base))
+	base = strings.ToLower(base)
+	seg := base
+	if i := strings.IndexAny(base, "-_"); i >= 0 {
+		seg = base[:i]
+	}
+	if len(seg) <= 1 {
+		return ""
+	}
+	if !strings.ContainsFunc(seg, unicode.IsDigit) {
+		return ""
+	}
+	return seg
 }
 
 // scentScore computes the anchor's scent score in [0,1] against the target's

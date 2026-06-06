@@ -112,7 +112,11 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 - **Low-scent anchors** — links whose anchor text barely previews where they lead
   (a generic "click here", or a label unrelated to the target's title). Reported
   as the `low-scent-anchor` finding (*Info, experimental* — **never** fails
-  `check`, even `--strict`) with a suggested rename to the target's title. See
+  `check`, even `--strict`) with a suggested rename to the target's title. Two
+  cases are deliberately **not** flagged: a **stable-identifier anchor** (e.g.
+  "ADR 0010" pointing at `0010-*.md` — it names the exact doc) and a **directory
+  link** (`[text](somedir/)` — its target is a folder, not a titled doc; bare-path
+  anchors like `docs/dev-guide.md` are still flagged, though). See
   [ADR 0016](adr/0016-agent-experience.md).
 
 Orphans, under-linked, dead-end and unreachable docs come with **different**

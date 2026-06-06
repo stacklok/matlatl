@@ -26,7 +26,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     `low-scent-anchor` flags links whose anchor text barely previews the target
     (Jaccard of anchor tokens vs. the target's title below 0.20), with a suggested
     rename. Anchor/display text is now threaded from the parser through to the
-    graph edge.
+    graph edge. Stable-identifier anchors (e.g. "ADR 0010") and directory-link
+    expansion edges (ADR 0008) are deliberately not flagged.
 
 ### Changed
 

@@ -714,6 +714,117 @@ func TestIntegration_EmitBundle(t *testing.T) {
 	assertNothingEscaped(t, outDir, want)
 }
 
+// TestIntegration_ScentExemptions drives the REAL CLI (`emit --out`) over a temp
+// fixture and asserts the two low-scent non-flag rules (ADR 0016) end-to-end:
+//   - a directory link [the adr folder](adr/) expands into synthetic, anchor-less,
+//     line-0 vouch edges (ADR 0008) → NONE of them produce a low-scent finding
+//     (the phantom empty-anchor / Line-0 bug is gone);
+//   - a stable-ID anchor [ADR 0001](adr/0001-foo.md) → NO finding (exempt);
+//   - a bare-path anchor [adr/0002-bar.md](adr/0002-bar.md) → finding present;
+//   - a vague anchor [click here](adr/0001-foo.md) → finding present.
+func TestIntegration_ScentExemptions(t *testing.T) {
+	dir := t.TempDir()
+	writeFile := func(name, body string) {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Hub doc: a directory link (vouches for the folder, ADR 0008) + the four
+	// anchor cases. README.md is an auto-root so the cluster is reachable.
+	writeFile("README.md", "# Home\n\n"+
+		"See [the adr folder](adr/).\n\n"+ // directory link → synthetic edges
+		"See [ADR 0001](adr/0001-foo.md).\n\n"+ // stable-ID anchor → exempt
+		"See [adr/0002-bar.md](adr/0002-bar.md).\n\n"+ // raw-path anchor → flagged
+		"See [click here](adr/0001-foo.md).\n") // vague anchor → flagged
+	writeFile("adr/0001-foo.md", "# Foo Decision\n\nBody.\n")
+	// Title deliberately shares no token with the path "adr/0002-bar.md", so the
+	// raw-path anchor scores below the threshold and is genuinely flagged.
+	writeFile("adr/0002-bar.md", "# Second Choice Record\n\nBody.\n")
+
+	outDir := t.TempDir()
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"emit", dir, "--out", outDir}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("emit code = %v, want ExitOK (stderr=%q)", code, errOut.String())
+	}
+
+	jb, err := os.ReadFile(filepath.Join(outDir, "findings.json"))
+	if err != nil {
+		t.Fatalf("findings.json not written: %v", err)
+	}
+	var fdoc struct {
+		Findings []struct {
+			Kind     string            `json:"kind"`
+			Document string            `json:"document"`
+			Line     int               `json:"line"`
+			Details  map[string]string `json:"details"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(jb, &fdoc); err != nil {
+		t.Fatalf("findings.json does not parse: %v", err)
+	}
+
+	// Collect the low-scent-anchor findings by their anchor text.
+	scentByAnchor := map[string]int{}
+	for _, f := range fdoc.Findings {
+		if f.Kind != "low-scent-anchor" {
+			continue
+		}
+		// The bug: no synthetic edge (empty anchor / Line 0) may produce a finding.
+		if f.Details["anchorText"] == "" || f.Line <= 0 {
+			t.Errorf("phantom low-scent finding from a synthetic/lineless edge: %+v", f)
+		}
+		scentByAnchor[f.Details["anchorText"]]++
+	}
+
+	// Exempt: stable-ID anchor → no finding.
+	if n := scentByAnchor["ADR 0001"]; n != 0 {
+		t.Errorf("stable-ID anchor 'ADR 0001' should be exempt, got %d finding(s)", n)
+	}
+	// Flagged: raw-path anchor.
+	if n := scentByAnchor["adr/0002-bar.md"]; n == 0 {
+		t.Errorf("raw-path anchor 'adr/0002-bar.md' should be flagged, got 0 (all: %v)", scentByAnchor)
+	}
+	// Flagged: vague anchor.
+	if n := scentByAnchor["click here"]; n == 0 {
+		t.Errorf("vague anchor 'click here' should be flagged, got 0 (all: %v)", scentByAnchor)
+	}
+
+	// De-vacuum: the phantom check above would ALSO pass if directory expansion
+	// produced zero edges. Assert the directory link actually expanded (ADR 0008)
+	// by reading graph.json and confirming README.md has an out-edge to an adr/
+	// member — so a future regression disabling expansion can't make this test
+	// silently green.
+	gb, err := os.ReadFile(filepath.Join(outDir, "graph.json"))
+	if err != nil {
+		t.Fatalf("graph.json not written: %v", err)
+	}
+	var gdoc struct {
+		Edges []struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		} `json:"edges"`
+	}
+	if err := json.Unmarshal(gb, &gdoc); err != nil {
+		t.Fatalf("graph.json does not parse: %v", err)
+	}
+	expanded := false
+	for _, e := range gdoc.Edges {
+		if e.From == "README.md" && strings.HasPrefix(e.To, "adr/") {
+			expanded = true
+			break
+		}
+	}
+	if !expanded {
+		t.Errorf("directory link [the adr folder](adr/) did not expand into README.md→adr/* edges "+
+			"(ADR 0008); the phantom-edge check would be vacuous. edges=%+v", gdoc.Edges)
+	}
+}
+
 func dirlinksFixture(t *testing.T) string {
 	t.Helper()
 	p, err := filepath.Abs(filepath.Join("..", "..", "testdata", "dirlinks"))
