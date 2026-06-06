@@ -1,3 +1,3 @@
 # Tips
 
-A few tips, linking back to the [home page](README.md) to close the loop.
+A few tips, linking back to the [Clean Corpus home](README.md) to close the loop.

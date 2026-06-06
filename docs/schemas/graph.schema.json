@@ -24,6 +24,7 @@
     "components",
     "hits",
     "betweenness",
+    "pageRank",
     "gaps",
     "suggestedLinks",
     "articulationPoints",
@@ -32,7 +33,7 @@
     "reachability"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 5 },
+    "schemaVersion": { "type": "integer", "const": 6 },
     "tool": { "type": "string" },
     "generatedNote": { "type": "string" },
     "summary": {
@@ -91,7 +92,7 @@
           "id", "kind", "title", "path", "description", "category",
           "inDegree", "outDegree", "component", "hubScore", "authorityScore",
           "reachable", "orphan", "intentionalOrphan", "underLinked", "deadEnd", "bowtie",
-          "betweenness", "isArticulation"
+          "betweenness", "isArticulation", "pageRank"
         ],
         "properties": {
           "id": { "type": "string" },
@@ -115,7 +116,8 @@
             "enum": ["core", "in", "out", "tendril", "disconnected"]
           },
           "betweenness": { "type": "number", "minimum": 0, "maximum": 1 },
-          "isArticulation": { "type": "boolean" }
+          "isArticulation": { "type": "boolean" },
+          "pageRank": { "type": "number", "minimum": 0, "maximum": 1 }
         }
       }
     },
@@ -231,6 +233,15 @@
     },
     "betweenness": {
       "description": "Critical-path centrality (ADR 0015): the top documents by directed betweenness — those on the most shortest paths between other documents (the corpus' load-bearing connectors). Parallel to `hits`. Pure data.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topDocs"],
+      "properties": {
+        "topDocs": { "$ref": "#/$defs/rankedList" }
+      }
+    },
+    "pageRank": {
+      "description": "PageRank importance (ADR 0016): the top documents by PageRank — the random-surfer stationary distribution (Brin & Page 1998), a measure of global importance. Parallel to `hits` and `betweenness`. Pure data.",
       "type": "object",
       "additionalProperties": false,
       "required": ["topDocs"],

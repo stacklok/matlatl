@@ -34,7 +34,7 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 | `matlatl graph [path]` | Emit the reference graph: `--format mermaid` (default), `dot`, or `json`. `--tree` renders the hierarchy-tree variant instead (mermaid only). |
 | `matlatl index [path]` | Emit a navigation surface: `index.md`, or an `llms.txt` family artifact (`--llms`, `--full`, `--small`, `--graph`). `--title` overrides the `llms.txt` H1. |
 | `matlatl orphans [path]` | List isolated orphans, under-linked and dead-end docs (`--isolated-only`) and unreachable docs (`--unreachable-only`). |
-| `matlatl emit [path] --out <dir>` | Write the whole bundle: `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `findings.json` (`--title` overrides the `llms.txt` H1). |
+| `matlatl emit [path] --out <dir>` | Write the whole bundle: `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `trails.json`, `findings.json` (`--title` overrides the `llms.txt` H1). |
 | `matlatl fix-prompt [path]` | Emit an agent-agnostic prompt (findings embedded inline) that tells an LLM coding agent how to fix them. Pipe it to any agent; `--errors-only` for broken links/anchors only; `--out` to write `fix-prompt.md`. |
 | `matlatl serve [path]` | Run the read-only MCP server (streamable HTTP) so an agent can query the graph. |
 | `matlatl version` | Print version information. |
@@ -103,6 +103,17 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
   **both** as `articulation-point` / `bridge` findings (*Info, experimental* —
   **never** fail `check`, even `--strict`) and as `graph.json` data. See
   [ADR 0015](adr/0015-critical-path-analysis.md).
+- **Importance (PageRank)** — the random-surfer global-importance score
+  (Brin & Page 1998), computed **beside** HITS. Descriptive **data**, never a
+  finding: surfaced as a per-node `pageRank` and a top-level `pageRank` block in
+  `graph.json`, and an "Importance (PageRank)" section in the human report. It
+  also ranks the reading-order trails. See
+  [ADR 0016](adr/0016-agent-experience.md).
+- **Low-scent anchors** — links whose anchor text barely previews where they lead
+  (a generic "click here", or a label unrelated to the target's title). Reported
+  as the `low-scent-anchor` finding (*Info, experimental* — **never** fails
+  `check`, even `--strict`) with a suggested rename to the target's title. See
+  [ADR 0016](adr/0016-agent-experience.md).
 
 Orphans, under-linked, dead-end and unreachable docs come with **different**
 remediation hints, because the fix differs: link an orphan in (or delete it); add
@@ -224,23 +235,32 @@ fail — so dashboards get structured results either way.
 `matlatl emit --out <dir>` produces a bundle designed for agents:
 
 - **`graph.json`** — the machine-queryable corpus manifest (schema **version
-  5**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`,
-  `betweenness` and `isArticulation`), edges, orphans, under-linked/dead-end, a
-  `bowtie` structure summary, broken links, components, gaps, `suggestedLinks`
-  (topology-based suggestions, each with
+  6**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`,
+  `betweenness`, `isArticulation` and `pageRank`), edges, orphans,
+  under-linked/dead-end, a `bowtie` structure summary, broken links, components,
+  gaps, `suggestedLinks` (topology-based suggestions, each with
   `sharedNeighbours`/`coupling`/`coCitation`/`adamicAdar`), a `betweenness` block
-  (top load-bearing docs), and `articulationPoints` / `bridges` (the critical
-  structure). Validated against
+  (top load-bearing docs), a `pageRank` block (top docs by global importance),
+  and `articulationPoints` / `bridges` (the critical structure). Backlinks are
+  derived from the existing `edges` (every edge's `from`), so there is no separate
+  backlinks array. Validated against
   [`docs/schemas/graph.schema.json`](schemas/graph.schema.json) and byte-stable
   run to run.
-- **`llms.txt`** — a curated index, most-important docs first, with a
-  "Known gaps" section flagging what's incomplete (per the `llms.txt` convention).
+- **`trails.json`** — suggested reading orders (associative trails, Bush 1945):
+  per connected cluster, a topologically-valid order rooted at the cluster's
+  most-important (highest-PageRank) document. Validated against
+  [`docs/schemas/trails.schema.json`](schemas/trails.schema.json) (schema version
+  1).
+- **`llms.txt`** — a curated index, most-important docs first, now with a
+  "Suggested reading order" block (the trails) and, on each entry, a
+  "linked from" backlinks clause; plus a "Known gaps" section flagging what's
+  incomplete (per the `llms.txt` convention).
 - **`llms-full.txt` / `llms-small.txt`** — concatenated clean bodies (each with a
   short context header) / a tight hubs-only subset for small context windows.
 - **`findings.json`** — every finding is self-contained and actionable, plus a
   `remediationGuide` so an agent can fix issues without extra context. Validated
   against [`docs/schemas/findings.schema.json`](schemas/findings.schema.json)
-  (schema version 5) and byte-stable run to run.
+  (schema version 6) and byte-stable run to run.
 
 ### Fixing findings with an agent
 

@@ -22,3 +22,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0013 | Topology-based link prediction (suggested links)        | Accepted |
 | 0014 | Corpus navigability metrics                             | Accepted |
 | 0015 | Critical-path analysis (betweenness, articulation points, bridges) | Accepted |
+| 0016 | Agent experience (PageRank, reading-order trails, backlinks, information scent) | Accepted |

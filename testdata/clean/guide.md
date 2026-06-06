@@ -1,7 +1,7 @@
 # Guide
 
-A short guide that links back to the [home page](README.md) and on to the
-[tips](tips.md).
+A short guide that links back to the [Clean Corpus home](README.md) and on to the
+[Tips](tips.md).
 
 ## Setup
 

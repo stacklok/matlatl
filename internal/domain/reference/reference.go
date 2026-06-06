@@ -208,6 +208,14 @@ type RawReference struct {
 	Type LinkType
 	// Line is the 1-based source line the reference appears on.
 	Line int
+	// AnchorText is the human-facing display text of the link as written: the
+	// inline link/image label ([this](x)), the image alt text (![alt](x)), or a
+	// wikilink alias ([[t|alias]], else the bare target). It is a pure-data string
+	// the resolver ignores (ADR 0001 keys identity on the target, never the label);
+	// it is carried through to the graph edge so the information-scent analysis can
+	// score a link's label against its target's title (ADR 0016). Empty when the
+	// link has no display text.
+	AnchorText string
 }
 
 // ResolvedTarget is the (tagged-union) outcome of resolving a RawReference.

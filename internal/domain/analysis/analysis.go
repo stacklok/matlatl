@@ -89,6 +89,13 @@ const (
 	// losing it disconnects them. Like ArticulationPoint it is always Info and
 	// never gates the exit code.
 	Bridge
+	// LowScentAnchor is a navigational link whose anchor text shares too few
+	// meaningful tokens with the target document's title to preview where it leads
+	// (ADR 0016): a generic "click here" / a label unrelated to the destination
+	// gives a reader or agent weak "information scent" (Pirolli & Card 1999). It is
+	// always Info and NEVER gates the exit code (even --strict) — a discoverability
+	// hint, not a defect — mirroring SuggestedLink, ArticulationPoint and Bridge.
+	LowScentAnchor
 )
 
 // String returns the canonical name of the finding kind.
@@ -118,6 +125,8 @@ func (k FindingKind) String() string {
 		return "articulation-point"
 	case Bridge:
 		return "bridge"
+	case LowScentAnchor:
+		return "low-scent-anchor"
 	default:
 		return "unknown"
 	}
@@ -125,7 +134,7 @@ func (k FindingKind) String() string {
 
 // Valid reports whether k is a defined FindingKind.
 func (k FindingKind) Valid() bool {
-	return k >= BrokenLink && k <= Bridge
+	return k >= BrokenLink && k <= LowScentAnchor
 }
 
 // Location pins a finding to a source position.

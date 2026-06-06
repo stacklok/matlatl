@@ -544,6 +544,60 @@ func TestPipeline_Run_CriticalStructureFindings(t *testing.T) {
 	}
 }
 
+// TestPipeline_Run_LowScentNonGating pins ADR 0016: a low-scent link produces an
+// Info low-scent-anchor finding that NEVER gates the exit code, even under
+// --strict. The chain README.md -> a.md uses a scent-free "click here" anchor
+// (score 0), so a low-scent finding must appear, be Info, and not fail the build.
+func TestPipeline_Run_LowScentNonGating(t *testing.T) {
+	const root = "README.md"
+	files := []ScannedFile{sf(root), sf("a.md")}
+	parser := &fakeParser{refsFor: func(file ScannedFile) []reference.RawReference {
+		if file.ID.String() != root {
+			return nil
+		}
+		return []reference.RawReference{
+			{Origin: file.ID, RawTarget: "a.md", Type: reference.RelativeLink, Line: 4, AnchorText: "click here"},
+		}
+	}}
+	scanner := &fakeScanner{result: ScanResult{Files: files}}
+	cfg := DefaultConfig()
+	cfg.ParseWorkers = 1
+	cfg.Strict = true
+	p := NewPipeline(cfg, scanner, newFakeFactory(parser), nil)
+	code, res, err := p.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if code != platform.ExitOK {
+		t.Fatalf("pipeline code = %v, want ExitOK", code)
+	}
+
+	if res.LowScentAnchorCount == 0 {
+		t.Errorf("expected at least one low-scent-anchor finding, got 0")
+	}
+	foundInfo := false
+	for _, f := range res.Report.Findings() {
+		if f.Kind == analysis.LowScentAnchor {
+			foundInfo = true
+			if f.Severity != analysis.Info {
+				t.Errorf("low-scent-anchor severity = %v, want Info", f.Severity)
+			}
+			if f.Location.Document != root || f.Location.Line != 4 {
+				t.Errorf("low-scent-anchor location = %v, want %s:4", f.Location, root)
+			}
+		}
+	}
+	if !foundInfo {
+		t.Errorf("expected a low-scent-anchor finding in the report")
+	}
+
+	// Non-gating proof: even under --strict, the low-scent finding alone does not
+	// fail the build (no broken links / orphans here that could gate).
+	if ec := res.CheckExitCode(true); ec != platform.ExitOK {
+		t.Errorf("CheckExitCode(strict=true) = %v, want ExitOK (low-scent never gates)", ec)
+	}
+}
+
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.RootPath != "." {

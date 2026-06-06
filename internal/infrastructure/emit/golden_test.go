@@ -17,6 +17,7 @@ import (
 	idxemit "github.com/stacklok/matlatl/internal/infrastructure/emit/index"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/llmstxt"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/report"
+	trailsemit "github.com/stacklok/matlatl/internal/infrastructure/emit/trails"
 	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
 	"github.com/stacklok/matlatl/internal/infrastructure/mdparser"
 )
@@ -162,6 +163,13 @@ func TestGolden_Artifacts(t *testing.T) {
 		}
 		assertGolden(t, "graph.json", b, nil)
 	})
+	t.Run("trails.json", func(t *testing.T) {
+		b, err := trailsemit.JSON(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertGolden(t, "trails.json", b, nil)
+	})
 	t.Run("llms.txt", func(t *testing.T) {
 		assertGolden(t, "llms.txt", llmstxt.LLMSTxt(v, opts), nil)
 	})
@@ -199,6 +207,13 @@ func TestGolden_ByteStable(t *testing.T) {
 			b, err := graphjson.JSON(v)
 			if err != nil {
 				t.Fatalf("graph.json emit: %v", err)
+			}
+			return b
+		}},
+		{"trails.json", func(v emit.View) []byte {
+			b, err := trailsemit.JSON(v)
+			if err != nil {
+				t.Fatalf("trails.json emit: %v", err)
 			}
 			return b
 		}},

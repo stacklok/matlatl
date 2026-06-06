@@ -66,7 +66,9 @@ const GraphJSONName = "graph.json"
 // isArticulation (bool); a top-level betweenness object {topDocs:[{id,score}]};
 // top-level articulationPoints ([]string) and bridges ([]{from,to}); and
 // summary.articulationPoints / summary.bridges counts — all pure data.
-const SchemaVersion = 5
+// v6 (ADR 0016) adds PageRank: a per-node pageRank (number) and a top-level
+// pageRank object {topDocs:[{id,score}]} parallel to betweenness — pure data.
+const SchemaVersion = 6
 
 // HITSFloatPrecision is the FIXED number of decimal places HITS hub/authority
 // scores are rounded to in graph.json. HITS scores are L2-normalized into [0,1]
@@ -125,6 +127,7 @@ type Document struct {
 	Components     Components      `json:"components"`
 	HITS           HITS            `json:"hits"`
 	Betweenness    Betweenness     `json:"betweenness"`
+	PageRank       PageRank        `json:"pageRank"`
 	Gaps           []Gap           `json:"gaps"`
 	SuggestedLinks []SuggestedLink `json:"suggestedLinks"`
 	// ArticulationPoints are cut vertices; Bridges are cut edges of the undirected
@@ -215,6 +218,10 @@ type Node struct {
 	// cut vertex of the undirected closure.
 	Betweenness    Float `json:"betweenness"`
 	IsArticulation bool  `json:"isArticulation"`
+	// PageRank is the node's PageRank score (ADR 0016): global importance via the
+	// random-surfer stationary distribution. Fixed precision (Float) so graph.json
+	// is byte-stable.
+	PageRank Float `json:"pageRank"`
 }
 
 // Edge is a directed document-projection navigational edge. Health is always
@@ -294,6 +301,13 @@ type Betweenness struct {
 	TopDocs []Ranked `json:"topDocs"`
 }
 
+// PageRank holds the top documents by PageRank (ADR 0016), parallel to the HITS
+// and Betweenness blocks. Scores use the fixed-precision Float type so graph.json
+// is byte-stable.
+type PageRank struct {
+	TopDocs []Ranked `json:"topDocs"`
+}
+
 // Bridge is a cut edge of the undirected closure (ADR 0015): the only link
 // between two parts of the corpus. from < to canonically.
 type Bridge struct {
@@ -354,6 +368,7 @@ func Build(v emit.View) Document {
 		Components:         Components{WCC: []Component{}, SCC: []Component{}},
 		HITS:               HITS{TopHubs: []Ranked{}, TopAuthorities: []Ranked{}},
 		Betweenness:        Betweenness{TopDocs: []Ranked{}},
+		PageRank:           PageRank{TopDocs: []Ranked{}},
 		Gaps:               []Gap{},
 		SuggestedLinks:     []SuggestedLink{},
 		ArticulationPoints: []string{},
@@ -402,6 +417,7 @@ func Build(v emit.View) Document {
 			Bowtie:            d.Bowtie,
 			Betweenness:       newFloat(d.Betweenness),
 			IsArticulation:    d.IsArticulation,
+			PageRank:          newFloat(d.PageRank),
 		})
 	}
 
@@ -418,6 +434,7 @@ func Build(v emit.View) Document {
 	doc.Components = Components{WCC: components(m.WCC), SCC: components(m.SCC)}
 	doc.HITS = HITS{TopHubs: ranked(v.TopHubs), TopAuthorities: ranked(v.TopAuthorities)}
 	doc.Betweenness = Betweenness{TopDocs: ranked(v.TopBetweenness)}
+	doc.PageRank = PageRank{TopDocs: ranked(v.TopPageRank)}
 	doc.Gaps = gaps(v.Gaps)
 	doc.SuggestedLinks = suggestedLinks(v.SuggestedLinks)
 	doc.ArticulationPoints = identity.IDStrings(v.ArticulationPoints)

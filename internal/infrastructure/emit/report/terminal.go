@@ -262,6 +262,17 @@ func fullReport(w io.Writer, p palette, v emit.View) error {
 	}
 	ew.line("")
 
+	// Importance (PageRank): global importance via the random-surfer stationary
+	// distribution (Brin & Page 1998), beside hubs/authorities (ADR 0016).
+	ew.line(p.bold("Importance (PageRank)") + p.dim(" (global random-surfer importance)"))
+	if len(v.TopPageRank) == 0 {
+		ew.line("  " + p.dim("none"))
+	}
+	for _, r := range v.TopPageRank {
+		ew.line(fmt.Sprintf("  %s  %s", p.cyan(fmt.Sprintf("%.3f", r.Score)), v.TitleOf(r.ID)))
+	}
+	ew.line("")
+
 	// 5. Knowledge gaps (closing note).
 	switch {
 	case v.GapsTruncated:

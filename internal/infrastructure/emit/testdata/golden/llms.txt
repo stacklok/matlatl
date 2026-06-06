@@ -4,12 +4,40 @@
 
 ## Documentation
 
-- [User Guide](docs/guide.md): How to use the thing.
-- [Overview](docs/sub/overview.md): Overview
-- [Project Home](README.md): Top-level readme for the fixture corpus.
-- [Downstream Branch](docs/flow/branch.md): Downstream Branch
-- [Terminal Page](docs/flow/terminal.md): Terminal Page
+- [User Guide](docs/guide.md): How to use the thing. (linked from: README.md, docs/README.md, docs/links.md, docs/sub/overview.md)
+- [Overview](docs/sub/overview.md): Overview (linked from: README.md, docs/guide.md, docs/links.md)
+- [Project Home](README.md): Top-level readme for the fixture corpus. (linked from: docs/guide.md, docs/links.md, docs/stray.md)
+- [Downstream Branch](docs/flow/branch.md): Downstream Branch (linked from: docs/flow/aside.md, docs/sub/overview.md)
+- [Terminal Page](docs/flow/terminal.md): Terminal Page (linked from: docs/flow/branch.md)
 - [Docs Index](docs/README.md): Docs Index
+
+## Suggested reading order
+
+_Associative trails (Bush 1945): a topologically-valid path through each cluster, most-important doc first._
+
+### Cycle Alpha
+
+1. [Cycle Alpha](docs/cycle/alpha.md)
+2. [Cycle Beta](docs/cycle/beta.md)
+
+### User Guide
+
+1. [Docs Index](docs/README.md)
+2. [Tendril Aside](docs/flow/aside.md)
+3. [Link Showcase](docs/links.md)
+4. [Stray Page](docs/stray.md)
+5. [User Guide](docs/guide.md)
+6. [Overview](docs/sub/overview.md)
+7. [Project Home](README.md)
+8. [Downstream Branch](docs/flow/branch.md)
+9. [Terminal Page](docs/flow/terminal.md)
+
+### Island One
+
+1. [Island Four](docs/island/four.md)
+2. [Island Three](docs/island/three.md)
+3. [Island One](docs/island/one.md)
+4. [Island Two](docs/island/two.md)
 
 ## Known gaps
 

@@ -19,12 +19,19 @@ linked docs rather than re-deriving them.
     link prediction (the additive `suggested-link` signal); 0014 corpus
     navigability metrics (compactness/stratum/path-length/clustering, scalars);
     0015 critical-path analysis (betweenness centrality as data; articulation
-    points + bridges as non-gating `articulation-point` / `bridge` Info findings).
-- **docs/schemas/** — published JSON Schemas for the two machine artifacts:
-  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 5)
-  and [findings.schema.json](docs/schemas/findings.schema.json) (findings schema
-  version 5). The emitter types are kept in lockstep and validated by tests; if
-  you change an artifact's shape, change the schema and bump its version.
+    points + bridges as non-gating `articulation-point` / `bridge` Info findings);
+    0016 agent experience (PageRank beside HITS; reading-order trails ranked by
+    PageRank; backlinks in index.md + llms.txt, NO array in graph.json;
+    information scent as the non-gating `low-scent-anchor` Info finding — the
+    scent-free phrase + stopword sets live in
+    `internal/domain/graphmodel/scent.go`).
+- **docs/schemas/** — published JSON Schemas for the three machine artifacts:
+  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 6),
+  [findings.schema.json](docs/schemas/findings.schema.json) (findings schema
+  version 6), and [trails.schema.json](docs/schemas/trails.schema.json) (trails
+  schema version 1). The emitter types are kept in lockstep and validated by
+  tests; if you change an artifact's shape, change the schema and bump its
+  version.
 - **[docs/user-guide.md](docs/user-guide.md)** /
   **[docs/dev-guide.md](docs/dev-guide.md)** — commands/flags/CI, and the layout
   + contribution rules.
@@ -59,7 +66,8 @@ and exposes read-only tools (`what-links-to`, `list-orphans`, `path-between`,
 `corpus-summary` returns the full `graph.json` manifest, including the
 `summary.navigability` scalars (compactness, stratum, characteristic/median path
 length, clustering, diameter), per-node `betweenness`/`isArticulation`, and the
-top-level `betweenness`/`articulationPoints`/`bridges` (schema v5);
+top-level `betweenness`/`articulationPoints`/`bridges`, and per-node/top-level
+`pageRank` (schema v6);
 `critical-docs` returns just the critical-path structure (top load-bearing docs
 by betweenness + articulation points + bridges). Prefer these for live graph
 queries over parsing artifacts yourself.

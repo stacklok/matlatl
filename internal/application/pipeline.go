@@ -109,6 +109,10 @@ type Result struct {
 	// path); they are carried for the human summary and machine artifacts.
 	ArticulationPointCount int
 	BridgeCount            int
+	// LowScentAnchorCount is the number of low-scent-anchor findings (ADR 0016):
+	// links whose anchor text barely previews the target. Info; NEVER affects the
+	// exit code; carried for the human summary and machine artifacts.
+	LowScentAnchorCount int
 	// Report is the frozen analysis report (all finding kinds).
 	Report *analysis.AnalysisReport
 	// Metrics is the frozen P3 graph-analysis carrier (graph, components, HITS,
@@ -290,6 +294,8 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 
 		ArticulationPointCount: report.CountByKind(analysis.ArticulationPoint),
 		BridgeCount:            report.CountByKind(analysis.Bridge),
+
+		LowScentAnchorCount: report.CountByKind(analysis.LowScentAnchor),
 
 		Report:      report,
 		Metrics:     metrics,

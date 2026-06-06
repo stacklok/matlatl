@@ -43,7 +43,7 @@ for the authoritative flag list before guessing flags.
 | Committable Markdown report | `matlatl report . --out <dir>` (writes `report.md`) |
 | Diagram of the graph | `matlatl graph . --format mermaid\|dot\|json` (`--tree` for the hierarchy variant) |
 | Navigation surface / `llms.txt` | `matlatl index .` (`--llms`, `--full`, `--small`, `--graph`) |
-| **Full artifact bundle for agents/LLMs** | `matlatl emit . --out <dir>` → `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `findings.json` |
+| **Full artifact bundle for agents/LLMs** | `matlatl emit . --out <dir>` → `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `trails.json`, `findings.json` |
 | **Get an agent-ready fix prompt** | `matlatl fix-prompt .` (pipe to an agent; `--errors-only` for broken links/anchors only) |
 | **Live graph queries (MCP)** | `matlatl serve .` |
 
@@ -137,5 +137,6 @@ Before reporting orphans/noise, check what the repo already declares:
 
 - `docs/user-guide.md` — every command, flag, and CI usage in depth.
 - `docs/adr/0005-exit-code-contract.md` — the exact `check` contract.
-- `docs/schemas/graph.schema.json`, `docs/schemas/findings.schema.json` — the
-  artifact shapes (both schema version 5).
+- `docs/schemas/graph.schema.json` (schema version 6),
+  `docs/schemas/findings.schema.json` (schema version 6),
+  `docs/schemas/trails.schema.json` (schema version 1) — the artifact shapes.

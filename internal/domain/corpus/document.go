@@ -87,3 +87,66 @@ type Document struct {
 	// ModTime is the file's last-modified time.
 	ModTime time.Time
 }
+
+// Title returns the document's display title with the documented fallbacks
+// (ADR 0016): front-matter title → first heading text → the DocumentID string.
+// This is the single source of truth for a document's title; the emit-layer
+// presentation helper and the information-scent analysis both go through it so
+// they cannot drift.
+func (d *Document) Title() string {
+	if d == nil {
+		return ""
+	}
+	if t := d.FrontMatter.Title; t != "" {
+		return t
+	}
+	if h := d.FirstHeadingText(); h != "" {
+		return h
+	}
+	return d.ID.String()
+}
+
+// FirstHeadingText returns the text of the first (document-order) heading with
+// non-empty text, or "" if the document has no headings.
+func (d *Document) FirstHeadingText() string {
+	if d == nil || d.Root == nil {
+		return ""
+	}
+	var found string
+	var walk func(s *Section) bool
+	walk = func(s *Section) bool {
+		for _, child := range s.Children {
+			if child.Text != "" {
+				found = child.Text
+				return true
+			}
+			if walk(child) {
+				return true
+			}
+		}
+		return false
+	}
+	walk(d.Root)
+	return found
+}
+
+// HeadingTexts returns every non-empty heading text in the document, in
+// document order (ADR 0016): the information-scent analysis falls back to the
+// union of these when a target's title yields no scoreable tokens.
+func (d *Document) HeadingTexts() []string {
+	if d == nil || d.Root == nil {
+		return nil
+	}
+	var out []string
+	var walk func(s *Section)
+	walk = func(s *Section) {
+		for _, child := range s.Children {
+			if child.Text != "" {
+				out = append(out, child.Text)
+			}
+			walk(child)
+		}
+	}
+	walk(d.Root)
+	return out
+}

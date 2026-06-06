@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stacklok/matlatl/internal/domain/identity"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
@@ -52,16 +53,33 @@ func Markdown(v emit.View) []byte {
 		// rendered as a Markdown heading, so it gets the same flowing-text escaping
 		// the report uses (a hostile category must not render as live markdown).
 		fmt.Fprintf(&b, "## %s\n\n", emit.EscapeMarkdownText(emit.CategoryLabel(cat)))
-		b.WriteString("| Document | Description | Modified |\n| --- | --- | --- |\n")
+		b.WriteString("| Document | Description | Backlinks | Modified |\n| --- | --- | --- | --- |\n")
 		for _, d := range byCat[cat] {
-			fmt.Fprintf(&b, "| `%s` | %s | %s |\n",
+			fmt.Fprintf(&b, "| `%s` | %s | %s | %s |\n",
 				emit.EscapeInlineCode(d.ID.String()),
 				emit.EscapeTableCell(d.Description),
+				emit.EscapeTableCell(backlinksCell(v, d.ID)),
 				emit.EscapeTableCell(formatModTime(d.ModTime)))
 		}
 		b.WriteString("\n")
 	}
 	return []byte(b.String())
+}
+
+// backlinksCell renders the documents that link TO id as a comma-separated list
+// of their paths (ADR 0016, Nelson/Xanadu two-way links), or "-" when nothing
+// links to it. The list is the document projection's in-neighbours (already
+// sorted by path, self-excluded), so the cell is deterministic.
+func backlinksCell(v emit.View, id identity.DocumentID) string {
+	in := v.Backlinks(id)
+	if len(in) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(in))
+	for _, src := range in {
+		parts = append(parts, src.String())
+	}
+	return strings.Join(parts, ", ")
 }
 
 // formatModTime renders a mod-time as a stable RFC3339 UTC date-time, or "-" for

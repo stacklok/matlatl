@@ -207,6 +207,34 @@ func TestReferenceExtraction(t *testing.T) {
 	}
 }
 
+// TestAnchorTextCaptured pins ADR 0016 anchor-text plumbing: the parser captures
+// the display text of inline links, images (alt), wikilinks, and aliased
+// wikilinks ([[t|alias]]) onto RawReference.AnchorText, trimmed.
+func TestAnchorTextCaptured(t *testing.T) {
+	src := "" +
+		"[the user guide](guide.md)\n\n" +
+		"![architecture diagram](arch.png)\n\n" +
+		"[[overview]]\n\n" +
+		"[[target|the alias text]]\n"
+	doc := parse(t, src)
+
+	got := map[string]string{} // rawTarget → anchorText
+	for _, r := range doc.RawReferences {
+		got[r.RawTarget] = r.AnchorText
+	}
+	wants := map[string]string{
+		"guide.md": "the user guide",       // inline link label
+		"arch.png": "architecture diagram", // image alt
+		"overview": "overview",             // bare wikilink → target text
+		"target":   "the alias text",       // [[t|alias]] → alias
+	}
+	for target, want := range wants {
+		if got[target] != want {
+			t.Errorf("anchor text for %q = %q, want %q (all refs: %+v)", target, got[target], want, doc.RawReferences)
+		}
+	}
+}
+
 func TestSlugsIndexedIntoCorpus(t *testing.T) {
 	doc := parse(t, "# One\n\n## Two\n")
 	c := corpus.NewCorpus()

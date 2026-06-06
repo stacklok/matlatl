@@ -27,6 +27,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stacklok/matlatl/internal/domain/identity"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
 
@@ -87,32 +88,93 @@ func LLMSTxt(v emit.View, opts Options) []byte {
 
 	b.WriteString("## Documentation\n\n")
 	for _, rd := range primary {
-		writeLink(&b, rd.view)
+		writeLink(&b, v, rd.view)
 	}
 	b.WriteString("\n")
 
 	if len(optional) > 0 {
 		b.WriteString("## Optional\n\n")
 		for _, rd := range optional {
-			writeLink(&b, rd.view)
+			writeLink(&b, v, rd.view)
 		}
 		b.WriteString("\n")
 	}
 
+	writeReadingOrder(&b, v)
 	writeKnownGaps(&b, v)
 	return []byte(b.String())
 }
 
-// writeLink writes one curated `- [title](path): description` line. The link
-// text/description are single-lined (no body dumping) and parenthesis/newline
-// safe so they cannot break the markdown link.
-func writeLink(b *strings.Builder, d emit.DocView) {
-	desc := oneLine(d.Description)
-	if desc != "" {
-		fmt.Fprintf(b, "- [%s](%s): %s\n", linkText(d.Title), linkPath(d.ID), desc)
+// writeReadingOrder writes a "## Suggested reading order" section: one heading per
+// trail (the root document) followed by a numbered list of [title](path) in the
+// trail's order (ADR 0016). Trails are the modern realization of Vannevar Bush's
+// associative trails ("As We May Think", 1945): a curated path through a connected
+// cluster, rooted at its most important doc. Only emitted when there is at least
+// one multi-document trail (a corpus of singletons has nothing to order).
+func writeReadingOrder(b *strings.Builder, v emit.View) {
+	hasOrder := false
+	for _, t := range v.Trails {
+		if len(t.Order) > 1 {
+			hasOrder = true
+			break
+		}
+	}
+	if !hasOrder {
 		return
 	}
-	fmt.Fprintf(b, "- [%s](%s)\n", linkText(d.Title), linkPath(d.ID))
+	b.WriteString("## Suggested reading order\n\n")
+	b.WriteString("_Associative trails (Bush 1945): a topologically-valid path through each cluster, " +
+		"most-important doc first._\n\n")
+	for _, t := range v.Trails {
+		if len(t.Order) <= 1 {
+			continue // a singleton cluster has no meaningful order
+		}
+		fmt.Fprintf(b, "### %s\n\n", oneLine(titleFor(v, t.Root)))
+		for i, id := range t.Order {
+			fmt.Fprintf(b, "%d. [%s](%s)\n", i+1, linkText(titleFor(v, id)), linkPath(id))
+		}
+		b.WriteString("\n")
+	}
+}
+
+// titleFor returns the document's display title (falling back to the ID).
+func titleFor(v emit.View, id identity.DocumentID) string {
+	if d, ok := v.Doc(id); ok && d.Title != "" {
+		return d.Title
+	}
+	return id.String()
+}
+
+// writeLink writes one curated `- [title](path): description` line, with a
+// trailing "(linked from: …)" backlinks clause (ADR 0016, Nelson/Xanadu two-way
+// links) so an agent sees what points at each doc. The link text/description are
+// single-lined (no body dumping) and parenthesis/newline safe so they cannot
+// break the markdown link.
+func writeLink(b *strings.Builder, v emit.View, d emit.DocView) {
+	desc := oneLine(d.Description)
+	back := backlinksClause(v, d.ID)
+	switch {
+	case desc != "":
+		fmt.Fprintf(b, "- [%s](%s): %s%s\n", linkText(d.Title), linkPath(d.ID), desc, back)
+	default:
+		fmt.Fprintf(b, "- [%s](%s)%s\n", linkText(d.Title), linkPath(d.ID), back)
+	}
+}
+
+// backlinksClause returns a terse " (linked from: a.md, b.md)" suffix listing the
+// documents that link TO id, or "" when nothing does. The list is the document
+// projection's in-neighbours (already sorted by path, self-excluded), so it is
+// deterministic. The whole clause is single-lined so it cannot break the entry.
+func backlinksClause(v emit.View, id identity.DocumentID) string {
+	in := v.Backlinks(id)
+	if len(in) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(in))
+	for _, src := range in {
+		parts = append(parts, src.String())
+	}
+	return " " + oneLine(fmt.Sprintf("(linked from: %s)", strings.Join(parts, ", ")))
 }
 
 // writeKnownGaps writes the incompleteness note so an agent knows what is

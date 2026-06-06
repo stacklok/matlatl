@@ -14,14 +14,15 @@ internal/
     corpus/              Document, Section, FrontMatter, Corpus (+ Freeze), indices
     reference/           LinkType/LinkHealth, the pure-domain link Resolver
     graphmodel/          reference graph, hierarchy, reachability, orphans,
-                         components (WCC union-find + iterative Tarjan SCC),
-                         HITS, gaps — all hand-rolled & deterministic
+                         components (WCC union-find + iterative Tarjan SCC +
+                         condensation), HITS, PageRank, betweenness, gaps, trails,
+                         scent — all hand-rolled & deterministic
     analysis/            Finding, Severity, AnalysisReport (immutable, sorted)
   application/           Config, ports, the scan→parse→resolve→build→analyze pipeline
   infrastructure/        all I/O + third-party:
     fsscanner/           secure recursive markdown discovery
     mdparser/            goldmark (quarantined here) → domain Documents
-    emit/                report / diagram / index / graphjson / llmstxt emitters
+    emit/                report / diagram / index / graphjson / trails / llmstxt emitters
     linkcheck/           opt-in external HTTP checker + SSRF guard
     mcpserver/           the MCP server (mark3labs/mcp-go, quarantined here)
   platform/              version, exit codes
@@ -45,7 +46,13 @@ testdata/                fixture corpora + golden artifacts
    (`centrality.go`) is a worked example: it iterates sources in sorted order and
    accumulates dependencies over **sorted predecessor lists** (built by the
    sorted-neighbour expansion in `ForEachSourceBFS`), so every float division/sum
-   runs in a fixed order. Golden tests assert byte-stability.
+   runs in a fixed order. PageRank (`pagerank.go`) is the same discipline: the
+   dangling-mass sum iterates the **sorted** document set and each node's inbound
+   sum iterates the already-sorted `projRev`, so the float addition order is fixed
+   (no L2 normalization — total mass is conserved by uniform dangling
+   redistribution). Trails (`trails.go`) re-sort the Kahn frontier as a slice
+   each pop (never range a map for output); scent (`scent.go`) computes Jaccard
+   via a sorted merge-walk. Golden tests assert byte-stability.
 3. **Security is not a phase.** Root containment, resource caps, output-path
    sanitization, label escaping, and the SSRF guard are tested with adversarial
    fixtures. See [ADR 0003](adr/0003-security-model.md).
@@ -123,7 +130,8 @@ why output is byte-identical at any worker count. See [ADR 0004](adr/0004-ddd-la
 ## Adding things
 
 - **A new finding kind** — append to the `analysis.FindingKind` iota (keep the
-  newest kind last and update `Valid()`'s upper bound to it — currently `Bridge`),
+  newest kind last and update `Valid()`'s upper bound to it — currently
+  `LowScentAnchor`),
   update its `String()`, produce it in `application` with a concrete
   `SuggestedFix` and structured `Details`, add a `remediationGuide` entry **and** a
   `kindPresentationOrder` entry in the findings emitter (a test asserts every kind
@@ -147,6 +155,16 @@ why output is byte-identical at any worker count. See [ADR 0004](adr/0004-ddd-la
   (articulation/bridges, `articulation.go`) over the **undirected** closure — the
   same split navigability uses. See [ADR 0014](adr/0014-navigability-metrics.md)
   and [ADR 0015](adr/0015-critical-path-analysis.md).
+- **Anything that needs a link's display text** — the parser threads the anchor
+  text (inline-link label, image alt, wikilink alias/target) onto
+  `reference.RawReference.AnchorText` → `reference.Reference` (via embedding) →
+  `graphmodel.Edge.AnchorText` (with the source `Line`), meaningful only for
+  `EdgeReference` edges. It is pure data the resolver ignores (identity stays
+  keyed on the target, [ADR 0001](adr/0001-document-identity.md)). The
+  information-scent analysis (`graphmodel/scent.go`) is the consumer; its
+  **scent-free phrase set and stopword set are in-source constants in
+  `scent.go`** (`scentFreePhrases` / `scentStopwords`) — edit them there, they are
+  documented inline. See [ADR 0016](adr/0016-agent-experience.md).
 - **A new library** — record the decision (or the choice to hand-roll) in
   [ADR 0002](adr/0002-library-choices.md). Keep it out of `domain`.
 - **A new ADR** — copy the format of an existing one, add it to

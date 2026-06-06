@@ -128,6 +128,18 @@ _Not reachable from any root. Add an inbound link from a page that is itself rea
 | 4 | Overview (0.296) | Downstream Branch (0.133) |
 | 5 | Docs Index (0.245) | Island One (0.000) |
 
+## Importance (PageRank)
+
+_Documents ranked by PageRank: the random-surfer stationary distribution (Brin & Page 1998). High PageRank marks a globally-important doc (ADR 0016)._
+
+| Rank | Document | PageRank |
+| --- | --- | --- |
+| 1 | Island One | 0.164 |
+| 2 | Island Two | 0.164 |
+| 3 | User Guide | 0.094 |
+| 4 | Cycle Alpha | 0.089 |
+| 5 | Cycle Beta | 0.089 |
+
 ## Knowledge gaps
 
 _Experimental: pairs of disconnected document clusters that may warrant a bridge (ADR 0007)._

@@ -539,7 +539,7 @@ func TestIntegration_GraphJSONToOut(t *testing.T) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("graph.json does not parse: %v", err)
 	}
-	if doc.SchemaVersion != 5 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
+	if doc.SchemaVersion != 6 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
 		t.Errorf("graph.json content unexpected: version=%d docs=%d nodes=%d", doc.SchemaVersion, doc.Summary.Documents, len(doc.Nodes))
 	}
 	// summary.navigability (ADR 0014) is present with sensible values: the fixture
@@ -597,8 +597,8 @@ func TestIntegration_SuggestedLinks(t *testing.T) {
 	if err := json.Unmarshal(fb, &fdoc); err != nil {
 		t.Fatalf("findings.json does not parse: %v", err)
 	}
-	if fdoc.SchemaVersion != 5 {
-		t.Errorf("findings.json schemaVersion = %d, want 5", fdoc.SchemaVersion)
+	if fdoc.SchemaVersion != 6 {
+		t.Errorf("findings.json schemaVersion = %d, want 6", fdoc.SchemaVersion)
 	}
 	if fdoc.Summary.SuggestedLink < 1 {
 		t.Errorf("findings.json summary.suggestedLink = %d, want >= 1", fdoc.Summary.SuggestedLink)
@@ -688,7 +688,7 @@ func TestIntegration_EmitBundle(t *testing.T) {
 	if code != platform.ExitOK {
 		t.Fatalf("emit code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
-	want := []string{"index.md", "llms.txt", "llms-full.txt", "llms-small.txt", "graph.json", "findings.json"}
+	want := []string{"index.md", "llms.txt", "llms-full.txt", "llms-small.txt", "graph.json", "trails.json", "findings.json"}
 	for _, name := range want {
 		b, err := os.ReadFile(filepath.Join(outDir, name))
 		if err != nil {
@@ -698,8 +698,8 @@ func TestIntegration_EmitBundle(t *testing.T) {
 			t.Errorf("bundle artifact %s is empty", name)
 		}
 	}
-	// graph.json + findings.json parse as JSON.
-	for _, name := range []string{"graph.json", "findings.json"} {
+	// graph.json + trails.json + findings.json parse as JSON.
+	for _, name := range []string{"graph.json", "trails.json", "findings.json"} {
 		b, _ := os.ReadFile(filepath.Join(outDir, name))
 		var v any
 		if err := json.Unmarshal(b, &v); err != nil {

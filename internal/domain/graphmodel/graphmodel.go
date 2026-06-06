@@ -103,6 +103,15 @@ type Edge struct {
 	To   NodeID
 	Kind EdgeKind
 	Type reference.LinkType
+	// AnchorText is the human-facing display text of the link (ADR 0016), carried
+	// from the resolved reference so the information-scent analysis can score the
+	// label against the target's title. Meaningful only for EdgeReference edges;
+	// empty for EdgeContains and for reference edges with no display text.
+	AnchorText string
+	// Line is the 1-based source line of the reference in its origin document
+	// (ADR 0016), so a scent finding can be pinned to the link. Meaningful only
+	// for EdgeReference edges; 0 for EdgeContains.
+	Line int
 }
 
 // DefaultNavigationalTypes is the set of LinkTypes that count as navigational in
@@ -267,7 +276,10 @@ func (g *ReferenceGraph) addReferenceEdge(c *corpus.Corpus, ref reference.Refere
 	}
 
 	from := g.originNode(c, ref)
-	g.edges = append(g.edges, Edge{From: from, To: to, Kind: EdgeReference, Type: ref.Type})
+	g.edges = append(g.edges, Edge{
+		From: from, To: to, Kind: EdgeReference, Type: ref.Type,
+		AnchorText: ref.AnchorText, Line: ref.Line,
+	})
 }
 
 // addDirectoryEdges adds the navigational edges for a directory link (ADR 0008).

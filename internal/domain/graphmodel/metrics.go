@@ -60,6 +60,20 @@ type GraphMetrics struct {
 	// is surfaced BOTH as non-gating Info findings (articulation-point / bridge)
 	// AND as graph.json data.
 	Critical CriticalStructure
+	// PageRank holds per-document PageRank scores (ADR 0016): global importance via
+	// the random-surfer stationary distribution. Pure data, like HITS/Betweenness —
+	// never a finding, never gates the exit code. It also ranks the reading-order
+	// Trails.
+	PageRank PageRankScores
+	// Trails are the per-weak-component suggested reading orders (ADR 0016): a
+	// topologically-valid order that prefers higher-PageRank docs among the
+	// available frontier. Pure data; surfaced in the emit bundle (trails.json +
+	// the llms.txt reading-order block).
+	Trails []Trail
+	// Scent holds the low-scent navigational links (ADR 0016): links whose anchor
+	// text shares too few tokens with the target's title to preview where they
+	// lead. Surfaced as non-gating Info low-scent-anchor findings.
+	Scent []ScentFinding
 
 	// componentOf maps each document to its WCC ID, for emitters.
 	componentOf map[identity.DocumentID]identity.DocumentID
@@ -73,6 +87,9 @@ type AnalyzeOptions struct {
 	RootGlobs []string
 	// Hits tunes the HITS power iteration.
 	Hits HitsOptions
+	// PageRank tunes the PageRank power iteration (ADR 0016). Zero values are
+	// normalized to the documented defaults inside ComputePageRank.
+	PageRank PageRankOptions
 	// Gaps tunes knowledge-gap detection.
 	Gaps GapOptions
 	// LinkPrediction tunes topology-based link prediction (ADR 0013). Zero values
@@ -116,6 +133,15 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 	// articulation/bridge are non-gating Info findings + data.
 	betweenness := g.ComputeBetweenness()
 	critical := g.ComputeCriticalStructure()
+	// Agent-experience analyses (ADR 0016): PageRank (global importance), then the
+	// reading-order trails ranked by it, then the information-scent link audit over
+	// the graph + corpus. PageRank is pure data; trails are pure data (emit bundle);
+	// scent becomes non-gating Info findings.
+	pageRank := g.ComputePageRank(opts.PageRank)
+	trails := ComputeTrails(pageRank, wcc, scc, func() (map[identity.DocumentID]identity.DocumentID, map[identity.DocumentID][]identity.DocumentID) {
+		return g.Condensation(scc)
+	})
+	scent := g.ComputeScent(c)
 
 	return &GraphMetrics{
 		Graph:                   g,
@@ -135,6 +161,9 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 		Navigability:            navigability,
 		Betweenness:             betweenness,
 		Critical:                critical,
+		PageRank:                pageRank,
+		Trails:                  trails,
+		Scent:                   scent,
 		componentOf:             memberComponentIndex(wcc),
 	}
 }

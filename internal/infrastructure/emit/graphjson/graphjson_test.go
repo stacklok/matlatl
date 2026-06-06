@@ -170,8 +170,8 @@ func TestJSON_Navigability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc := graphjson.Build(v); doc.SchemaVersion != 5 {
-		t.Errorf("schemaVersion = %d, want 5", doc.SchemaVersion)
+	if doc := graphjson.Build(v); doc.SchemaVersion != 6 {
+		t.Errorf("schemaVersion = %d, want 6", doc.SchemaVersion)
 	}
 
 	// The navigability floats must render at the fixed precision (determinism).
@@ -241,8 +241,8 @@ func TestJSON_CriticalStructure(t *testing.T) {
 	if err := json.Unmarshal(b, &typed); err != nil {
 		t.Fatal(err)
 	}
-	if typed.SchemaVersion != 5 {
-		t.Errorf("schemaVersion = %d, want 5", typed.SchemaVersion)
+	if typed.SchemaVersion != 6 {
+		t.Errorf("schemaVersion = %d, want 6", typed.SchemaVersion)
 	}
 
 	// Per-node betweenness + isArticulation.
@@ -276,6 +276,66 @@ func TestJSON_CriticalStructure(t *testing.T) {
 	if typed.Summary.ArticulationPoints != 2 || typed.Summary.Bridges != 3 {
 		t.Errorf("summary articulationPoints/bridges = %d/%d, want 2/3",
 			typed.Summary.ArticulationPoints, typed.Summary.Bridges)
+	}
+}
+
+// TestJSON_PageRank proves the v6 PageRank fields (ADR 0016) are emitted and
+// round-trip: a per-node `pageRank` field on every node (> 0 for a connected
+// doc) and a top-level `pageRank.topDocs` block, parallel to `betweenness`, with
+// scores in descending order. The directed path a->b->c->d is connected, so every
+// node accrues positive PageRank.
+func TestJSON_PageRank(t *testing.T) {
+	c := corpus.NewCorpus()
+	for _, id := range []string{"a.md", "b.md", "c.md", "d.md"} {
+		d := &corpus.Document{
+			ID:   corpusID(id),
+			Root: &corpus.Section{Level: 0, Children: []*corpus.Section{{Level: 1, Text: "T", Slug: "t", StartLine: 1, EndLine: 2}}},
+		}
+		if err := c.Add(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g := graphmodel.BuildReferenceGraph(c, []reference.Reference{
+		pathRef("a.md", "b.md"), pathRef("b.md", "c.md"), pathRef("c.md", "d.md"),
+	}, graphmodel.BuildOptions{})
+	m := graphmodel.Analyze(g, c, graphmodel.AnalyzeOptions{})
+	v := emit.BuildView(application.Result{DocumentCount: c.Len(), Metrics: m, Corpus: c})
+
+	b, err := graphjson.JSON(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var typed graphjson.Document
+	if err := json.Unmarshal(b, &typed); err != nil {
+		t.Fatal(err)
+	}
+
+	// Per-node pageRank present and > 0 for every (connected) doc.
+	for _, n := range typed.Nodes {
+		if n.PageRank <= 0 {
+			t.Errorf("node %s pageRank = %v, want > 0 (connected corpus)", n.ID, n.PageRank)
+		}
+	}
+
+	// Top-level pageRank.topDocs block: non-empty, ranked descending.
+	top := typed.PageRank.TopDocs
+	if len(top) == 0 || top[0].ID == "" {
+		t.Fatalf("pageRank.topDocs missing: %+v", top)
+	}
+	for i := 1; i < len(top); i++ {
+		if top[i].Score > top[i-1].Score {
+			t.Errorf("pageRank.topDocs not descending at %d: %v > %v", i, top[i].Score, top[i-1].Score)
+		}
+	}
+
+	// The float renders at the fixed precision (byte-stable determinism), like the
+	// other score blocks.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := raw["pageRank"]; !ok {
+		t.Errorf("graph.json missing top-level pageRank block")
 	}
 }
 

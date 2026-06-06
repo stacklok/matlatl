@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stacklok.com/matlatl/schemas/trails.schema.json",
+  "title": "matlatl trails.json",
+  "description": "Suggested reading orders (associative trails, Bush 1945) emitted by `matlatl emit --out <dir>`. Each trail is a topologically-valid reading order for one weakly-connected component of the doc graph, rooted at the component's most important (highest-PageRank) document and preferring higher-authority docs among the available frontier (ADR 0016). This schema is the published contract; the emitter type internal/infrastructure/emit/trails.Document is kept in lockstep and a test validates emitted bytes against this document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tool", "generatedNote", "trails"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "tool": { "type": "string" },
+    "generatedNote": { "type": "string" },
+    "trails": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["root", "order"],
+        "properties": {
+          "root": {
+            "description": "The cluster's most-important document: its highest-PageRank member (ties broken by smallest DocumentID). This is an IMPORTANCE pointer, NOT the first doc to read — the root may appear anywhere in `order` (a high-importance sink is topologically late).",
+            "type": "string"
+          },
+          "order": {
+            "description": "The full topological reading sequence of the cluster's documents over the SCC condensation, tie-broken by PageRank (higher-PageRank docs are preferred among the currently-available frontier). The `root` may appear anywhere in this list, not necessarily first.",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

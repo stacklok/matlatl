@@ -191,6 +191,23 @@ func Markdown(v emit.View) []byte {
 		b.WriteString("\n")
 	}
 
+	// PageRank importance (ADR 0016): global importance via the random-surfer
+	// stationary distribution (Brin & Page 1998), beside the HITS table.
+	b.WriteString("## Importance (PageRank)\n\n")
+	b.WriteString("_Documents ranked by PageRank: the random-surfer stationary distribution " +
+		"(Brin & Page 1998). High PageRank marks a globally-important doc (ADR 0016)._\n\n")
+	if len(v.TopPageRank) == 0 {
+		b.WriteString("None.\n\n")
+	} else {
+		b.WriteString("| Rank | Document | PageRank |\n| --- | --- | --- |\n")
+		for i, r := range v.TopPageRank {
+			fmt.Fprintf(&b, "| %d | %s | %s |\n", i+1,
+				emit.EscapeTableCell(v.TitleOf(r.ID)),
+				emit.EscapeTableCell(fmt.Sprintf("%.3f", r.Score)))
+		}
+		b.WriteString("\n")
+	}
+
 	// Knowledge gaps.
 	b.WriteString("## Knowledge gaps\n\n")
 	b.WriteString("_Experimental: pairs of disconnected document clusters that may warrant a bridge (ADR 0007)._\n\n")

@@ -53,6 +53,49 @@ func (g *ReferenceGraph) StronglyConnectedComponents() Components {
 	return finalizeComponents(t.sccs)
 }
 
+// Condensation collapses each strongly-connected component to a single
+// representative node (its sorted-min member = the existing Component.ID) and
+// returns the condensation DAG over those representatives (ADR 0016). repOf maps
+// every document to its SCC representative; adj is the condensation out-edge
+// adjacency between DISTINCT representatives, built from the sorted document
+// projection (g.projAdj) so neighbour lists are sorted and de-duplicated and the
+// result is fully deterministic. A self-edge within an SCC (sv == sw) is skipped
+// so the condensation stays acyclic. It takes the SCC list as a parameter
+// (rather than recomputing) so the caller's single Tarjan pass is reused.
+func (g *ReferenceGraph) Condensation(scc Components) (repOf map[identity.DocumentID]identity.DocumentID, adj map[identity.DocumentID][]identity.DocumentID) {
+	repOf = make(map[identity.DocumentID]identity.DocumentID, len(g.documents))
+	for _, comp := range scc { // sorted by ID
+		for _, m := range comp.Members { // sorted
+			repOf[m] = comp.ID
+		}
+	}
+
+	// Accumulate distinct out-edges between representatives using a set so a
+	// multi-edge (many member→member links between two SCCs) collapses to one.
+	outSet := make(map[identity.DocumentID]map[identity.DocumentID]struct{}, len(scc))
+	for _, v := range g.documents { // sorted driver order
+		sv := repOf[v]
+		for _, w := range g.projAdj[v] { // sorted neighbours
+			sw := repOf[w]
+			if sv == sw {
+				continue // intra-SCC edge: skip so the condensation is acyclic
+			}
+			s := outSet[sv]
+			if s == nil {
+				s = make(map[identity.DocumentID]struct{})
+				outSet[sv] = s
+			}
+			s[sw] = struct{}{}
+		}
+	}
+
+	adj = make(map[identity.DocumentID][]identity.DocumentID, len(outSet))
+	for rep, s := range outSet {
+		adj[rep] = sortedKeys(s) // sorted, de-duplicated
+	}
+	return repOf, adj
+}
+
 // --- union-find ---
 
 type unionFind struct {

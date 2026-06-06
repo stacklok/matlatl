@@ -6,16 +6,41 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Agent-experience analyses (P11, [ADR 0016](docs/adr/0016-agent-experience.md)).**
+  Four new signals over the built graph, all deterministic and non-gating:
+  - **PageRank** — the random-surfer global-importance scalar (Brin & Page 1998),
+    computed beside HITS. Surfaced as a per-node `pageRank` and a top-level
+    `pageRank` block in `graph.json`, and an "Importance (PageRank)" section in
+    the human reports.
+  - **Reading-order trails** (Bush 1945) — per-cluster, topologically-valid
+    reading orders that prefer higher-PageRank docs among the available frontier.
+    Shipped in the `emit` bundle as a new **`trails.json`** (schema version 1) and
+    a "Suggested reading order" block in `llms.txt`.
+  - **Backlinks** (Nelson/Xanadu two-way links) — every document now shows what
+    links to it, in `index.md` (a Backlinks column) and `llms.txt` (a
+    "linked from" clause). Derived from the existing edges; no array added to
+    `graph.json`.
+  - **Information scent** (Pirolli & Card 1999) — a new non-gating Info finding
+    `low-scent-anchor` flags links whose anchor text barely previews the target
+    (Jaccard of anchor tokens vs. the target's title below 0.20), with a suggested
+    rename. Anchor/display text is now threaded from the parser through to the
+    graph edge.
+
 ### Changed
 
 - **Machine-artifact schemas bumped (additively).** `graph.json` is now
-  **schema version 5** (per-node `bowtie` / `underLinked` / `deadEnd` /
-  `betweenness` / `isArticulation`; top-level `suggestedLinks`, `articulationPoints`,
-  `bridges`; `summary.navigability` + `summary.betweenness`), and `findings.json`
-  is now **schema version 5** with the new finding kinds (`under-linked`,
-  `dead-end`, `suggested-link`, `articulation-point`, `bridge`). Existing
-  consumers keep working; the new fields are additive. Emitter types and the
-  published JSON Schemas are kept in lockstep and validated in tests.
+  **schema version 6** (adds per-node `pageRank` and a top-level `pageRank` block,
+  on top of v5's per-node `bowtie` / `underLinked` / `deadEnd` / `betweenness` /
+  `isArticulation`; top-level `suggestedLinks`, `articulationPoints`, `bridges`;
+  `summary.navigability` + `summary.betweenness`), and `findings.json` is now
+  **schema version 6** (adds the `low-scent-anchor` kind + `lowScentAnchor`
+  summary count, on top of v5's `under-linked`, `dead-end`, `suggested-link`,
+  `articulation-point`, `bridge`). A new **`trails.json`** (schema version 1) is
+  emitted in the bundle. Existing consumers keep working; the new fields are
+  additive. Emitter types and the published JSON Schemas are kept in lockstep and
+  validated in tests.
 - **`matlatl serve` now speaks MCP over streamable HTTP instead of stdio.** The
   endpoint is served at `/mcp` on `--address` (default `127.0.0.1:8080`); the
   serving context drives a graceful drain of in-flight requests on shutdown.

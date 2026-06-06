@@ -40,6 +40,32 @@ func buildCorpusView(t *testing.T) (emit.View, string) {
 	return emit.BuildView(res), root
 }
 
+// TestLLMSTxt_Backlinks: a curated entry carries a "(linked from: …)" clause
+// naming the documents that link TO it (ADR 0016, Nelson/Xanadu two-way links).
+// In the fixture corpus, docs/guide.md is linked from README.md (among others).
+func TestLLMSTxt_Backlinks(t *testing.T) {
+	v, _ := buildCorpusView(t)
+	out := string(llmstxt.LLMSTxt(v, llmstxt.Options{}))
+
+	// Find the curated line for docs/guide.md and assert its backlinks clause.
+	var guideLine string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "(docs/guide.md)") {
+			guideLine = line
+			break
+		}
+	}
+	if guideLine == "" {
+		t.Fatalf("no curated entry for docs/guide.md:\n%s", out)
+	}
+	if !strings.Contains(guideLine, "(linked from:") {
+		t.Errorf("docs/guide.md entry missing a backlinks clause: %q", guideLine)
+	}
+	if !strings.Contains(guideLine, "README.md") {
+		t.Errorf("docs/guide.md backlinks clause should name README.md as a source: %q", guideLine)
+	}
+}
+
 // TestLLMSTxt_SpecShape asserts the llms.txt spec shape: exactly one H1, a
 // blockquote summary, H2 sections, an Optional section position (if present)
 // LAST among content sections, and a Known-gaps note.
@@ -100,7 +126,17 @@ func TestLLMSTxt_ImportanceOrdering(t *testing.T) {
 func TestLLMSTxt_OnlyReachable(t *testing.T) {
 	v, _ := buildCorpusView(t)
 	out := string(llmstxt.LLMSTxt(v, llmstxt.Options{}))
-	if strings.Contains(out, "(docs/stray.md)") {
+	// Scope the assertion to the curated index (the Documentation/Optional
+	// sections), which is where reachability matters. The "Suggested reading
+	// order" block (ADR 0016) intentionally covers every connected cluster,
+	// including unreachable ones, so we only check the curated prefix here.
+	curated := out
+	if i := strings.Index(out, "## Suggested reading order"); i >= 0 {
+		curated = out[:i]
+	} else if i := strings.Index(out, "## Known gaps"); i >= 0 {
+		curated = out[:i]
+	}
+	if strings.Contains(curated, "(docs/stray.md)") {
 		t.Errorf("unreachable doc docs/stray.md should not be curated:\n%s", out)
 	}
 }

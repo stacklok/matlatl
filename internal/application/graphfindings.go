@@ -56,7 +56,41 @@ func findingsFromMetrics(m *graphmodel.GraphMetrics, threshold int, structureSev
 	for _, b := range m.Critical.Bridges {
 		out = append(out, bridgeFinding(b))
 	}
+	// Information scent (ADR 0016): links whose anchor text gives no preview of the
+	// target. Info; NEVER gates the exit code (even --strict). No count cap (bounded
+	// by the link count) — a deliberate decision documented in ADR 0016.
+	for _, s := range m.Scent {
+		out = append(out, lowScentFinding(s))
+	}
 	return out
+}
+
+// lowScentFinding turns a low-scent link (ADR 0016) into an Info finding: the
+// anchor text shares too few tokens with the target's title to tell a reader or
+// agent where it leads. It is anchored at the SOURCE document and line, names the
+// anchor + its scent score, and suggests renaming the link to the target's
+// title. Always Info; NEVER gates the exit code. The score is formatted at fixed
+// precision so the finding text is byte-stable.
+func lowScentFinding(s graphmodel.ScentFinding) analysis.Finding {
+	return analysis.Finding{
+		ID:       fmt.Sprintf("%s:%s:%d:%s", analysis.LowScentAnchor, s.Source, s.Line, s.Target),
+		Kind:     analysis.LowScentAnchor,
+		Severity: analysis.Info,
+		Location: analysis.Location{Document: s.Source, Line: s.Line},
+		Message: fmt.Sprintf(
+			"the link %q to %q has low information scent (score %.2f): the anchor text barely previews the target (experimental)",
+			s.AnchorText, s.Target, s.Score),
+		SuggestedFix: fmt.Sprintf(
+			"Rename the link anchor to describe the destination, e.g. %q (the target's title), so readers and agents "+
+				"can tell where it leads before following it.", s.Suggestion),
+		Details: map[string]string{
+			DetailSourceDocument:  s.Source.String(),
+			DetailTargetDocument:  s.Target.String(),
+			DetailAnchorText:      s.AnchorText,
+			DetailScentScore:      strconv.FormatFloat(s.Score, 'f', 6, 64),
+			DetailSuggestedAnchor: s.Suggestion,
+		},
+	}
 }
 
 // articulationFinding turns a cut vertex (ADR 0015) into an Info finding: the

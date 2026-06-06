@@ -28,18 +28,21 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    classification, weak + strong components, bow-tie classification relative to
    the giant SCC, HITS hub/authority, knowledge-gap detection, topology-based
    link prediction (the additive `suggested-link` signal), corpus-level
-   navigability metrics, and critical-path analysis (betweenness centrality +
-   articulation points / bridges) → a frozen
+   navigability metrics, critical-path analysis (betweenness centrality +
+   articulation points / bridges), and the agent-experience analyses (PageRank
+   global importance, reading-order trails, information scent) → a frozen
    `AnalysisReport` + `GraphMetrics`
    ([ADR 0007](adr/0007-graph-node-semantics.md),
    [ADR 0012](adr/0012-graduated-structure-and-bowtie.md),
    [ADR 0013](adr/0013-topology-link-prediction.md),
    [ADR 0014](adr/0014-navigability-metrics.md),
-   [ADR 0015](adr/0015-critical-path-analysis.md)). `GraphMetrics`
+   [ADR 0015](adr/0015-critical-path-analysis.md),
+   [ADR 0016](adr/0016-agent-experience.md)). `GraphMetrics`
    carries `Graph`, `Hierarchy`, `RootSet`, `Reachability`, `Degrees`, `Orphans`
    (isolated / dead-end / under-linked / unreachable), `WCC`, `SCC`, `Bowtie`,
-   `HITS`, `Gaps`, `SuggestedLinks`, `Navigability`, `Betweenness`, and
-   `Critical` (articulation points + bridges). Navigability and betweenness reuse
+   `HITS`, `Gaps`, `SuggestedLinks`, `Navigability`, `Betweenness`,
+   `Critical` (articulation points + bridges), and `PageRank` / `Trails` / `Scent`
+   (ADR 0016). Navigability and betweenness reuse
    a shared streaming APSP family in `apsp.go`: `ForEachSourceDistances` runs one
    BFS per source reusing a single distance map, never materializing a V² matrix
    (`O(V·(V+E))` time, `O(V)` transient memory); the sibling `ForEachSourceBFS`
@@ -48,8 +51,15 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    shape. Articulation points / bridges run an **iterative** Tarjan over the
    undirected closure (`articulation.go`), stack-safe like the SCC pass — the
    directed (betweenness) / undirected (cut structure) split mirrors ADR 0014.
+   PageRank (`pagerank.go`) is power iteration over the directed projection with
+   dangling-mass redistribution; trails (`trails.go`) priority-Kahn over the SCC
+   condensation (`Condensation()` in `components.go`) ranked by PageRank; scent
+   (`scent.go`) scores each reference edge's anchor text — threaded from the
+   parser onto `graphmodel.Edge` — against its target's title.
 6. **Emit** — render the report for humans (terminal, Markdown, Mermaid, DOT,
-   index.md) and LLMs (graph.json, llms.txt family, findings.json; JUnit via `check`).
+   index.md with a Backlinks column) and LLMs (graph.json, trails.json, the
+   llms.txt family with a reading-order block + backlinks, findings.json; JUnit
+   via `check`).
 
 ## 2. Layering
 

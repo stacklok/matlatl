@@ -29,7 +29,9 @@ const (
 // value + a suggestedLink summary count).
 // v5 (ADR 0015) adds the critical-path "articulation-point" and "bridge"
 // findings (two new kind values + articulationPoint/bridge summary counts).
-const FindingsSchemaVersion = 5
+// v6 (ADR 0016) adds the information-scent "low-scent-anchor" finding (a new
+// kind value + a lowScentAnchor summary count).
+const FindingsSchemaVersion = 6
 
 // findingsDocument is the stable findings.json schema. Adding fields is
 // backward-compatible; renaming/removing is a breaking change and must bump
@@ -58,6 +60,7 @@ type findingsSum struct {
 	SuggestedLink     int `json:"suggestedLink"`
 	ArticulationPoint int `json:"articulationPoint"`
 	Bridge            int `json:"bridge"`
+	LowScentAnchor    int `json:"lowScentAnchor"`
 }
 
 type findingJSON struct {
@@ -125,6 +128,11 @@ var remediationByKind = map[string]string{
 		"edge): it is the only connection between two parts of the corpus, so losing it disconnects them. This " +
 		"is an experimental, topology-based resilience hint, not an error. Add another navigational path between " +
 		"these two clusters so the single link is not a single point of failure.",
+	analysis.LowScentAnchor.String(): "The link's anchor text (`details.anchorText`) shares too few meaningful words with the " +
+		"target document's title to preview where it leads (Jaccard `details.scentScore`); generic labels like " +
+		"\"click here\" or \"read more\" give a reader or agent weak information scent (Pirolli & Card 1999). This " +
+		"is an experimental discoverability hint, not an error. Rename the anchor in `details.sourceDocument` at " +
+		"`line` to describe the destination — `details.suggestedAnchor` holds the target's title as a starting point.",
 }
 
 // kindPresentationOrder is the single source of truth for the order finding
@@ -136,7 +144,7 @@ var kindPresentationOrder = []analysis.FindingKind{
 	analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
 	analysis.Orphan, analysis.Unreachable, analysis.UnderLinked, analysis.DeadEnd,
 	analysis.KnowledgeGap, analysis.SuggestedLink, analysis.DeadLink,
-	analysis.ArticulationPoint, analysis.Bridge,
+	analysis.ArticulationPoint, analysis.Bridge, analysis.LowScentAnchor,
 }
 
 // remediationGuideFor returns the remediation entries for exactly the kinds
@@ -173,6 +181,7 @@ func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
 			SuggestedLink:     report.CountByKind(analysis.SuggestedLink),
 			ArticulationPoint: report.CountByKind(analysis.ArticulationPoint),
 			Bridge:            report.CountByKind(analysis.Bridge),
+			LowScentAnchor:    report.CountByKind(analysis.LowScentAnchor),
 		},
 		Findings: make([]findingJSON, 0, report.Len()),
 	}

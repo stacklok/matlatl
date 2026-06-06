@@ -488,12 +488,15 @@ func extractReferences(root ast.Node, src []byte, origin identity.DocumentID, li
 		}
 		switch node := n.(type) {
 		case *ast.Link:
-			refs = append(refs, makeRef(string(node.Destination), reference.RelativeLink, node, src, origin, lines))
+			// The link label ([label](dest)) is the inline children's text.
+			refs = append(refs, makeRef(string(node.Destination), string(textOf(node, src)), reference.RelativeLink, node, src, origin, lines))
 		case *ast.Image:
-			refs = append(refs, makeRef(string(node.Destination), reference.ImageEmbed, node, src, origin, lines))
+			// An image's display text is its alt text (the inline children's text).
+			refs = append(refs, makeRef(string(node.Destination), string(textOf(node, src)), reference.ImageEmbed, node, src, origin, lines))
 		case *ast.AutoLink:
-			// <https://...> / bare-URL autolinks are always external.
-			refs = append(refs, makeRef(string(node.URL(src)), reference.External, node, src, origin, lines))
+			// <https://...> / bare-URL autolinks are always external; their display
+			// text is the URL itself.
+			refs = append(refs, makeRef(string(node.URL(src)), string(node.URL(src)), reference.External, node, src, origin, lines))
 		case *wikilinkNode:
 			refs = append(refs, makeWikilinkRef(node, origin, lines))
 		}
@@ -514,18 +517,25 @@ func makeWikilinkRef(n *wikilinkNode, origin identity.DocumentID, lines *lineInd
 	case n.Target == "" && n.Fragment != "":
 		typ = reference.Anchor
 	}
+	// Display text: the wikilink alias ([[t|alias]]) when present, else the bare
+	// target text ([[t]]) so the link still carries a scent-able label (ADR 0016).
+	anchor := n.Display
+	if anchor == "" {
+		anchor = n.Target
+	}
 	return reference.RawReference{
-		Origin:    origin,
-		RawTarget: n.Target,
-		Fragment:  n.Fragment,
-		Type:      typ,
-		Line:      lines.lineAt(n.Offset),
+		Origin:     origin,
+		RawTarget:  n.Target,
+		Fragment:   n.Fragment,
+		Type:       typ,
+		Line:       lines.lineAt(n.Offset),
+		AnchorText: anchor,
 	}
 }
 
 // makeRef builds a RawReference, classifying target/fragment and resolving the
 // source line of the inline node.
-func makeRef(dest string, defType reference.LinkType, n ast.Node, src []byte, origin identity.DocumentID, lines *lineIndex) reference.RawReference {
+func makeRef(dest, anchorText string, defType reference.LinkType, n ast.Node, src []byte, origin identity.DocumentID, lines *lineIndex) reference.RawReference {
 	target, fragment := splitFragment(dest)
 	typ := defType
 	switch {
@@ -536,11 +546,12 @@ func makeRef(dest string, defType reference.LinkType, n ast.Node, src []byte, or
 		typ = reference.Anchor
 	}
 	return reference.RawReference{
-		Origin:    origin,
-		RawTarget: target,
-		Fragment:  fragment,
-		Type:      typ,
-		Line:      lines.lineAt(inlineOffset(n, src)),
+		Origin:     origin,
+		RawTarget:  target,
+		Fragment:   fragment,
+		Type:       typ,
+		Line:       lines.lineAt(inlineOffset(n, src)),
+		AnchorText: strings.TrimSpace(anchorText),
 	}
 }
 

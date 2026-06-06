@@ -96,6 +96,14 @@ const (
 	// bridge edge (the finding is anchored at the canonical-min endpoint).
 	DetailBetweenness    = "betweenness"
 	DetailBridgeEndpoint = "bridgeEndpoint"
+	// Low-scent-anchor detail keys (ADR 0016). DetailAnchorText is the link label
+	// as written; DetailScentScore the Jaccard similarity to the target title
+	// (fixed precision); DetailSuggestedAnchor the recommended replacement (the
+	// target's title); DetailSourceDocument / DetailTargetDocument the endpoints.
+	DetailAnchorText      = "anchorText"
+	DetailScentScore      = "scentScore"
+	DetailSuggestedAnchor = "suggestedAnchor"
+	DetailSourceDocument  = "sourceDocument"
 )
 
 // findingsFromReferences turns resolved references into analysis Findings. Only

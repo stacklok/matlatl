@@ -34,6 +34,9 @@ type View struct {
 	BrokenLinks   []analysis.Finding
 	BrokenAnchors []analysis.Finding
 	Ambiguous     []analysis.Finding
+	// LowScent are the low-scent-anchor findings (ADR 0016), already sorted. Info;
+	// they never gate the exit code.
+	LowScent []analysis.Finding
 
 	// Orphans (isolated) and Unreachable are the distinct ADR-0007 classes,
 	// sorted by DocumentID. Intentional orphans are already suppressed upstream.
@@ -49,6 +52,15 @@ type View struct {
 	// TopHubs / TopAuthorities are HITS rankings (descending, tie-break by ID).
 	TopHubs        []graphmodel.RankedDocument
 	TopAuthorities []graphmodel.RankedDocument
+
+	// TopPageRank are the documents ranked by PageRank (ADR 0016): global
+	// importance via the random-surfer stationary distribution, descending,
+	// tie-broken by ID. Pure data, surfaced in graph.json and the human report.
+	TopPageRank []graphmodel.RankedDocument
+
+	// Trails are the per-weak-component suggested reading orders (ADR 0016),
+	// sorted by Root. Surfaced in trails.json and the llms.txt reading-order block.
+	Trails []graphmodel.Trail
 
 	// TopBetweenness are the load-bearing docs ranked by betweenness centrality
 	// (ADR 0015), descending, tie-broken by ID. ArticulationPoints (cut vertices)
@@ -132,6 +144,9 @@ type DocView struct {
 	// load-bearing it is as a connector. IsArticulation marks it a cut vertex.
 	Betweenness    float64
 	IsArticulation bool
+	// PageRank is the document's PageRank score (ADR 0016): global importance via
+	// the random-surfer stationary distribution.
+	PageRank float64
 }
 
 // topN bounds how many hubs/authorities the human reports surface.
@@ -163,6 +178,8 @@ func BuildView(res application.Result) View {
 	v.Navigability = m.Navigability
 	v.TopHubs = m.HITS.TopHubs(topN)
 	v.TopAuthorities = m.HITS.TopAuthorities(topN)
+	v.TopPageRank = m.PageRank.Top(topN)
+	v.Trails = slices.Clone(m.Trails)
 	v.TopBetweenness = m.Betweenness.TopBetweenness(topN)
 	v.ArticulationPoints = slices.Clone(m.Critical.ArticulationPoints)
 	v.Bridges = slices.Clone(m.Critical.Bridges)
@@ -185,6 +202,7 @@ func BuildView(res application.Result) View {
 			Bowtie:         m.Bowtie.BucketOf(doc.ID).String(),
 			Betweenness:    m.Betweenness.Score(doc.ID),
 			IsArticulation: m.Critical.IsArticulation(doc.ID),
+			PageRank:       m.PageRank.Score(doc.ID),
 		}
 		if _, ok := intentional[doc.ID]; ok {
 			dv.Intentional = true
@@ -202,6 +220,11 @@ func BuildView(res application.Result) View {
 				v.BrokenAnchors = append(v.BrokenAnchors, f)
 			case analysis.Ambiguous:
 				v.Ambiguous = append(v.Ambiguous, f)
+			case analysis.LowScentAnchor:
+				// Low-scent links (ADR 0016) are carried as findings for the machine
+				// artifacts (findings.json) and surfaced via the metrics Scent slice for
+				// the human report; not a dedicated finding-list slice here.
+				v.LowScent = append(v.LowScent, f)
 			case analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap,
 				analysis.UnderLinked, analysis.DeadEnd, analysis.SuggestedLink,
 				analysis.ArticulationPoint, analysis.Bridge:
@@ -249,6 +272,19 @@ func (v View) Document(id identity.DocumentID) (*corpus.Document, bool) {
 	return v.corpus.Get(id)
 }
 
+// Backlinks returns the documents that navigationally link TO id (ADR 0016),
+// sorted by DocumentID (= path) and self-excluded — exactly the document
+// projection's in-neighbours. Empty when nothing links to id or metrics are
+// absent. This realizes Nelson's Xanadu two-way links: every page can show what
+// points at it, not just where it points. Derived from the existing projection
+// (no redundant graph.json array).
+func (v View) Backlinks(id identity.DocumentID) []identity.DocumentID {
+	if v.Metrics == nil || v.Metrics.Graph == nil {
+		return nil
+	}
+	return v.Metrics.Graph.ProjectionIn(id)
+}
+
 // TitleOf returns the best-effort display title for id (or the id itself).
 func (v View) TitleOf(id identity.DocumentID) string {
 	if d, ok := v.Doc(id); ok && d.Title != "" {
@@ -281,42 +317,14 @@ func countsFromResult(res application.Result, m *graphmodel.GraphMetrics) Counts
 // titleAndDescription derives a document's display title and description with
 // the documented fallbacks: title := front-matter title → first heading →
 // DocumentID; description := front-matter description → first heading text → "".
+// Title resolution goes through the domain corpus.Document.Title so the emit
+// presentation and the information-scent analysis cannot drift (ADR 0016).
 func titleAndDescription(doc *corpus.Document) (title, description string) {
-	first := firstHeadingText(doc)
-	title = doc.FrontMatter.Title
-	if title == "" {
-		title = first
-	}
-	if title == "" {
-		title = doc.ID.String()
-	}
+	first := doc.FirstHeadingText()
+	title = doc.Title()
 	description = doc.FrontMatter.Description
 	if description == "" {
 		description = first
 	}
 	return title, description
-}
-
-// firstHeadingText returns the text of the first (document-order) heading with
-// non-empty text, or "" if the document has no headings.
-func firstHeadingText(doc *corpus.Document) string {
-	if doc.Root == nil {
-		return ""
-	}
-	var found string
-	var walk func(s *corpus.Section) bool
-	walk = func(s *corpus.Section) bool {
-		for _, child := range s.Children {
-			if child.Text != "" {
-				found = child.Text
-				return true
-			}
-			if walk(child) {
-				return true
-			}
-		}
-		return false
-	}
-	walk(doc.Root)
-	return found
 }

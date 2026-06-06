@@ -92,5 +92,12 @@ Top authorities (linked to by many docs)
   0.133  Downstream Branch
   0.000  Island One
 
+Importance (PageRank) (global random-surfer importance)
+  0.164  Island One
+  0.164  Island Two
+  0.094  User Guide
+  0.089  Cycle Alpha
+  0.089  Cycle Beta
+
 Knowledge gaps: 3 disconnected cluster pair(s) that may warrant a bridge (experimental)
 Suggested links: 1 topology-based suggestion(s) (experimental)

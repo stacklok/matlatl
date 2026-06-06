@@ -10,6 +10,7 @@ import (
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
 	idxemit "github.com/stacklok/matlatl/internal/infrastructure/emit/index"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/llmstxt"
+	trailsemit "github.com/stacklok/matlatl/internal/infrastructure/emit/trails"
 	"github.com/stacklok/matlatl/internal/platform"
 )
 
@@ -28,7 +29,8 @@ func newEmitCommand() *cobra.Command {
 			"run: index.md (navigation), llms.txt (curated importance-ordered index), " +
 			"llms-full.txt (concatenated clean bodies of reachable docs), llms-small.txt " +
 			"(hubs + getting-started for tight context windows), graph.json (the machine-" +
-			"queryable manifest), and findings.json (actionable, agent-ready findings).\n\n" +
+			"queryable manifest), trails.json (suggested reading orders), and findings.json " +
+			"(actionable, agent-ready findings).\n\n" +
 			"All artifacts are deterministic and written under --out (required) through " +
 			"the path-safety guard (ADR 0003).",
 		Args:          usageArgs(cobra.MaximumNArgs(1)),
@@ -80,6 +82,10 @@ func bundleArtifacts(view emit.View, res application.Result, rootPath string, op
 	if err != nil {
 		return nil, err
 	}
+	trailsJSON, err := trailsemit.JSON(view)
+	if err != nil {
+		return nil, err
+	}
 	findingsJSON, err := emit.FindingsJSON(res.Report)
 	if err != nil {
 		return nil, err
@@ -91,6 +97,7 @@ func bundleArtifacts(view emit.View, res application.Result, rootPath string, op
 		{Name: llmstxt.LLMSFullTxtName, Content: llmstxt.LLMSFull(view, reader, opts)},
 		{Name: llmstxt.LLMSSmallTxtName, Content: llmstxt.LLMSSmall(view, reader, opts)},
 		{Name: graphjson.GraphJSONName, Content: graphJSON},
+		{Name: trailsemit.TrailsJSONName, Content: trailsJSON},
 		{Name: emit.FindingsJSONName, Content: findingsJSON},
 	}, nil
 }

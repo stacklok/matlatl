@@ -34,13 +34,18 @@ From those it surfaces:
   connectors most navigation flows through) and the **single points of failure**
   (articulation points and bridges, the docs and links whose removal fragments
   the corpus).
+- **Importance & navigation** — **PageRank** global importance (beside HITS),
+  **reading-order trails** (a suggested path through each cluster), **backlinks**
+  (what links to each doc), and **low-scent anchors** (links whose text — a
+  generic "click here" — barely previews where they lead).
 
 It then renders the result for three audiences:
 
 - **Humans** — a colorized terminal report, a committable Markdown report, Mermaid and
-  Graphviz/DOT diagrams, and a navigable `index.md`.
-- **LLMs (reading)** — a compact, queryable `graph.json`, an `llms.txt` family, and a
-  `findings.json` where every finding is a self-contained, actionable fix instruction.
+  Graphviz/DOT diagrams, and a navigable `index.md` (with backlinks).
+- **LLMs (reading)** — a compact, queryable `graph.json`, a `trails.json` reading
+  order, an `llms.txt` family, and a `findings.json` where every finding is a
+  self-contained, actionable fix instruction.
 - **Acting agents** — `fix-prompt` emits a self-contained, agent-agnostic prompt
   that turns the findings into fixes: `matlatl fix-prompt . | claude -p`.
 
@@ -333,10 +338,12 @@ the **graduated structure ladder + bow-tie** classification
 ([ADR 0012](docs/adr/0012-graduated-structure-and-bowtie.md)), **topology-based
 link prediction** ([ADR 0013](docs/adr/0013-topology-link-prediction.md)),
 corpus-level **navigability metrics**
-([ADR 0014](docs/adr/0014-navigability-metrics.md)), and **critical-path
+([ADR 0014](docs/adr/0014-navigability-metrics.md)), **critical-path
 analysis** — betweenness + articulation points / bridges
-([ADR 0015](docs/adr/0015-critical-path-analysis.md)) — surfaced over the same
-report, `graph.json`, `llms.txt`, and MCP. See
+([ADR 0015](docs/adr/0015-critical-path-analysis.md)), and the
+**agent-experience** analyses — PageRank, reading-order trails, backlinks, and
+information scent ([ADR 0016](docs/adr/0016-agent-experience.md)) — surfaced over
+the same report, `graph.json`, `trails.json`, `llms.txt`, and MCP. See
 [`docs/architecture.md`](docs/architecture.md) and the [ADRs](docs/adr/).
 
 ## Documentation
@@ -345,7 +352,7 @@ report, `graph.json`, `llms.txt`, and MCP. See
 - [Developer guide](docs/dev-guide.md) — layout, rules, testing, how to contribute
 - [Architecture](docs/architecture.md)
 - [Architecture Decision Records](docs/adr/)
-- [graph.json schema](docs/schemas/graph.schema.json) · [findings.json schema](docs/schemas/findings.schema.json)
+- [graph.json schema](docs/schemas/graph.schema.json) · [findings.json schema](docs/schemas/findings.schema.json) · [trails.json schema](docs/schemas/trails.schema.json)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Agent guide](AGENTS.md)
 
 ## Contributing
