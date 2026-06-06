@@ -105,16 +105,29 @@ type OrphanReport struct {
 }
 
 // DetectOrphans computes the orphan/unreachable classification. Isolated orphans
-// are independent of the root set (degree-based) and always computed; unreachable
-// is only computed when reachability is determinate. Intentional orphans are
-// excluded from both lists. Results are sorted.
-func (g *ReferenceGraph) DetectOrphans(c *corpus.Corpus, deg DegreeIndex, reach Reachability) OrphanReport {
+// are degree-based (in==0 && out==0) and always computed; unreachable is only
+// computed when reachability is determinate. Two kinds of node are exempt from
+// the isolated-orphan finding: intentional orphans (front-matter
+// `matlatl: orphan-intentional`) and root-set members (configured OR convention)
+// — a declared entry point with no inbound links is its purpose, not a defect
+// (ADR 0007). Because a root with out-edges is already non-isolated by degree,
+// the root exemption only affects EDGELESS roots (the agent-doc case). Results
+// are sorted.
+func (g *ReferenceGraph) DetectOrphans(c *corpus.Corpus, rootSet RootSet, deg DegreeIndex, reach Reachability) OrphanReport {
 	intentional := identity.IDSet(IntentionalOrphans(c))
+
+	// One exemption set for the isolated finding: intentional orphans + roots.
+	// A root with out-degree > 0 is already non-isolated, so in practice this
+	// only suppresses edgeless roots.
+	exemptIsolated := identity.IDSet(rootSet.Roots)
+	for id := range intentional {
+		exemptIsolated[id] = struct{}{}
+	}
 
 	var isolated []identity.DocumentID
 	isolatedSet := make(map[identity.DocumentID]struct{})
 	for _, id := range g.documents {
-		if _, skip := intentional[id]; skip {
+		if _, skip := exemptIsolated[id]; skip {
 			continue
 		}
 		if deg[id].In == 0 && deg[id].Out == 0 {

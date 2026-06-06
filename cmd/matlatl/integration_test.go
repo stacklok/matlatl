@@ -590,6 +590,93 @@ func TestIntegration_RootFlagChangesReachability(t *testing.T) {
 	}
 }
 
+// TestIntegration_SkillRootAndEdgelessRoot proves the ADR-0007 root semantics
+// end-to-end via graph.json: (a) a SKILL.md that links to references/x.md forms a
+// reachable cluster (SKILL.md is an auto-root by filename, so neither it nor its
+// target is unreachable), and (b) an edgeless agent-style doc is reported isolated
+// by default but is exempt once designated a root with --root.
+func TestIntegration_SkillRootAndEdgelessRoot(t *testing.T) {
+	dir := t.TempDir()
+	writeFile := func(name, body string) {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// SKILL.md (auto-root by filename) → references/x.md cluster.
+	writeFile("SKILL.md", "# Skill\n\nSee [x](references/x.md).\n")
+	writeFile("references/x.md", "# X\n\nReference body.\n")
+	// An edgeless agent-style doc: no inbound, no outbound links.
+	writeFile("agent.md", "# Agent\n\nStandalone entry point, links to nothing.\n")
+
+	graphJSON := func(extraArgs ...string) struct {
+		RootSet     []string `json:"rootSet"`
+		Orphans     []string `json:"orphans"`
+		Unreachable []string `json:"unreachable"`
+	} {
+		outDir := t.TempDir()
+		args := append([]string{"graph", dir, "--format", "json", "--out", outDir}, extraArgs...)
+		var out, errOut bytes.Buffer
+		if code := runArgs(context.Background(), args, &out, &errOut); code != platform.ExitOK {
+			t.Fatalf("graph json code = %v (stderr=%q)", code, errOut.String())
+		}
+		b, err := os.ReadFile(filepath.Join(outDir, "graph.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			RootSet     []string `json:"rootSet"`
+			Orphans     []string `json:"orphans"`
+			Unreachable []string `json:"unreachable"`
+		}
+		if err := json.Unmarshal(b, &doc); err != nil {
+			t.Fatalf("graph.json parse: %v", err)
+		}
+		return doc
+	}
+
+	// Default run: SKILL.md is an auto-root, its cluster is reachable.
+	bare := graphJSON()
+	if !strings.Contains(strings.Join(bare.RootSet, ","), "SKILL.md") {
+		t.Errorf("SKILL.md should be an auto-root; rootSet = %v", bare.RootSet)
+	}
+	for _, d := range bare.Unreachable {
+		if d == "SKILL.md" || d == "references/x.md" {
+			t.Errorf("SKILL.md cluster must be reachable, not unreachable; unreachable = %v", bare.Unreachable)
+		}
+	}
+	for _, d := range bare.Orphans {
+		if d == "SKILL.md" || d == "references/x.md" {
+			t.Errorf("SKILL.md cluster has edges; must not be isolated; orphans = %v", bare.Orphans)
+		}
+	}
+	// The edgeless agent doc IS isolated by default (general case still fires).
+	if !slicesContains(bare.Orphans, "agent.md") {
+		t.Errorf("edgeless agent.md should be isolated by default; orphans = %v", bare.Orphans)
+	}
+
+	// Designate agent.md a root: it must now be exempt from the isolated finding.
+	rooted := graphJSON("--root", "agent.md")
+	if slicesContains(rooted.Orphans, "agent.md") {
+		t.Errorf("with --root agent.md, the edgeless root must be exempt from isolated; orphans = %v", rooted.Orphans)
+	}
+	if slicesContains(rooted.Unreachable, "agent.md") {
+		t.Errorf("a root must never be unreachable; unreachable = %v", rooted.Unreachable)
+	}
+}
+
+func slicesContains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
+}
+
 // TestIntegration_EmitRequiresOut: `emit` without --out is a usage error.
 func TestIntegration_EmitRequiresOut(t *testing.T) {
 	var out, errOut bytes.Buffer

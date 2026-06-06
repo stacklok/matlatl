@@ -46,7 +46,7 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 | `--out <dir>` | Write artifacts into `<dir>` (paths are sanitized to stay inside it). |
 | `--strict` | Promote orphan/ambiguous **warnings** to **failures** (affects `check`'s exit code). |
 | `--check-external` | Opt in to HTTP liveness checks of external links (off by default; see below). |
-| `--root <glob>` | Add reachability root(s) on top of the autodetected ones (`README.md`/`index.md`/`type: index`). Repeatable and/or comma-separated; matched against document paths with `path.Match` (a single `*` does **not** cross `/`, and `**` is unsupported — e.g. `docs/*.md`, not `docs/**`). |
+| `--root <glob>` | Add reachability root(s) on top of the autodetected ones (`README.md`/`index.md`/`SKILL.md` by filename, plus `type: index`). Repeatable and/or comma-separated; matched against document paths with `path.Match` (a single `*` does **not** cross `/`, and `**` is unsupported — e.g. `docs/*.md`, not `docs/**`). |
 | `--no-color` | Disable ANSI color. `NO_COLOR` env and non-TTY output are also honored. |
 | `--quiet` / `--verbose` | Less / more output. |
 | `--resolution <policy>` | (`check`) `exact` \| `longest-suffix` (default) \| `basename`. |
@@ -60,8 +60,13 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
   refuses to guess and shows you the candidates.
 - **Orphans** — documents with **no** inbound or outbound links (truly isolated).
 - **Unreachable** — documents you can't reach by following links from a root
-  (`README.md`, `index.md`, or a `type: index` front-matter doc). They differ from
-  orphans: an unreachable doc may link outward but nothing leads *to* it.
+  (`README.md`, `index.md`, `SKILL.md`, or a `type: index` front-matter doc).
+  They differ from orphans: an unreachable doc may link outward but nothing leads
+  *to* it. **Any root** — whether configured with `--root` or detected by a
+  convention (`README.md`/`index.md`/`SKILL.md`/`type: index`) — is itself exempt
+  from both the unreachable and the orphan findings: a declared entry point with
+  no inbound links is its purpose, not a defect
+  ([ADR 0010](adr/0010-agent-scaffolding-roots-and-default-ignores.md)).
 - **Knowledge gaps** — clusters of docs that are disconnected from each other.
 
 Orphans and unreachable docs come with **different** remediation hints, because
@@ -155,10 +160,12 @@ runs until interrupted and drains in-flight requests on shutdown.
 
 Create a `.matlatlignore` (gitignore syntax). `.git`, `node_modules`, and
 `vendor` are ignored by default (matched by directory name, anywhere in the
-tree), as is `.claude/worktrees/` (Claude Code agent worktrees — each is a full
-copy of the repo, which would otherwise multiply the corpus many times over;
-matched only at the scan root, so `.claude/rules/` and the rest of `.claude/`
-stay in the graph).
+tree). `.claude/worktrees/` (Claude Code agent worktrees — each is a full copy of
+the repo, which would otherwise multiply the corpus many times over) and
+`.claude/plans/` (transient scratch plans) are ignored too, matched only at the
+scan root — so `.claude/rules/`, `.claude/skills/`, and the rest of `.claude/`
+stay in the graph
+([ADR 0010](adr/0010-agent-scaffolding-roots-and-default-ignores.md)).
 
 ## Checking external links (opt-in)
 
@@ -171,11 +178,11 @@ re-checks redirects against the resolved IP) — see
 ## Troubleshooting
 
 **"reachability indeterminate (no root found)"** — matlatl prints this notice
-when it can't find any reachability root: no `README.md`/`index.md` at any depth
-and no `type: index` front-matter doc, and you didn't pass `--root`. Rather than
-flag *every* document as unreachable (which would be noise), matlatl skips
-reachability analysis entirely and says so. Orphan (isolated) detection still
-runs. Fix it by adding a `README.md`/`index.md`, marking an entry doc with
+when it can't find any reachability root: no `README.md`/`index.md`/`SKILL.md` at
+any depth and no `type: index` front-matter doc, and you didn't pass `--root`.
+Rather than flag *every* document as unreachable (which would be noise), matlatl
+skips reachability analysis entirely and says so. Orphan (isolated) detection
+still runs. Fix it by adding a `README.md`/`index.md`, marking an entry doc with
 `type: index` front matter, or passing an explicit `--root <glob>`. This notice
 alone never fails `check` (per [ADR 0005](adr/0005-exit-code-contract.md)).
 

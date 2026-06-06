@@ -12,6 +12,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   endpoint is served at `/mcp` on `--address` (default `127.0.0.1:8080`); the
   serving context drives a graceful drain of in-flight requests on shutdown.
   Containerized deployments should bind `--address 0.0.0.0:PORT`.
+- **Reachability roots are now exempt from the isolated-orphan finding** as well
+  as from the unreachable finding. This applies to **any root — configured via
+  `--root` or detected by a convention** (`README.md`/`index.md`/`SKILL.md` or
+  `type: index`): a declared entry point with no inbound links is its purpose, not
+  a defect. In practice this only affects edgeless roots (a root with outbound
+  links is already non-isolated). The change softens the `check` gate
+  monotonically (it can only remove findings, never newly fail a build). See
+  [ADR 0010](docs/adr/0010-agent-scaffolding-roots-and-default-ignores.md).
 - **Renamed the project from `doctopus` to `matlatl`** (Nahuatl for *net*; the
   tool casts a net over a repo's markdown). The module path is now
   `github.com/stacklok/matlatl`, the binary and command are `matlatl`, the ignore
@@ -28,8 +36,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `fix-prompt.md`. It is a generator, not a gate (always exits 0). See
   [ADR 0009](docs/adr/0009-fix-prompt-acting-agents.md).
 - Persistent `--root <glob>` flag to designate extra reachability roots on top of
-  the autodetected ones (`README.md`/`index.md`/`type: index`), feeding
+  the autodetected ones (`README.md`/`index.md`/`SKILL.md`/`type: index`), feeding
   `graphmodel.ResolveRootSet` (ADR 0007).
+- **`SKILL.md` is now an auto-detected reachability root** by filename
+  (case-insensitive), peer to `README.md`/`index.md` — the tool-agnostic
+  agent-skills manifest convention. Only the *filename* is matched; no directory
+  path (e.g. `.claude/...`) is baked in (those remain per-repo config). See
+  [ADR 0010](docs/adr/0010-agent-scaffolding-roots-and-default-ignores.md).
+- **`.claude/plans/` is now default-ignored** (scan-root-relative), alongside
+  `.claude/worktrees/` — transient agent scratch that would otherwise add noise.
+  `.claude/agents`, `.claude/agent-memory`, `.claude/skills`, and `.claude/rules`
+  are deliberately left in the corpus. See
+  [ADR 0010](docs/adr/0010-agent-scaffolding-roots-and-default-ignores.md).
 - Published `docs/schemas/findings.schema.json` (schema version 2) for the
   `findings.json` artifact, validated against emitted output in tests.
 - `LICENSE` (Apache-2.0), `CONTRIBUTING.md`, `AGENTS.md`, and this changelog.

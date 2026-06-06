@@ -59,7 +59,7 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 	rootSet := ResolveRootSet(c, opts.RootGlobs)
 	reach := g.ComputeReachability(rootSet)
 	deg := g.BuildDegreeIndex()
-	orphans := g.DetectOrphans(c, deg, reach)
+	orphans := g.DetectOrphans(c, rootSet, deg, reach)
 	wcc := g.WeaklyConnectedComponents()
 	scc := g.StronglyConnectedComponents()
 	hits := g.ComputeHITS(opts.Hits)

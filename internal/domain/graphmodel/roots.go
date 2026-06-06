@@ -21,6 +21,13 @@ const (
 	FMTypeIndex = "index"
 )
 
+// skillManifestBasename is the agent-skills manifest filename (the
+// SKILL.md convention). It is auto-detected as a root by FILENAME, peer to
+// README.md/index.md and matched case-insensitively. It is deliberately a
+// FILENAME convention only: no directory/path (e.g. `.claude/...`) is baked in
+// here — path conventions are per-repo config (ADR 0007).
+const skillManifestBasename = "skill.md"
+
 // RootSet is the resolved set of reachability roots plus whether it is
 // indeterminate (empty). When Indeterminate is true, reachability analysis is
 // skipped and a notice is emitted (ADR 0005/0007); orphan detection still runs.
@@ -34,8 +41,9 @@ type RootSet struct {
 }
 
 // ResolveRootSet computes the root set from configured globs plus conventions
-// (ADR 0007): any README.md/index.md at any depth, and any doc with front matter
-// `type: index`. configuredGlobs are matched against DocumentIDs with
+// (ADR 0007): any README.md/index.md/SKILL.md at any depth (filename
+// conventions, case-insensitive), and any doc with front matter `type: index`.
+// configuredGlobs are matched against DocumentIDs with
 // path.Match (slash paths; the single-`*` wildcard does NOT cross `/`, and
 // `**` is not supported). A malformed glob is collected in BadGlobs (it matches
 // nothing) rather than silently discarded. The result is sorted and
@@ -61,6 +69,10 @@ func ResolveRootSet(c *corpus.Corpus, configuredGlobs []string) RootSet {
 			set[id] = struct{}{}
 			continue
 		}
+		if isSkillManifest(id) {
+			set[id] = struct{}{}
+			continue
+		}
 		if isIndexType(doc) {
 			set[id] = struct{}{}
 			continue
@@ -80,6 +92,12 @@ func ResolveRootSet(c *corpus.Corpus, configuredGlobs []string) RootSet {
 	slices.Sort(roots)
 	slices.Sort(badGlobs)
 	return RootSet{Roots: roots, Indeterminate: len(roots) == 0, BadGlobs: badGlobs}
+}
+
+// isSkillManifest reports whether a document's filename is the agent-skills
+// manifest (SKILL.md), matched case-insensitively by base name only (ADR 0007).
+func isSkillManifest(id identity.DocumentID) bool {
+	return strings.EqualFold(path.Base(id.String()), skillManifestBasename)
 }
 
 // isIndexType reports whether a document declares `type: index` in front matter

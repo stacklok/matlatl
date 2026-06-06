@@ -40,8 +40,21 @@ const (
 	maxIgnoreBytes int64 = 1 << 20
 )
 
-// defaultIgnoredDirs are directory names skipped wholesale during the walk.
+// defaultIgnoredDirs are directory base names skipped wholesale during the walk,
+// matched anywhere in the tree.
 var defaultIgnoredDirs = []string{".git", "node_modules", "vendor"}
+
+// defaultIgnoredRelPaths are scan-root-relative directory paths skipped wholesale
+// during the walk. Unlike defaultIgnoredDirs (matched by base name anywhere),
+// these match one specific location so the skip stays scoped. `.claude/worktrees`
+// holds Claude Code agent worktrees — each a FULL copy of the repository — which
+// would otherwise multiply the corpus many times over; `.claude/plans` holds
+// transient scratch plans (ADR 0003). The line is drawn deliberately narrow:
+// other `.claude/*` subtrees (agents, agent-memory, skills, rules) are NOT
+// default-ignored — those are judgment calls deferred to per-repo config or are
+// real docs/graphs handled by the roots mechanism. Slash-separated to match
+// relForMatch output.
+var defaultIgnoredRelPaths = []string{".claude/plans", ".claude/worktrees"}
 
 // Config tunes a Scanner. The zero value is not valid; use New, which fills in
 // safe defaults for any unset field.
@@ -284,6 +297,9 @@ func (s *Scanner) loadIgnore(realRoot string) *ignore.GitIgnore {
 // shouldSkipDir reports whether a directory should be pruned from the walk.
 func (s *Scanner) shouldSkipDir(realRoot, path, name, absOut string, matcher *ignore.GitIgnore) bool {
 	if slices.Contains(defaultIgnoredDirs, name) {
+		return true
+	}
+	if rel, ok := relForMatch(realRoot, path); ok && slices.Contains(defaultIgnoredRelPaths, rel) {
 		return true
 	}
 	if absOut != "" {

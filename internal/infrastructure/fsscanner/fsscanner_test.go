@@ -97,6 +97,62 @@ func TestScan_DefaultIgnoresAndIgnoreFile(t *testing.T) {
 	}
 }
 
+// TestScan_DefaultIgnoresClaudeWorktrees asserts the scoped default skip for
+// `.claude/worktrees` (Claude Code agent worktrees, each a full repo copy) while
+// keeping the rest of `.claude` — e.g. `.claude/rules` — in the corpus, since
+// docs commonly link into the rules.
+func TestScan_DefaultIgnoresClaudeWorktrees(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "README.md"), "# Root")
+	writeFile(t, filepath.Join(root, ".claude", "rules", "go-style.md"), "# Rules")
+	writeFile(t, filepath.Join(root, ".claude", "worktrees", "agent-1", "README.md"), "# Copy")
+	writeFile(t, filepath.Join(root, ".claude", "worktrees", "agent-1", "docs", "guide.md"), "# Copy guide")
+
+	got := ids(scan(t, root, Config{}))
+	want := []string{".claude/rules/go-style.md", "README.md"}
+	if len(got) != len(want) {
+		t.Fatalf("ids = %v, want %v (worktrees skipped, rules kept)", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("ids = %v, want %v", got, want)
+			break
+		}
+	}
+}
+
+// TestScan_DefaultIgnoresClaudePlans asserts the scoped default skip for
+// `.claude/plans` (transient agent scratch) while keeping the deliberately
+// non-default `.claude` subtrees in the corpus: `.claude/rules` (real docs),
+// `.claude/skills` (real graphs), and `.claude/agents` (judgment call deferred to
+// per-repo config, NOT default-ignored).
+func TestScan_DefaultIgnoresClaudePlans(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "README.md"), "# Root")
+	writeFile(t, filepath.Join(root, ".claude", "plans", "scratch.md"), "# Scratch")
+	writeFile(t, filepath.Join(root, ".claude", "plans", "deep", "more.md"), "# More")
+	writeFile(t, filepath.Join(root, ".claude", "rules", "go-style.md"), "# Rules")
+	writeFile(t, filepath.Join(root, ".claude", "skills", "x", "SKILL.md"), "# Skill")
+	writeFile(t, filepath.Join(root, ".claude", "agents", "a.md"), "# Agent")
+
+	got := ids(scan(t, root, Config{}))
+	want := []string{
+		".claude/agents/a.md",
+		".claude/rules/go-style.md",
+		".claude/skills/x/SKILL.md",
+		"README.md",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("ids = %v, want %v (plans skipped; rules/skills/agents kept)", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("ids = %v, want %v", got, want)
+			break
+		}
+	}
+}
+
 func TestScan_OutputDirExcluded(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "keep.md"), "# Keep")

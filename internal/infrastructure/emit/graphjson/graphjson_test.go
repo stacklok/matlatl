@@ -187,6 +187,52 @@ func TestJSON_IndeterminateReachability(t *testing.T) {
 	}
 }
 
+// TestJSON_EdgelessRootNotInOrphans guards the view/emit layer (ADR 0010): an
+// edgeless document that IS a root must be ABSENT from the emitted `orphans`
+// array, exactly as it is exempt from graphmodel's Orphans.Isolated. This pins
+// view.go against silently diverging from the domain classification, and runs in
+// the DEFAULT `go test ./...` gate (the integration test needs -tags=integration).
+func TestJSON_EdgelessRootNotInOrphans(t *testing.T) {
+	c := corpus.NewCorpus()
+	for _, id := range []string{"README.md", "agent.md", "loner.md"} {
+		d := &corpus.Document{
+			ID: corpusID(id),
+			Root: &corpus.Section{Level: 0, Children: []*corpus.Section{
+				{Level: 1, Text: "T", Slug: "t", StartLine: 1, EndLine: 2},
+			}},
+		}
+		if err := c.Add(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// README.md is an auto-root; agent.md becomes a root via --root glob. Both are
+	// edgeless. loner.md is an edgeless non-root (the control: it MUST be an orphan).
+	g := graphmodel.BuildReferenceGraph(c, nil, graphmodel.BuildOptions{})
+	m := graphmodel.Analyze(g, c, graphmodel.AnalyzeOptions{RootGlobs: []string{"agent.md"}})
+	v := emit.BuildView(application.Result{DocumentCount: c.Len(), Metrics: m, Corpus: c})
+
+	doc := graphjson.Build(v)
+	for _, want := range []string{"README.md", "agent.md"} {
+		if sliceHas(doc.Orphans, want) {
+			t.Errorf("edgeless root %q must be absent from emitted orphans; orphans = %v", want, doc.Orphans)
+		}
+	}
+	// Control: the edgeless non-root IS an orphan, proving the finding still fires
+	// at the emit layer (the test isn't passing because orphans is empty).
+	if !sliceHas(doc.Orphans, "loner.md") {
+		t.Errorf("edgeless non-root loner.md must be in emitted orphans; orphans = %v", doc.Orphans)
+	}
+}
+
+func sliceHas(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
+}
+
 // TestJSON_HostileTitleEscaped confirms a hostile title is JSON-escaped (never
 // breaks the document). encoding/json handles this; we assert it.
 func TestJSON_HostileTitleEscaped(t *testing.T) {
