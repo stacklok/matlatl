@@ -51,9 +51,24 @@ $ matlatl serve .           # MCP server exposing graph queries to agents
 
 Link checkers (lychee, markdown-link-check) validate links but build no graph.
 Knowledge tools (Obsidian, Foam, Dendron, Quartz) visualize a graph but are not
-CI-oriented and emit nothing an LLM can act on. `matlatl` treats a
-**machine-readable, LLM-queryable graph as a first-class output** — the gap all of
-that prior art leaves open.
+CI-oriented and emit nothing an agent can act on. `matlatl` builds the graph and
+treats it as a **machine-readable, queryable first-class output**.
+
+Broken-link and orphan checking is the way in: a `check` gate that fails a PR on
+the rot a link checker would catch, plus the orphans, unreachable pages, and weak
+spots in the graph that a flat link check can't see. But the real point is what
+surrounds that graph. Your docs are now written and read by agents as much as by
+people, so `matlatl` emits the graph (`graph.json`), a navigable `llms.txt`, and
+findings an agent can fix straight from (`findings.json`, `fix-prompt`), and it
+serves the whole thing over MCP. One graph, rendered for whoever needs it: a
+human, an LLM reading, or an agent acting.
+
+So, what happens when an agent has been scribbling in your repo? `matlatl` knows
+the difference between your docs and an agent's scaffolding. A `SKILL.md` is an
+entry point, not an orphan; agent worktrees and scratch plans are ignored by
+default; and a `.matlatl.yml` lets a repo declare its own roots (say, your
+sub-agent definitions) so the health check stays accurate instead of burying you
+in false orphans.
 
 ## Documentation
 
