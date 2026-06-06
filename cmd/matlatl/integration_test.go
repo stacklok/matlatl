@@ -812,3 +812,163 @@ func assertNothingEscaped(t *testing.T, outDir string, want []string) {
 		t.Errorf("an artifact leaked to the parent of --out")
 	}
 }
+
+// TestIntegration_ConfigFileDeclaresRoots is the ADR 0011 end-to-end proof: a
+// temp repo whose .matlatl.yml declares `.claude/agents/*.md` as roots makes an
+// EDGELESS agent doc stop being reported as an isolated orphan, riding the
+// existing root→isolated-orphan exemption (ADR 0010). The control (no config)
+// confirms the same doc IS isolated by default. matlatl ships zero
+// Claude-Code-specific knowledge; the repo's config carries it.
+func TestIntegration_ConfigFileDeclaresRoots(t *testing.T) {
+	dir := t.TempDir()
+	writeFile := func(name, body string) {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A README (a convention root) plus an edgeless agent doc under .claude/agents.
+	writeFile("README.md", "# Repo\n\nThe overview.\n")
+	writeFile(".claude/agents/foo.md", "# Foo Agent\n\nEntry point; links to nothing.\n")
+
+	graphOrphans := func() []string {
+		outDir := t.TempDir()
+		args := []string{"graph", dir, "--format", "json", "--out", outDir}
+		var out, errOut bytes.Buffer
+		if code := runArgs(context.Background(), args, &out, &errOut); code != platform.ExitOK {
+			t.Fatalf("graph json code = %v (stderr=%q)", code, errOut.String())
+		}
+		b, err := os.ReadFile(filepath.Join(outDir, "graph.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			Orphans []string `json:"orphans"`
+			RootSet []string `json:"rootSet"`
+		}
+		if err := json.Unmarshal(b, &doc); err != nil {
+			t.Fatalf("graph.json parse: %v", err)
+		}
+		return doc.Orphans
+	}
+
+	agentID := ".claude/agents/foo.md"
+
+	// Control: NO .matlatl.yml → the edgeless agent doc IS an isolated orphan.
+	if !slicesContains(graphOrphans(), agentID) {
+		t.Fatalf("control: edgeless %s should be isolated without config; it was not", agentID)
+	}
+
+	// Declare the agents glob as roots via .matlatl.yml.
+	writeFile(".matlatl.yml", "version: 1\nroots:\n  - \".claude/agents/*.md\"\n")
+
+	// With the config, the agent doc is a root and is exempt from the isolated
+	// finding (the domain ResolveRootSet consumes the unioned roots unchanged).
+	if slicesContains(graphOrphans(), agentID) {
+		t.Errorf("with .matlatl.yml declaring it a root, %s must not be isolated", agentID)
+	}
+}
+
+// TestIntegration_ConfigMalformedExitsUsage: a malformed .matlatl.yml is a HARD
+// error mapped to ExitUsage (2) per ADR 0011, with an explanation on stderr.
+func TestIntegration_ConfigMalformedExitsUsage(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# R\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Unterminated flow sequence: a YAML syntax error.
+	if err := os.WriteFile(filepath.Join(dir, ".matlatl.yml"),
+		[]byte("version: 1\nroots: [\"a.md\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{dir}, &out, &errOut)
+	if code != platform.ExitUsage {
+		t.Fatalf("malformed config code = %v, want ExitUsage (2) (stderr=%q)", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "matlatl:") {
+		t.Errorf("malformed config should explain itself on stderr, got %q", errOut.String())
+	}
+}
+
+// TestIntegration_ConfigVersionTooNewExitsUsage: a config declaring a newer
+// schema version is a HARD error mapped to ExitUsage (2).
+func TestIntegration_ConfigVersionTooNewExitsUsage(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# R\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".matlatl.yml"),
+		[]byte("version: 2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{dir}, &out, &errOut)
+	if code != platform.ExitUsage {
+		t.Fatalf("version-too-new code = %v, want ExitUsage (2) (stderr=%q)", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "upgrade matlatl") {
+		t.Errorf("version-too-new stderr = %q, want the upgrade hint", errOut.String())
+	}
+}
+
+// TestIntegration_ConfigBadGlobReachesStderr exercises the full
+// config→union→ResolveRootSet→BadGlobs notice path end-to-end: a .matlatl.yml
+// with an invalid path.Match glob must surface a bad-glob notice on stderr (the
+// run still succeeds — a bad glob is tolerated, not fatal). Each half is unit-
+// tested in isolation; this pins the wiring.
+func TestIntegration_ConfigBadGlobReachesStderr(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# R\n\nBody.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// "[bad" is an invalid path.Match pattern (unterminated character class).
+	if err := os.WriteFile(filepath.Join(dir, ".matlatl.yml"),
+		[]byte("version: 1\nroots:\n  - \"[bad\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{dir}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("bad-glob config code = %v, want ExitOK (a bad glob is tolerated) (stderr=%q)", code, errOut.String())
+	}
+	// The domain reports the bad glob; the pipeline routes it to stderr as a
+	// notice. Assert the offending pattern appears in a notice line.
+	if !strings.Contains(errOut.String(), "[bad") {
+		t.Errorf("bad-glob notice did not reach stderr; stderr = %q", errOut.String())
+	}
+}
+
+// TestIntegration_ConfigToleratedNoticeReachesStderr pins the tolerated-notice
+// stderr path through the CLI: a .matlatl.yml with no `version` field (assumed 1)
+// AND an unknown key both emit `matlatl: notice [config] ...` lines on stderr,
+// and the run still succeeds.
+func TestIntegration_ConfigToleratedNoticeReachesStderr(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# R\n\nBody.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// No version field (→ "assuming 1" notice) and an unknown key (→ ignore notice).
+	if err := os.WriteFile(filepath.Join(dir, ".matlatl.yml"),
+		[]byte("rootz:\n  - \"docs/*.md\"\nroots:\n  - \"docs/*.md\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{dir}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("tolerated-notice config code = %v, want ExitOK (stderr=%q)", code, errOut.String())
+	}
+	se := errOut.String()
+	if !strings.Contains(se, "notice [config]") {
+		t.Errorf("expected a `notice [config]` line on stderr, got %q", se)
+	}
+	if !strings.Contains(se, "assuming 1") {
+		t.Errorf("expected the no-version 'assuming 1' notice on stderr, got %q", se)
+	}
+	if !strings.Contains(se, "rootz") {
+		t.Errorf("expected the unknown-key 'rootz' notice on stderr, got %q", se)
+	}
+}

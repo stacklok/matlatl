@@ -57,7 +57,10 @@ func newIndexCommand() *cobra.Command {
 					err: fmt.Errorf("--llms, --full, --small and --graph are mutually exclusive (use `emit` for the full bundle)")}
 			}
 
-			cfg := configFromFlags(cmd, args)
+			cfg, cerr := configFromFlags(cmd, args)
+			if cerr != nil {
+				return cerr
+			}
 			view, err := analyzeToView(cmd, cfg)
 			if err != nil {
 				return err

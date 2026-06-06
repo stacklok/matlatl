@@ -1,0 +1,8 @@
+# `rootz` is a typo for `roots`. An unknown non-version key is tolerated with a
+# notice (it surfaces typos and tolerates future additive keys); the recognized
+# keys still parse.
+version: 1
+rootz:
+  - ".claude/agents/*.md"
+roots:
+  - "docs/*.md"

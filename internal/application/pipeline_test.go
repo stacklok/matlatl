@@ -381,7 +381,7 @@ func TestDefaultConfig(t *testing.T) {
 func TestNoticeKind_String(t *testing.T) {
 	all := []NoticeKind{
 		NoticeSkippedSymlink, NoticeEscapesRoot, NoticeOversized,
-		NoticeTruncated, NoticeWalkError, NoticeIOError,
+		NoticeTruncated, NoticeWalkError, NoticeIOError, NoticeConfig,
 	}
 	seen := make(map[string]bool)
 	for _, k := range all {

@@ -17,3 +17,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0008 | Directory links resolve and confer navigational reachability | Accepted |
 | 0009 | `fix-prompt` serves acting agents with an embedded prompt | Accepted |
 | 0010 | How matlatl treats agent-tooling scaffolding | Accepted |
+| 0011 | Per-repo configuration file (`.matlatl.yml`) | Accepted |

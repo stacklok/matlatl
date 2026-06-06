@@ -1,0 +1,4 @@
+# `version` below the minimum (1): a distinct HARD error ("minimum 1").
+version: 0
+roots:
+  - "docs/*.md"

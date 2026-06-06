@@ -35,7 +35,10 @@ func newFixPromptCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := configFromFlags(cmd, args)
+			cfg, cerr := configFromFlags(cmd, args)
+			if cerr != nil {
+				return cerr
+			}
 
 			logSink := cmd.ErrOrStderr()
 			if cfg.Quiet {

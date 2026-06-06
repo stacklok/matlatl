@@ -29,6 +29,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`.matlatl.yml` per-repo configuration file** — an optional, committed file at
+  the scan root (sibling of `.matlatlignore`) that declares **additional
+  reachability `roots`** (path globs, same `path.Match` semantics as `--root`),
+  **unioned** with the auto-detected conventions and any `--root` flags. It
+  carries an explicit integer `version` (supported: `1`). This lets a repo declare
+  e.g. `.claude/agents/*.md` as roots so its edgeless agent docs stop being
+  reported as isolated orphans — with zero tool-specific knowledge baked into
+  matlatl. v1 is roots-only (`.matlatlignore` stays the sole ignore mechanism; run
+  behavior stays flag-only). A malformed/unsupported config exits 2 (usage); an
+  unknown key or a missing version is tolerated with a notice. See
+  [ADR 0011](docs/adr/0011-per-repo-config-file.md) and
+  [the schema reference](docs/schemas/matlatl-config-v1.md).
 - **`matlatl fix-prompt [path]`** — emits a self-contained, agent-agnostic prompt
   (findings and per-kind how-to embedded inline) that instructs an LLM coding
   agent to fix the documentation findings: `matlatl fix-prompt . | claude -p`.

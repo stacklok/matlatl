@@ -1,0 +1,16 @@
+# ADR 0003 adversarial fixture: a YAML alias pyramid ("billion laughs") that
+# stays tiny on disk but would expand exponentially if naively dereferenced. The
+# 1 MiB source cap does NOT trip here (the document is sub-cap by construction);
+# yaml.v3's built-in alias-expansion budget must reject it at Decode time, which
+# the loader surfaces as a HARD error (malformed/over-budget YAML).
+a0: &a0 ["lol", "lol", "lol", "lol", "lol"]
+a1: &a1 [*a0, *a0, *a0, *a0, *a0]
+a2: &a2 [*a1, *a1, *a1, *a1, *a1]
+a3: &a3 [*a2, *a2, *a2, *a2, *a2]
+a4: &a4 [*a3, *a3, *a3, *a3, *a3]
+a5: &a5 [*a4, *a4, *a4, *a4, *a4]
+a6: &a6 [*a5, *a5, *a5, *a5, *a5]
+a7: &a7 [*a6, *a6, *a6, *a6, *a6]
+a8: &a8 [*a7, *a7, *a7, *a7, *a7]
+a9: &a9 [*a8, *a8, *a8, *a8, *a8]
+version: 1

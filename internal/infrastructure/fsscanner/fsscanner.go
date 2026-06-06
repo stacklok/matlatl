@@ -20,6 +20,7 @@ import (
 
 	"github.com/stacklok/matlatl/internal/application"
 	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/platform"
 )
 
 // Default resource caps (ADR 0003). They are safe-by-default and overridable
@@ -35,9 +36,11 @@ const (
 	// memory. The ignore file is read BEFORE the WalkDir loop (and therefore
 	// before the per-file MaxFileSizeBytes guard applies), so a hostile repo
 	// could otherwise hand us a multi-GB ignore file and OOM the scan (ADR 0003
-	// invariant 3). 1 MiB is far more than any real ignore file needs; an
-	// oversized ignore file is skipped (treated like a missing file).
-	maxIgnoreBytes int64 = 1 << 20
+	// invariant 3). It is the shared pre-walk read cap (platform.PreWalkReadCap,
+	// the single audit point for this limit, shared with the config loader's
+	// .matlatl.yml read): far more than any real ignore file needs; an oversized
+	// ignore file is skipped (treated like a missing file).
+	maxIgnoreBytes = platform.PreWalkReadCap
 )
 
 // defaultIgnoredDirs are directory base names skipped wholesale during the walk,
@@ -261,13 +264,18 @@ var errStopWalk = errors.New("fsscanner: max files reached")
 // absent, unreadable, or oversized (none of these are an error — a repo without
 // a usable ignore file simply has no ignore rules).
 //
-// Security (ADR 0003 invariant 3): the ignore file is read BEFORE the WalkDir
-// loop, so the per-file MaxFileSizeBytes guard does NOT cover it. We therefore
-// os.Stat it first and skip a file larger than maxIgnoreBytes, so a hostile repo
-// cannot OOM the scan with a multi-GB .matlatlignore. We then read the capped
-// bytes ourselves and hand them to CompileIgnoreLines rather than
-// CompileIgnoreFile (whose internal ReadFile has no size cap). Splitting on "\n"
-// and trimming any trailing "\r" preserves CompileIgnoreFile's CRLF handling.
+// Security (ADR 0003): the ignore file is read BEFORE the WalkDir loop, so
+// neither the per-file MaxFileSizeBytes guard (invariant 3) nor the walk's
+// no-symlink-follow stance (invariant 1) covers it automatically. We therefore
+// Lstat it first: a symlink is NOT followed (skipped, like the walk skips
+// symlinks), and a file larger than maxIgnoreBytes is skipped rather than read,
+// so a hostile repo cannot OOM the scan with a multi-GB .matlatlignore nor
+// escape the root via a symlinked one. We then read the capped bytes ourselves
+// and hand them to CompileIgnoreLines rather than CompileIgnoreFile (whose
+// internal ReadFile has no size cap). Splitting on "\n" and trimming any
+// trailing "\r" preserves CompileIgnoreFile's CRLF handling. A skipped symlink
+// is silent here, matching loadIgnore's existing silent-skip-on-missing posture
+// (it returns no notice channel).
 //
 // Note: go-gitignore supports gitignore '!' negation (re-inclusion) patterns;
 // behavior is pinned by TestLoadIgnore_NegationReincludes. (A historical TODO in
@@ -276,9 +284,12 @@ var errStopWalk = errors.New("fsscanner: max files reached")
 // regression if the dep is ever swapped.)
 func (s *Scanner) loadIgnore(realRoot string) *ignore.GitIgnore {
 	p := filepath.Join(realRoot, ignoreFileName)
-	fi, err := os.Stat(p)
+	fi, err := os.Lstat(p)
 	if err != nil || !fi.Mode().IsRegular() {
-		return nil // missing / not a regular file: no ignore rules.
+		// missing / symlink / not a regular file: no ignore rules. Lstat (not
+		// Stat) means a symlink reports its own mode (ModeSymlink, not regular),
+		// so it falls into this branch and is not followed (ADR 0003 invariant 1).
+		return nil
 	}
 	if fi.Size() > maxIgnoreBytes {
 		return nil // oversized: skip gracefully rather than read it into memory.

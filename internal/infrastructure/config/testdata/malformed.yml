@@ -1,0 +1,4 @@
+# Broken YAML syntax (unterminated flow sequence): a HARD error mapped to
+# ExitUsage.
+version: 1
+roots: [".claude/agents/*.md"

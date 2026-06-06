@@ -1,0 +1,4 @@
+# `version` must be an integer; a string is a HARD error.
+version: "one"
+roots:
+  - "docs/*.md"

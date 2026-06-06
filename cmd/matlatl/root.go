@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/infrastructure/config"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/report"
 	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
@@ -52,7 +54,10 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := configFromFlags(cmd, args)
+			cfg, cerr := configFromFlags(cmd, args)
+			if cerr != nil {
+				return cerr
+			}
 
 			// Notices (skipped symlinks, oversized files, truncation) go to stderr.
 			var logSink = cmd.ErrOrStderr()
@@ -122,7 +127,16 @@ func newRootCommand() *cobra.Command {
 // configFromFlags builds an application.Config from the persistent flags and the
 // optional positional path. Subcommands may further adjust the result (e.g.
 // check sets ResolutionPolicy from its own flag).
-func configFromFlags(cmd *cobra.Command, args []string) application.Config {
+//
+// It also loads the optional per-repo `.matlatl.yml` at the resolved scan root
+// (ADR 0011) and UNIONs its declared roots with any --root flags. File roots and
+// flag roots are merged additively; dedup/sort happens later in the domain's
+// ResolveRootSet, so order is irrelevant. Tolerated loader conditions (unknown
+// key, assumed version, oversized config) are emitted as notices to the same
+// stderr sink the pipeline uses (suppressed under --quiet). A HARD loader error
+// (malformed YAML, wrong types, unsupported version) is returned as an
+// exitCodeError mapped to ExitUsage (ADR 0005).
+func configFromFlags(cmd *cobra.Command, args []string) (application.Config, error) {
 	cfg := application.DefaultConfig()
 	if len(args) == 1 {
 		cfg.RootPath = args[0]
@@ -133,10 +147,44 @@ func configFromFlags(cmd *cobra.Command, args []string) application.Config {
 	cfg.OutputDir, _ = flags.GetString("out")
 	cfg.Quiet, _ = flags.GetBool("quiet")
 	cfg.Verbose, _ = flags.GetBool("verbose")
-	if r, err := flags.GetStringSlice("root"); err == nil && len(r) > 0 {
-		cfg.Roots = r
+
+	var flagRoots []string
+	if r, err := flags.GetStringSlice("root"); err == nil {
+		flagRoots = r
 	}
-	return cfg
+
+	// Read exactly <scanRoot>/.matlatl.yml. Resolve the path to absolute so the
+	// loader keys off a stable, cwd-independent directory (the scanner resolves
+	// the same RootPath against the same — stable within one invocation — cwd, so
+	// both target the same tree). cfg.RootPath is left as given; only this local
+	// is abs'd, which is all the loader needs.
+	scanRoot := cfg.RootPath
+	if abs, err := filepath.Abs(scanRoot); err == nil {
+		scanRoot = abs
+	}
+	file, notices, err := config.Load(scanRoot)
+	if err != nil {
+		// Hard config error: a mistake in something matlatl understands (ADR 0011).
+		return cfg, exitCodeError{code: platform.ExitUsage, err: err}
+	}
+
+	// Route tolerated-condition notices to stderr (unless --quiet), matching the
+	// pipeline's notice sink format.
+	if !cfg.Quiet {
+		sink := cmd.ErrOrStderr()
+		for _, n := range notices {
+			_, _ = fmt.Fprintf(sink, "matlatl: notice [%s] %s: %s\n", n.Kind, n.Path, n.Detail)
+		}
+	}
+
+	// Additive union: conventions ∪ .matlatl.yml roots ∪ --root flags. The
+	// domain's ResolveRootSet adds the conventions and sorts/dedups the union, so
+	// order is irrelevant; a fresh slice avoids aliasing file.Roots' backing array.
+	union := make([]string, 0, len(file.Roots)+len(flagRoots))
+	union = append(union, file.Roots...)
+	union = append(union, flagRoots...)
+	cfg.Roots = union
+	return cfg, nil
 }
 
 // buildPipeline wires the concrete scanner + parser factory into a Pipeline.

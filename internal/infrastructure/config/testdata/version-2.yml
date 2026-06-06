@@ -1,0 +1,5 @@
+# Declares a schema version newer than this matlatl supports: a HARD error
+# (the repo expects a newer tool).
+version: 2
+roots:
+  - "docs/*.md"

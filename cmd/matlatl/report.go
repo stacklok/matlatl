@@ -28,7 +28,10 @@ func newReportCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := configFromFlags(cmd, args)
+			cfg, cerr := configFromFlags(cmd, args)
+			if cerr != nil {
+				return cerr
+			}
 			view, err := analyzeToView(cmd, cfg)
 			if err != nil {
 				return err

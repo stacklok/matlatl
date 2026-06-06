@@ -1,0 +1,5 @@
+# A valid v1 config declaring an extra reachability root.
+version: 1
+roots:
+  - ".claude/agents/*.md"
+  - "docs/*.md"

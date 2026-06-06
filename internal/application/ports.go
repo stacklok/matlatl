@@ -47,6 +47,12 @@ const (
 	// NoticeIOError reports a stat/info or identity-derivation failure on an
 	// otherwise-eligible file (the file was skipped).
 	NoticeIOError
+	// NoticeConfig reports a tolerated observation from loading the per-repo
+	// `.matlatl.yml` (a missing version field assumed as 1, an unknown/typo key
+	// ignored, an oversized config skipped). It never by itself fails the run;
+	// hard config errors are surfaced as a real error mapped to ExitUsage (ADR
+	// 0011).
+	NoticeConfig
 )
 
 // String returns a short identifier for the notice kind.
@@ -64,6 +70,8 @@ func (k NoticeKind) String() string {
 		return "walk-error"
 	case NoticeIOError:
 		return "io-error"
+	case NoticeConfig:
+		return "config"
 	default:
 		return "unknown"
 	}

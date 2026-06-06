@@ -424,6 +424,35 @@ func TestScan_OversizedIgnoreFileSkippedGracefully(t *testing.T) {
 	}
 }
 
+// TestScan_SymlinkedIgnoreFileNotFollowed pins the no-symlink-escape invariant
+// (ADR 0003 invariant 1) for the pre-walk .matlatlignore read: a .matlatlignore
+// that is a SYMLINK to a file OUTSIDE the scan root must NOT be followed. The
+// loader Lstat-skips it, so its rules never apply — proven by keep.md still being
+// discovered even though the symlink target would have excluded it.
+func TestScan_SymlinkedIgnoreFileNotFollowed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on windows")
+	}
+	// A rules file OUTSIDE the scan root that, if followed, WOULD drop keep.md.
+	outside := t.TempDir()
+	target := filepath.Join(outside, "evil-ignore")
+	if err := os.WriteFile(target, []byte("keep.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	root := t.TempDir()
+	if err := os.Symlink(target, filepath.Join(root, ignoreFileName)); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+	writeFile(t, filepath.Join(root, "keep.md"), "# Keep")
+
+	// The symlinked ignore file is not followed, so keep.md is still discovered.
+	res := scan(t, root, Config{})
+	if got := ids(res); len(got) != 1 || got[0] != "keep.md" {
+		t.Errorf("ids = %v, want [keep.md] (symlinked .matlatlignore not followed)", got)
+	}
+}
+
 // TestScan_IgnoreNegationReincludes pins the current behavior of go-gitignore's
 // '!' negation (re-inclusion): a later '!' pattern re-includes a path excluded
 // by an earlier pattern. (The dependency's source carries a stale TODO claiming

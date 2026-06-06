@@ -34,7 +34,10 @@ func newOrphansCommand() *cobra.Command {
 					err:  fmt.Errorf("--isolated-only and --unreachable-only are mutually exclusive"),
 				}
 			}
-			cfg := configFromFlags(cmd, args)
+			cfg, cerr := configFromFlags(cmd, args)
+			if cerr != nil {
+				return cerr
+			}
 
 			// Go through the same analyze→View path every other render command uses
 			// (report, index). The View is the single place intentional-orphan

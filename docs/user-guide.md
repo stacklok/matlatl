@@ -167,6 +167,44 @@ scan root — so `.claude/rules/`, `.claude/skills/`, and the rest of `.claude/`
 stay in the graph
 ([ADR 0010](adr/0010-agent-scaffolding-roots-and-default-ignores.md)).
 
+## Declaring extra roots (`.matlatl.yml`)
+
+For roots you want **committed and durable** — not retyped on every command line
+— add a `.matlatl.yml` at the scan root (a sibling of `.matlatlignore`; read only
+there, never up the tree). It's optional: absent means current defaults.
+
+```yaml
+# .matlatl.yml
+version: 1
+roots:
+  - ".claude/agents/*.md"
+```
+
+Its `roots` are path globs (same `path.Match` semantics as `--root`: a single
+`*` does not cross `/`, `**` is unsupported) **unioned** with the autodetected
+conventions and any `--root` flags — `roots = conventions ∪ .matlatl.yml ∪
+--root`. Because a root is exempt from both the unreachable and the
+isolated-orphan findings ([ADR 0010](adr/0010-agent-scaffolding-roots-and-default-ignores.md)),
+declaring `.claude/agents/*.md` as roots stops edgeless agent files — entry
+points nothing links to by design — from being reported as isolated orphans, with
+no tool-specific path baked into matlatl.
+
+**`.matlatlignore` vs `.matlatl.yml`** — different jobs: `.matlatlignore`
+**removes** files from the corpus; `.matlatl.yml` **declares the role** of files
+that stay in it (entry-point roots). Use the ignore file to drop noise, the config
+to mark entry points.
+
+The `version` field (integer; supported: `1`) is the forward-compatibility
+anchor — pin it. A missing version is assumed `1` (with a notice); a malformed
+file, a wrong-typed field, or a `version` newer than this matlatl supports is a
+usage error (exit 2); an unknown key (a typo, or a key from a newer matlatl) is
+tolerated with a notice. The file is read only at the scan root, capped at 1 MiB,
+and its globs are string-matched against in-corpus documents (never a filesystem
+read). v1 is **roots only**: `.matlatlignore` stays the sole ignore mechanism and
+run behavior (`--strict`/`--out`/…) stays flag-only. See
+[ADR 0011](adr/0011-per-repo-config-file.md) and the
+[schema reference](schemas/matlatl-config-v1.md).
+
 ## Checking external links (opt-in)
 
 `--check-external` enables HTTP liveness checks of external URLs. It's **off by

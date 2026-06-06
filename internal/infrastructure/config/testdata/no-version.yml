@@ -1,0 +1,4 @@
+# A present file with NO version field: the loader assumes version 1 and
+# emits a notice nudging the author to pin `version: 1`.
+roots:
+  - ".claude/agents/*.md"

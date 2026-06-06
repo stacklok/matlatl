@@ -35,7 +35,10 @@ func newServeCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := configFromFlags(cmd, args)
+			cfg, cerr := configFromFlags(cmd, args)
+			if cerr != nil {
+				return cerr
+			}
 			if !cfg.Quiet {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "matlatl serve: MCP endpoint on http://%s%s\n",
 					address, mcpserver.EndpointPath)
