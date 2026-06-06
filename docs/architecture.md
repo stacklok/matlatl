@@ -26,15 +26,21 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
 5. **Analyze** — reachability from the root set, the graduated structure ladder
    (isolated orphan → dead-end → under-linked) plus orthogonal unreachable
    classification, weak + strong components, bow-tie classification relative to
-   the giant SCC, HITS hub/authority, knowledge-gap detection, and topology-based
-   link prediction (the additive `suggested-link` signal) → a frozen
+   the giant SCC, HITS hub/authority, knowledge-gap detection, topology-based
+   link prediction (the additive `suggested-link` signal), and corpus-level
+   navigability metrics → a frozen
    `AnalysisReport` + `GraphMetrics`
    ([ADR 0007](adr/0007-graph-node-semantics.md),
    [ADR 0012](adr/0012-graduated-structure-and-bowtie.md),
-   [ADR 0013](adr/0013-topology-link-prediction.md)). `GraphMetrics`
+   [ADR 0013](adr/0013-topology-link-prediction.md),
+   [ADR 0014](adr/0014-navigability-metrics.md)). `GraphMetrics`
    carries `Graph`, `Hierarchy`, `RootSet`, `Reachability`, `Degrees`, `Orphans`
    (isolated / dead-end / under-linked / unreachable), `WCC`, `SCC`, `Bowtie`,
-   `HITS`, `Gaps`, and `SuggestedLinks`.
+   `HITS`, `Gaps`, `SuggestedLinks`, and `Navigability`. Navigability reuses a
+   shared streaming APSP helper (`ForEachSourceDistances` in `apsp.go`): one BFS
+   per source, reusing a single distance map and never materializing a V² matrix
+   (`O(V·(V+E))` time, `O(V)` transient memory). The same helper is the
+   foundation for P10 betweenness centrality.
 6. **Emit** — render the report for humans (terminal, Markdown, Mermaid, DOT,
    index.md) and LLMs (graph.json, llms.txt family, findings.json; JUnit via `check`).
 

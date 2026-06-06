@@ -51,6 +51,13 @@ func Markdown(v emit.View) []byte {
 	writeBowtie(&b, v)
 	b.WriteString("\n")
 
+	// Navigability scalars (ADR 0014): how navigable the corpus is overall.
+	b.WriteString("## Navigability\n\n")
+	for _, l := range navigabilityLines(v) {
+		fmt.Fprintf(&b, "- %s\n", emit.EscapeMarkdownText(l))
+	}
+	b.WriteString("\n")
+
 	// Broken links + anchors table (combined; Kind column distinguishes).
 	b.WriteString("## Broken links and anchors\n\n")
 	broken := make([]analysis.Finding, 0, len(v.BrokenLinks)+len(v.BrokenAnchors))

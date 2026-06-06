@@ -426,6 +426,10 @@ func TestIntegration_ReportToOut(t *testing.T) {
 	if !strings.Contains(string(b), "# matlatl report") || !strings.Contains(string(b), "| Metric | Count |") {
 		t.Errorf("report.md missing expected content:\n%s", b)
 	}
+	// The Navigability section (ADR 0014) renders end-to-end.
+	if !strings.Contains(string(b), "## Navigability") || !strings.Contains(string(b), "Compactness:") {
+		t.Errorf("report.md missing the Navigability section:\n%s", b)
+	}
 	assertNothingEscaped(t, outDir, []string{"report.md"})
 }
 
@@ -509,15 +513,25 @@ func TestIntegration_GraphJSONToOut(t *testing.T) {
 	var doc struct {
 		SchemaVersion int `json:"schemaVersion"`
 		Summary       struct {
-			Documents int `json:"documents"`
+			Documents    int `json:"documents"`
+			Navigability struct {
+				Compactness    float64 `json:"compactness"`
+				Diameter       int     `json:"diameter"`
+				ReachablePairs int     `json:"reachablePairs"`
+			} `json:"navigability"`
 		} `json:"summary"`
 		Nodes []json.RawMessage `json:"nodes"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("graph.json does not parse: %v", err)
 	}
-	if doc.SchemaVersion != 3 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
+	if doc.SchemaVersion != 4 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
 		t.Errorf("graph.json content unexpected: version=%d docs=%d nodes=%d", doc.SchemaVersion, doc.Summary.Documents, len(doc.Nodes))
+	}
+	// summary.navigability (ADR 0014) is present with sensible values: the fixture
+	// corpus is connected enough to have a positive compactness and finite pairs.
+	if doc.Summary.Navigability.ReachablePairs == 0 || doc.Summary.Navigability.Diameter == 0 {
+		t.Errorf("graph.json summary.navigability looks empty: %+v", doc.Summary.Navigability)
 	}
 	assertNothingEscaped(t, outDir, []string{"graph.json"})
 }

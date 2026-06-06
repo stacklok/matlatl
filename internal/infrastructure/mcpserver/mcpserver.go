@@ -181,7 +181,7 @@ func getSectionTool() mcp.Tool {
 
 func corpusSummaryTool() mcp.Tool {
 	return mcp.NewTool("corpus-summary",
-		mcp.WithDescription("Return the full graph.json manifest of the corpus: nodes, edges, sections, components, HITS hub/authority rankings, orphans, unreachable, broken links, knowledge gaps and topology-based suggested links."),
+		mcp.WithDescription("Return the full graph.json manifest of the corpus: nodes, edges, sections, components, HITS hub/authority rankings, orphans, unreachable, broken links, knowledge gaps, topology-based suggested links, and summary navigability scalars (compactness, stratum, characteristic/median path length, clustering coefficient, diameter)."),
 	)
 }
 

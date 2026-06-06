@@ -91,6 +91,9 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
   core) / *out* (lead away from it) / *tendril* / *disconnected*. Reported in the
   human report, `graph.json`, and over MCP — it is descriptive **data**, not a
   finding.
+- **Navigability metrics** — a handful of corpus-level scalars that summarize how
+  navigable the whole corpus is. Descriptive **data**, not findings — they
+  **never** fail `check` ([ADR 0014](adr/0014-navigability-metrics.md)).
 
 Orphans, under-linked, dead-end and unreachable docs come with **different**
 remediation hints, because the fix differs: link an orphan in (or delete it); add
@@ -122,6 +125,34 @@ unreachable doc an inbound link from somewhere reachable.
 - A report that says **"no cyclic core"** means the corpus is acyclic (every SCC
   is a singleton) — common and not a problem; the in/out/tendril/disconnected
   counts still describe the shape.
+
+#### Reading the navigability metrics
+
+The `## Navigability` report section (and `summary.navigability` in `graph.json`)
+report ([ADR 0014](adr/0014-navigability-metrics.md)):
+
+- **Compactness** `[0,1]` — how connected the corpus is over directed links. `1`
+  means every doc reaches every other in one hop; `0` means nothing reaches
+  anything. Higher is better. A large corpus below `0.1` also emits a non-gating
+  `[low-compactness]` stderr notice.
+- **Stratum** `[0,1]` — how hierarchical the directed link structure is. `1` is a
+  pure top-down chain; `0` is a fully cyclic/symmetric web. Neither extreme is
+  inherently "good" — it characterizes the shape.
+- **Characteristic path length** — the *mean* number of clicks between linked
+  docs (over the undirected closure). Lower means docs are closer together.
+- **Median path length** — the median of that same distribution (robust to a few
+  far-apart pairs).
+- **Diameter** — the longest shortest path: the worst-case click distance between
+  any two connected docs.
+- **Clustering coefficient** `[0,1]` — how often a doc's neighbours also link to
+  each other (local "neighbourhoods"). Computed over nodes with at least two
+  neighbours.
+- **Reachable pairs** — how many ordered doc pairs are connected at all (the
+  sample size behind the path-length stats).
+
+These are scalars to track over time, not pass/fail gates: a healthy reference
+corpus trends toward higher compactness and shorter path lengths as you link it
+together.
 
 ### Keeping a doc intentionally unlinked
 

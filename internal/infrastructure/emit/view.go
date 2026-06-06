@@ -59,6 +59,11 @@ type View struct {
 	SuggestedLinks          []graphmodel.LinkSuggestion
 	SuggestedLinksTruncated bool
 
+	// Navigability holds the corpus-level navigability scalars (ADR 0014):
+	// compactness, stratum, characteristic/median path length, clustering,
+	// diameter. Pure data, surfaced in graph.json and the human reports.
+	Navigability graphmodel.Navigability
+
 	// BrokenEdges are unresolved navigational references (origin → raw target),
 	// for the diagram emitters' red placeholder target nodes. Sorted upstream.
 	BrokenEdges []application.BrokenEdge
@@ -143,6 +148,7 @@ func BuildView(res application.Result) View {
 	v.GapsTruncated = m.GapsTruncated
 	v.SuggestedLinks = slices.Clone(m.SuggestedLinks)
 	v.SuggestedLinksTruncated = m.SuggestedLinksTruncated
+	v.Navigability = m.Navigability
 	v.TopHubs = m.HITS.TopHubs(topN)
 	v.TopAuthorities = m.HITS.TopAuthorities(topN)
 	v.BrokenEdges = slices.Clone(res.BrokenEdges)

@@ -227,6 +227,16 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 				"(or a hub neighbour above the fan-out limit was skipped); "+
 				"additional pairs were not reported\n", graphmodel.MaxSuggestedLinks)
 	}
+	// Navigability scalars are pure data (ADR 0014) and never gate the exit code.
+	// A single non-gating notice flags a corpus that is large but very poorly
+	// connected (compactness near 0), so an agent/maintainer notices the
+	// navigability problem without it failing the build.
+	if nav := metrics.Navigability; nav.Documents >= 10 && nav.Compactness < 0.1 {
+		_, _ = fmt.Fprintf(p.log,
+			"matlatl: notice [low-compactness] corpus compactness is %.3f across %d documents "+
+				"(navigational reachability is very low; consider linking clusters together)\n",
+			nav.Compactness, nav.Documents)
+	}
 
 	// Resolve the structure-finding severity (default Info when unset) and the
 	// actual inbound threshold the domain used (it floors <=0 to the default), so

@@ -59,7 +59,10 @@ const GraphJSONName = "graph.json"
 // deadEnd arrays, a bowtie summary, and underLinked/deadEnd summary counts.
 // v3 (ADR 0013) adds the top-level suggestedLinks array (topology-based
 // link-prediction suggestions) and a suggestedLinks summary count.
-const SchemaVersion = 3
+// v4 (ADR 0014) adds a summary.navigability object (compactness, stratum,
+// characteristic/median path length, clustering coefficient, diameter,
+// reachablePairs) — corpus-level navigability scalars, pure data.
+const SchemaVersion = 4
 
 // HITSFloatPrecision is the FIXED number of decimal places HITS hub/authority
 // scores are rounded to in graph.json. HITS scores are L2-normalized into [0,1]
@@ -139,6 +142,22 @@ type Summary struct {
 	Ambiguous      int `json:"ambiguous"`
 	KnowledgeGaps  int `json:"knowledgeGaps"`
 	SuggestedLinks int `json:"suggestedLinks"`
+	// Navigability holds the corpus-level navigability scalars (ADR 0014). Floats
+	// use the fixed-precision Float type so graph.json stays byte-stable.
+	Navigability Navigability `json:"navigability"`
+}
+
+// Navigability is the wire shape of the corpus navigability scalars (ADR 0014).
+// The float fields reuse the fixed-precision Float type (the HITS determinism
+// mechanism) so output is byte-stable; diameter and reachablePairs are integers.
+type Navigability struct {
+	Compactness              Float `json:"compactness"`
+	Stratum                  Float `json:"stratum"`
+	CharacteristicPathLength Float `json:"characteristicPathLength"`
+	MedianPathLength         Float `json:"medianPathLength"`
+	ClusteringCoefficient    Float `json:"clusteringCoefficient"`
+	Diameter                 int   `json:"diameter"`
+	ReachablePairs           int   `json:"reachablePairs"`
 }
 
 // BowtieSummary is the corpus-level bow-tie tally relative to the giant SCC
@@ -380,8 +399,24 @@ func Build(v emit.View) Document {
 		Ambiguous:      len(doc.Ambiguous),
 		KnowledgeGaps:  v.Counts.KnowledgeGap,
 		SuggestedLinks: len(doc.SuggestedLinks),
+		Navigability:   navigability(m.Navigability),
 	}
 	return doc
+}
+
+// navigability projects the domain navigability scalars into the wire shape,
+// rounding the floats to the fixed precision (newFloat) so graph.json is
+// byte-stable.
+func navigability(n graphmodel.Navigability) Navigability {
+	return Navigability{
+		Compactness:              newFloat(n.Compactness),
+		Stratum:                  newFloat(n.Stratum),
+		CharacteristicPathLength: newFloat(n.CharacteristicPathLength),
+		MedianPathLength:         newFloat(n.MedianPathLength),
+		ClusteringCoefficient:    newFloat(n.ClusteringCoefficient),
+		Diameter:                 n.Diameter,
+		ReachablePairs:           n.ReachablePairs,
+	}
 }
 
 // JSON renders the View as the canonical graph.json bytes (pretty-printed,

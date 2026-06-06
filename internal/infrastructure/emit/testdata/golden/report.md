@@ -19,6 +19,16 @@
 
 **Structure: 3 core, 3 in, 2 out, 1 tendril, 9 disconnected**
 
+## Navigability
+
+- Compactness: 0.119 (0 = disconnected, 1 = fully connected)
+- Stratum: 0.494 (0 = cyclic/symmetric, 1 = pure hierarchy)
+- Characteristic path length: 2.000 (mean clicks between linked docs)
+- Median path length: 2.000
+- Diameter: 4 (longest shortest path)
+- Clustering coefficient: 0.648
+- Reachable pairs: 86
+
 ## Broken links and anchors
 
 | File | Line | Kind | Detail | Suggested fix |

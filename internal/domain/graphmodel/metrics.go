@@ -45,6 +45,11 @@ type GraphMetrics struct {
 	// or a hub neighbour was skipped as a generator (MaxNeighbourFanout); surfaced
 	// as a notice.
 	SuggestedLinksTruncated bool
+	// Navigability holds the corpus-level navigability / structural-health scalars
+	// (ADR 0014): compactness, stratum, characteristic/median path length,
+	// clustering coefficient, diameter. Pure data — never a finding, never gates
+	// the check exit code.
+	Navigability Navigability
 
 	// componentOf maps each document to its WCC ID, for emitters.
 	componentOf map[identity.DocumentID]identity.DocumentID
@@ -92,6 +97,9 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 	// the same projection but reports concrete unlinked, structurally-close PAIRS
 	// rather than wholly-disconnected component pairs.
 	linkResult := g.PredictLinks(opts.LinkPrediction)
+	// Navigability scalars (ADR 0014): compactness/stratum over the directed
+	// projection, path-length/clustering over the undirected closure. Pure data.
+	navigability := g.ComputeNavigability()
 
 	return &GraphMetrics{
 		Graph:                   g,
@@ -108,6 +116,7 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 		GapsTruncated:           gapResult.Truncated,
 		SuggestedLinks:          linkResult.Suggestions,
 		SuggestedLinksTruncated: linkResult.Truncated,
+		Navigability:            navigability,
 		componentOf:             memberComponentIndex(wcc),
 	}
 }

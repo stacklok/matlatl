@@ -14,6 +14,7 @@ import (
 	"github.com/stacklok/matlatl/internal/domain/corpus"
 	"github.com/stacklok/matlatl/internal/domain/graphmodel"
 	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
 	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
@@ -136,6 +137,95 @@ func TestJSON_FloatFixedPrecision(t *testing.T) {
 				t.Errorf("hits.%s score = %s, want %d fractional digits", group, s, graphjson.HITSFloatPrecision)
 			}
 		}
+	}
+}
+
+// TestJSON_Navigability proves the summary.navigability block is emitted, the
+// schemaVersion is 4, the floats render at the fixed precision (byte-stable), and
+// the values round-trip into the typed struct. The directed path A->B->C->D has
+// hand-computed compactness 14/36 and diameter 3 (see navigability_test.go).
+func TestJSON_Navigability(t *testing.T) {
+	c := corpus.NewCorpus()
+	for _, id := range []string{"a.md", "b.md", "c.md", "d.md"} {
+		d := &corpus.Document{
+			ID:   corpusID(id),
+			Root: &corpus.Section{Level: 0, Children: []*corpus.Section{{Level: 1, Text: "T", Slug: "t", StartLine: 1, EndLine: 2}}},
+		}
+		if err := c.Add(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Build the directed path projection a->b->c->d directly via the graph.
+	g := graphmodel.BuildReferenceGraph(c, []reference.Reference{
+		pathRef("a.md", "b.md"), pathRef("b.md", "c.md"), pathRef("c.md", "d.md"),
+	}, graphmodel.BuildOptions{})
+	m := graphmodel.Analyze(g, c, graphmodel.AnalyzeOptions{})
+	v := emit.BuildView(application.Result{DocumentCount: c.Len(), Metrics: m, Corpus: c})
+
+	if v.Metrics.Navigability.Documents != 4 {
+		t.Fatalf("expected 4 docs in navigability, got %d", v.Metrics.Navigability.Documents)
+	}
+
+	b, err := graphjson.JSON(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc := graphjson.Build(v); doc.SchemaVersion != 4 {
+		t.Errorf("schemaVersion = %d, want 4", doc.SchemaVersion)
+	}
+
+	// The navigability floats must render at the fixed precision (determinism).
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatal(err)
+	}
+	var summary map[string]json.RawMessage
+	if err := json.Unmarshal(raw["summary"], &summary); err != nil {
+		t.Fatal(err)
+	}
+	var nav map[string]json.RawMessage
+	if err := json.Unmarshal(summary["navigability"], &nav); err != nil {
+		t.Fatalf("summary.navigability missing/invalid: %v", err)
+	}
+	for _, k := range []string{"compactness", "stratum", "characteristicPathLength", "medianPathLength", "clusteringCoefficient"} {
+		if !hasNFractionalDigits(string(nav[k]), graphjson.HITSFloatPrecision) {
+			t.Errorf("navigability.%s = %s, want %d fractional digits", k, nav[k], graphjson.HITSFloatPrecision)
+		}
+	}
+
+	// Round-trip into the typed struct and check the hand-computed values.
+	var typed graphjson.Document
+	if err := json.Unmarshal(b, &typed); err != nil {
+		t.Fatal(err)
+	}
+	wantCompactness := graphjson.Float(14.0 / 36.0)
+	if got := typed.Summary.Navigability.Compactness; got != newFloatForTest(14.0/36.0) {
+		t.Errorf("navigability.compactness = %v, want ~%v", got, wantCompactness)
+	}
+	if got := typed.Summary.Navigability.Diameter; got != 3 {
+		t.Errorf("navigability.diameter = %d, want 3", got)
+	}
+	if got := typed.Summary.Navigability.ReachablePairs; got != 12 {
+		t.Errorf("navigability.reachablePairs = %d, want 12", got)
+	}
+}
+
+// newFloatForTest mirrors graphjson.newFloat's fixed-precision rounding so the
+// test compares against the same value the emitter stores.
+func newFloatForTest(f float64) graphjson.Float {
+	b, _ := json.Marshal(graphjson.Float(f))
+	var out graphjson.Float
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+
+// pathRef builds a minimal valid relative-link reference for the navigability
+// fixture.
+func pathRef(origin, target string) reference.Reference {
+	return reference.Reference{
+		RawReference: reference.RawReference{Origin: corpusID(origin), RawTarget: target, Type: reference.RelativeLink, Line: 1},
+		Target:       reference.ResolvedTarget{Kind: reference.TargetDocument, DocumentID: corpusID(target)},
+		Health:       reference.Valid,
 	}
 }
 

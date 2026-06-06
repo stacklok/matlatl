@@ -1,6 +1,6 @@
 # matlatl
 
-> A markdown documentation corpus of 24 document(s) across 2 component(s), with 195 heading(s) and 70 resolved reference(s). Entries are ordered by importance (most-connected first).
+> A markdown documentation corpus of 25 document(s) across 2 component(s), with 204 heading(s) and 74 resolved reference(s). Entries are ordered by importance (most-connected first). Compactness 0.22, docs ~1.7 clicks apart.
 
 ## Documentation
 
@@ -18,15 +18,16 @@
 - [8. Directory links resolve and confer navigational reachability](docs/adr/0008-directory-links.md): 8. Directory links resolve and confer navigational reachability
 - [12. Graduated structure findings and bow-tie classification](docs/adr/0012-graduated-structure-and-bowtie.md): 12. Graduated structure findings and bow-tie classification
 - [13. Topology-based link prediction (suggested links)](docs/adr/0013-topology-link-prediction.md): 13. Topology-based link prediction (suggested links)
+- [14. Corpus navigability metrics](docs/adr/0014-navigability-metrics.md): 14. Corpus navigability metrics
 - [matlatl architecture](docs/architecture.md): matlatl architecture
 - [matlatl developer guide](docs/dev-guide.md): matlatl developer guide
 - [.matlatl.yml — per-repo configuration (schema v1)](docs/schemas/matlatl-config-v1.md): .matlatl.yml — per-repo configuration (schema v1)
 - [matlatl user guide](docs/user-guide.md): matlatl user guide
 - [Agent guide](AGENTS.md): Agent guide
-- [Changelog](CHANGELOG.md): Changelog
 
 ## Optional
 
+- [Changelog](CHANGELOG.md): Changelog
 - [Contributing to matlatl](CONTRIBUTING.md): Contributing to matlatl
 - [🕸️ matlatl](README.md): 🕸️ matlatl
 
@@ -37,8 +38,8 @@ This corpus is INCOMPLETE for navigation; an agent should not assume full covera
 - 0 orphan document(s) (nothing links to them)
 - 0 unreachable document(s) (not reachable from a root)
 - 4 under-linked document(s) (few inbound links; hard to discover)
-- 12 dead-end document(s) (no onward links)
+- 13 dead-end document(s) (no onward links)
 - 0 broken link(s)
 - 0 broken anchor(s)
 - 0 ambiguous link(s)
-- 131 suggested link(s) (unlinked but topologically related; experimental)
+- 147 suggested link(s) (unlinked but topologically related; experimental)

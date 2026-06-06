@@ -37,7 +37,12 @@ testdata/                fixture corpora + golden artifacts
    wires it together. Enforced in CI by a grep over `go list -deps` (see below).
 2. **Determinism.** Every collection is iterated in sorted order; every artifact
    is byte-stable. Go map iteration order must never leak into output. Floats
-   (HITS) are emitted at fixed precision. Golden tests assert byte-stability.
+   (HITS, navigability) are emitted at fixed precision. The **Float determinism
+   rule:** plain `float64` lives in the domain; the fixed-precision `Float` wire
+   type lives ONLY in the `graphjson` layer (`newFloat` rounds before storing, so
+   equal inputs render to equal bytes). Sum floats in sorted order and read
+   medians from a histogram, never a float sort. Golden tests assert
+   byte-stability.
 3. **Security is not a phase.** Root containment, resource caps, output-path
    sanitization, label escaping, and the SSRF guard are tested with adversarial
    fixtures. See [ADR 0003](adr/0003-security-model.md).
@@ -124,6 +129,13 @@ why output is byte-identical at any worker count. See [ADR 0004](adr/0004-ddd-la
   the frozen `emit.View`/`GraphMetrics` (never mutate the domain), write through
   the `FSWriter`/`safeJoin` guard, escape labels per format, and add a golden +
   byte-stability test.
+- **A new graph metric over distances** — reuse the shared streaming APSP helper
+  `ReferenceGraph.ForEachSourceDistances` (`graphmodel/apsp.go`): one BFS per
+  source, a single reused distance map, no V² matrix (`O(V)` transient memory).
+  It is intentionally minimal — betweenness centrality (P10) will need BFS
+  discovery order + predecessor counts (sigma), which it should expose via a
+  *sibling* helper following the same per-source streaming shape, NOT by adding
+  out-parameters here. See [ADR 0014](adr/0014-navigability-metrics.md).
 - **A new library** — record the decision (or the choice to hand-roll) in
   [ADR 0002](adr/0002-library-choices.md). Keep it out of `domain`.
 - **A new ADR** — copy the format of an existing one, add it to

@@ -80,6 +80,10 @@ type fakeParser struct {
 	err     error
 	calls   int
 	onParse func(file ScannedFile) // optional hook (e.g. to cancel a context)
+	// refsFor optionally supplies the raw outbound references for a parsed doc, so
+	// a test can build a connected corpus (otherwise docs are edgeless). nil means
+	// no references.
+	refsFor func(file ScannedFile) []reference.RawReference
 }
 
 func (f *fakeParser) Parse(_ context.Context, file ScannedFile) (*corpus.Document, error) {
@@ -90,7 +94,11 @@ func (f *fakeParser) Parse(_ context.Context, file ScannedFile) (*corpus.Documen
 	if f.err != nil {
 		return nil, f.err
 	}
-	return &corpus.Document{ID: file.ID}, nil
+	doc := &corpus.Document{ID: file.ID}
+	if f.refsFor != nil {
+		doc.RawReferences = f.refsFor(file)
+	}
+	return doc, nil
 }
 
 // fakeFactory hands out the shared fakeParser from New so tests can inspect its
@@ -116,7 +124,7 @@ func (f *fakeFactory) New() DocumentParser { f.news.Add(1); return f.parser }
 // rely on this propagation.
 func (f *fakeFactory) Clone() DocumentParser {
 	f.news.Add(1)
-	return &fakeParser{err: f.parser.err, onParse: f.parser.onParse}
+	return &fakeParser{err: f.parser.err, onParse: f.parser.onParse, refsFor: f.parser.refsFor}
 }
 
 func newFakeFactory(p *fakeParser) *fakeFactory { return &fakeFactory{parser: p} }
@@ -366,6 +374,101 @@ func TestPipeline_Run_BadRootGlobNotice(t *testing.T) {
 	if !strings.Contains(out, "[bad-root-glob]") || !strings.Contains(out, `"["`) {
 		t.Errorf("expected a bad-root-glob notice naming the pattern, got:\n%s", out)
 	}
+}
+
+// TestPipeline_Run_LowCompactnessNotice pins the [low-compactness] notice rule
+// (ADR 0014): it fires only when Documents>=10 AND compactness<0.1, and it never
+// affects the exit code (navigability is pure data, not a finding). The fake
+// parser yields edgeless documents, so any corpus of >=10 docs has compactness 0
+// (no ordered pair reaches another) and trips the notice; a 9-doc corpus does
+// not (the threshold is N>=10).
+func TestPipeline_Run_LowCompactnessNotice(t *testing.T) {
+	run := func(t *testing.T, n int) (string, platform.ExitCode) {
+		t.Helper()
+		files := make([]ScannedFile, n)
+		for i := range files {
+			files[i] = sf(fmt.Sprintf("doc%02d.md", i))
+		}
+		scanner := &fakeScanner{result: ScanResult{Files: files}}
+		var log bytes.Buffer
+		p := NewPipeline(DefaultConfig(), scanner, newFakeFactory(&fakeParser{}), &log)
+		code, res, err := p.Run(context.Background())
+		if err != nil {
+			t.Fatalf("Run() error: %v", err)
+		}
+		if code != platform.ExitOK {
+			t.Fatalf("pipeline code = %v, want ExitOK", code)
+		}
+		// Navigability is pure data and must NEVER gate the exit code: the default
+		// (non-strict) run over these edgeless docs has no broken links/anchors, so
+		// despite the very low compactness it stays ExitOK. (Under --strict the
+		// orphan/unreachable structure findings gate — that is ADR 0005, NOT
+		// navigability — so we assert the non-strict contract here.)
+		if ec := res.CheckExitCode(false); ec != platform.ExitOK {
+			t.Errorf("CheckExitCode(false) = %v, want ExitOK (navigability never gates)", ec)
+		}
+		return log.String(), code
+	}
+
+	t.Run("fires at N>=10 and low compactness", func(t *testing.T) {
+		out, _ := run(t, 10)
+		if !strings.Contains(out, "[low-compactness]") {
+			t.Errorf("expected a [low-compactness] notice for 10 disconnected docs, got:\n%s", out)
+		}
+	})
+	t.Run("silent below the document threshold", func(t *testing.T) {
+		out, _ := run(t, 9)
+		if strings.Contains(out, "[low-compactness]") {
+			t.Errorf("did not expect a [low-compactness] notice for 9 docs (N<10), got:\n%s", out)
+		}
+	})
+
+	// The Compactness<0.1 comparator itself must be exercised, not just the
+	// N-boundary: a well-connected N>=10 corpus has compactness well ABOVE 0.1, so
+	// the notice must STAY SILENT. This catches a comparator flip (>= vs <) or a
+	// threshold-widening regression. We pin the BEHAVIOR (silent), not the float.
+	t.Run("silent when compactness is healthy at N>=10", func(t *testing.T) {
+		const n = 10
+		const hub = "doc00.md"
+		files := make([]ScannedFile, n)
+		for i := range files {
+			files[i] = sf(fmt.Sprintf("doc%02d.md", i))
+		}
+		// Hub<->spoke: the hub links to all 9 leaves and every leaf links back to the
+		// hub. Every doc reaches every other in <=2 hops, so compactness ~0.91
+		// (>> 0.1); verified by the navigability fixture tests. (18 resolved refs.)
+		parser := &fakeParser{refsFor: func(file ScannedFile) []reference.RawReference {
+			if file.ID.String() == hub {
+				refs := make([]reference.RawReference, 0, n-1)
+				for i := 1; i < n; i++ {
+					refs = append(refs, reference.RawReference{
+						Origin: file.ID, RawTarget: fmt.Sprintf("doc%02d.md", i), Type: reference.RelativeLink, Line: 1,
+					})
+				}
+				return refs
+			}
+			return []reference.RawReference{
+				{Origin: file.ID, RawTarget: hub, Type: reference.RelativeLink, Line: 1},
+			}
+		}}
+		scanner := &fakeScanner{result: ScanResult{Files: files}}
+		var log bytes.Buffer
+		cfg := DefaultConfig()
+		cfg.ParseWorkers = 1
+		p := NewPipeline(cfg, scanner, newFakeFactory(parser), &log)
+		_, res, err := p.Run(context.Background())
+		if err != nil {
+			t.Fatalf("Run() error: %v", err)
+		}
+		// Guard the fixture: the corpus really is well-connected (>0.1), so a SILENT
+		// result means the comparator held, not that compactness happened to be low.
+		if got := res.Metrics.Navigability.Compactness; got <= 0.1 {
+			t.Fatalf("fixture invalid: expected compactness >0.1, got %.4f", got)
+		}
+		if strings.Contains(log.String(), "[low-compactness]") {
+			t.Errorf("did not expect a [low-compactness] notice for a well-connected 10-doc corpus, got:\n%s", log.String())
+		}
+	})
 }
 
 func TestDefaultConfig(t *testing.T) {

@@ -20,3 +20,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0011 | Per-repo configuration file (`.matlatl.yml`) | Accepted |
 | 0012 | Graduated structure findings and bow-tie classification | Accepted |
 | 0013 | Topology-based link prediction (suggested links)        | Accepted |
+| 0014 | Corpus navigability metrics                             | Accepted |

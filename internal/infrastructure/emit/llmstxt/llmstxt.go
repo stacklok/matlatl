@@ -142,11 +142,19 @@ func writeKnownGaps(b *strings.Builder, v emit.View) {
 // plus its headline counts.
 func summaryLine(v emit.View) string {
 	c := v.Counts
+	// One terse navigability clause (ADR 0014): compactness + typical click
+	// distance, so an agent gets the corpus's connectivity at a glance.
+	var nav string
+	if v.Metrics != nil && v.Metrics.Navigability.Documents > 0 {
+		n := v.Metrics.Navigability
+		nav = fmt.Sprintf(" Compactness %.2f, docs ~%.1f clicks apart.",
+			n.Compactness, n.CharacteristicPathLength)
+	}
 	return oneLine(fmt.Sprintf(
 		"A markdown documentation corpus of %d document(s) across %d component(s), "+
 			"with %d heading(s) and %d resolved reference(s). "+
-			"Entries are ordered by importance (most-connected first).",
-		c.Documents, c.Components, c.Headings, c.References))
+			"Entries are ordered by importance (most-connected first).%s",
+		c.Documents, c.Components, c.Headings, c.References, nav))
 }
 
 // rankedReachable returns the reachable documents in importance order (authority

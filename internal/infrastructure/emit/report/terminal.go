@@ -32,6 +32,26 @@ func bowtieLine(v emit.View) string {
 		c[graphmodel.BucketTendril], c[graphmodel.BucketDisconnected])
 }
 
+// navigabilityLines renders the corpus navigability scalars (ADR 0014) as a list
+// of "label: value" lines shared by the terminal and markdown reports. Floats
+// are formatted %.3f. When N==0 (or no metrics) it returns a single
+// "not computed" line so the section is always present (a stable contract).
+func navigabilityLines(v emit.View) []string {
+	if v.Metrics == nil || v.Metrics.Navigability.Documents == 0 {
+		return []string{"Navigability: not computed (no documents)"}
+	}
+	n := v.Metrics.Navigability
+	return []string{
+		fmt.Sprintf("Compactness: %.3f (0 = disconnected, 1 = fully connected)", n.Compactness),
+		fmt.Sprintf("Stratum: %.3f (0 = cyclic/symmetric, 1 = pure hierarchy)", n.Stratum),
+		fmt.Sprintf("Characteristic path length: %.3f (mean clicks between linked docs)", n.CharacteristicPathLength),
+		fmt.Sprintf("Median path length: %.3f", n.MedianPathLength),
+		fmt.Sprintf("Diameter: %d (longest shortest path)", n.Diameter),
+		fmt.Sprintf("Clustering coefficient: %.3f", n.ClusteringCoefficient),
+		fmt.Sprintf("Reachable pairs: %d", n.ReachablePairs),
+	}
+}
+
 // TerminalOptions tunes the terminal report.
 type TerminalOptions struct {
 	// Color selects color behavior (auto/never/always). Auto is TTY+NO_COLOR aware.
@@ -167,6 +187,13 @@ func fullReport(w io.Writer, p palette, v emit.View) error {
 
 	// Bow-tie structure summary (macro-shape relative to the giant core).
 	ew.line(p.dim(bowtieLine(v)))
+	ew.line("")
+
+	// Navigability scalars (ADR 0014): how navigable the corpus is overall.
+	ew.line(p.bold("Navigability"))
+	for _, l := range navigabilityLines(v) {
+		ew.line("  " + p.dim(l))
+	}
 	ew.line("")
 
 	// 4. Top hubs / authorities.
