@@ -136,8 +136,10 @@ prove internal targets are refused **without a network call**.
 over **streamable HTTP** (`github.com/mark3labs/mcp-go`, isolated in
 `internal/infrastructure/mcpserver` — the only package importing the MCP lib):
 `what-links-to`, `list-orphans`, `path-between`, `get-section`,
-`corpus-summary` (the graph.json manifest), and `suggest-links` (topology-based
-suggested links, doc-scoped or global top-N; ADR 0013). The endpoint is served at `/mcp` on
+`corpus-summary` (the graph.json manifest), `suggest-links` (topology-based
+suggested links, doc-scoped or global top-N; ADR 0013), and `critical-docs` (the
+critical-path structure — top load-bearing docs by betweenness, plus articulation
+points and bridges; ADR 0015). The endpoint is served at `/mcp` on
 `--address` (default `127.0.0.1:8080`); the serving context drives a graceful
 drain on shutdown. Tools reuse the `emit.View` + `emit/graphjson` layers and
 validate every `DocumentID` against the corpus.
@@ -145,6 +147,9 @@ validate every `DocumentID` against the corpus.
 ## 5. Delivery
 
 Built in phases P0–P6 (skeleton → scan/parse → resolve/check → graph/analysis →
-human emitters → LLM emitters → MCP/concurrency). Each phase: Go-expert
-implementation → expert panel review (concurrency, security, QA, duplication,
-library-vs-handroll, idiomacy) → fixes → small commits → user gate.
+human emitters → LLM emitters → MCP/concurrency), then extended by phases P7–P10
+(graduated structure + bow-tie → topology link prediction → navigability metrics
+→ critical-path analysis). Each phase: architect plan → separate implementation →
+expert panel review (spec conformance, domain correctness, QA/test-adequacy; plus
+concurrency, security, duplication, library-vs-handroll, idiomacy) → fixes →
+small commits → user gate.

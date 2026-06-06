@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Machine-artifact schemas bumped (additively).** `graph.json` is now
+  **schema version 5** (per-node `bowtie` / `underLinked` / `deadEnd` /
+  `betweenness` / `isArticulation`; top-level `suggestedLinks`, `articulationPoints`,
+  `bridges`; `summary.navigability` + `summary.betweenness`), and `findings.json`
+  is now **schema version 5** with the new finding kinds (`under-linked`,
+  `dead-end`, `suggested-link`, `articulation-point`, `bridge`). Existing
+  consumers keep working; the new fields are additive. Emitter types and the
+  published JSON Schemas are kept in lockstep and validated in tests.
 - **`matlatl serve` now speaks MCP over streamable HTTP instead of stdio.** The
   endpoint is served at `/mcp` on `--address` (default `127.0.0.1:8080`); the
   serving context drives a graceful drain of in-flight requests on shutdown.
@@ -29,6 +37,36 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Graduated structure findings + bow-tie classification** — the binary orphan
+  check is now a tiered ladder: **orphan** (no inbound *and* no outbound links,
+  most severe) → **dead-end** (inbound but nothing onward) → **under-linked**
+  (fewer inbound links than the discoverability threshold). `under-linked` and
+  `dead-end` default to **Info** severity (never fail `check`) and can be promoted
+  to `warning` via the `structureFindingsSeverity` config key; `inboundThreshold`
+  (default 3, plus `--inbound-threshold`) sets the under-linked line. Every doc is
+  also classified into a **bow-tie** bucket (core / in / out / tendril /
+  disconnected) relative to the giant SCC, surfaced as data in `graph.json`, the
+  report, and MCP. See [ADR 0012](docs/adr/0012-graduated-structure-and-bowtie.md).
+- **Topology-based link prediction (`suggested-link`)** — ranked "these two docs
+  should link" suggestions from bibliographic coupling (`|out∩out|`), co-citation
+  (`|in∩in|`), and Adamic/Adar, over currently-unlinked pairs. Info severity;
+  **augments** (does not replace) the disconnected-cluster knowledge-gap signal.
+  New read-only MCP tool `suggest-links` (doc-scoped or global top-N). See
+  [ADR 0013](docs/adr/0013-topology-link-prediction.md).
+- **Navigability metrics** — a corpus-level health panel reported as scalars
+  (never gate `check`): **compactness** and **stratum** (Botafogo/Rivlin/
+  Shneiderman) over the directed projection, plus **characteristic / median path
+  length**, **diameter**, and **clustering coefficient** over the undirected
+  closure. A non-gating `[low-compactness]` notice fires only on a non-trivial
+  corpus (≥10 docs) with compactness < 0.1. See
+  [ADR 0014](docs/adr/0014-navigability-metrics.md).
+- **Critical-path analysis** — **betweenness centrality** (Brandes, directed)
+  surfaces the **load-bearing docs** that navigation flows through (per-doc data +
+  top-N, like HITS), and **articulation points** + **bridges** (iterative Tarjan
+  over the undirected closure) flag the single docs/links whose removal fragments
+  the corpus as Info findings (`articulation-point`, `bridge`) plus `graph.json`
+  data. New read-only MCP tool `critical-docs`. See
+  [ADR 0015](docs/adr/0015-critical-path-analysis.md).
 - **`.matlatl.yml` per-repo configuration file** — an optional, committed file at
   the scan root (sibling of `.matlatlignore`) that declares **additional
   reachability `roots`** (path globs, same `path.Match` semantics as `--root`),

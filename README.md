@@ -37,13 +37,20 @@ removal fragments the corpus). It then renders the result for three audiences:
 
 ## Status
 
-✅ Feature-complete across phases P0–P6: secure scan + parse, link/anchor
-resolution, the reference graph with orphan/unreachable/component/HITS/gap
-analysis plus topology-based link suggestions, human emitters (terminal,
-Markdown, Mermaid, DOT, index), LLM
-emitters (`graph.json`, the `llms.txt` family, actionable `findings.json`),
-fan-out parsing, and a read-only MCP server. See [`docs/architecture.md`](docs/architecture.md)
-and the [ADRs](docs/adr/).
+✅ The P0–P6 foundation is feature-complete: secure scan + parse, link/anchor
+resolution, the reference graph (reachability, components, HITS hub/authority),
+human emitters (terminal, Markdown, Mermaid, DOT, index), LLM emitters
+(`graph.json`, the `llms.txt` family, actionable `findings.json`), fan-out
+parsing, and a read-only MCP server. Phases **P7–P10** extend the analysis with
+the **graduated structure ladder + bow-tie** classification
+([ADR 0012](docs/adr/0012-graduated-structure-and-bowtie.md)), **topology-based
+link prediction** ([ADR 0013](docs/adr/0013-topology-link-prediction.md)),
+corpus-level **navigability metrics**
+([ADR 0014](docs/adr/0014-navigability-metrics.md)), and **critical-path
+analysis** — betweenness + articulation points / bridges
+([ADR 0015](docs/adr/0015-critical-path-analysis.md)) — surfaced over the same
+report, `graph.json`, `llms.txt`, and MCP. See
+[`docs/architecture.md`](docs/architecture.md) and the [ADRs](docs/adr/).
 
 ## Quick start
 
@@ -52,7 +59,7 @@ $ matlatl .                 # scan + analyze, print the terminal report
 $ matlatl check .           # CI lint mode: non-zero exit on broken links/anchors
 $ matlatl graph . --format mermaid
 $ matlatl index .           # emit index.md + llms.txt
-$ matlatl orphans .         # list orphans / unreachable docs
+$ matlatl orphans .         # list orphans, under-linked, dead-end & unreachable docs
 $ matlatl fix-prompt . | claude -p   # agent-ready prompt to fix the findings
 $ matlatl serve .           # MCP server exposing graph queries to agents
 ```
