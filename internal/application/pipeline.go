@@ -86,6 +86,11 @@ type Result struct {
 	OrphanCount       int
 	UnreachableCount  int
 	KnowledgeGapCount int
+	// SuggestedLinkCount is the number of topology-based suggested-link findings
+	// (ADR 0013). Info; never affects the exit code. SuggestedLinksTruncated
+	// reports the suggestion list was capped or a hub neighbour was skipped.
+	SuggestedLinkCount      int
+	SuggestedLinksTruncated bool
 	// UnderLinkedCount / DeadEndCount are the graduated structure-tier tallies
 	// (ADR 0012). They affect the exit code only when StructureFindingsSeverity is
 	// Warning (consulted by CheckExitCode).
@@ -193,8 +198,12 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	// as orphans) do not also generate an O(k^2) blow-up of singleton gaps
 	// (ADR 0007).
 	metrics := graphmodel.Analyze(graph, c, graphmodel.AnalyzeOptions{
-		RootGlobs:        p.cfg.Roots,
-		Gaps:             graphmodel.GapOptions{MinComponentSize: 2},
+		RootGlobs: p.cfg.Roots,
+		Gaps:      graphmodel.GapOptions{MinComponentSize: 2},
+		// Link prediction (ADR 0013) is an additive signal. The config-only
+		// LinkSuggestionMinShared knob tunes the shared-neighbour floor; <=0 is
+		// normalized to the domain default (2) inside PredictLinks.
+		LinkPrediction:   graphmodel.LinkPredictionOptions{MinSharedNeighbours: p.cfg.LinkSuggestionMinShared},
 		InboundThreshold: p.cfg.InboundThreshold, // <=0 normalized to default in Analyze
 	})
 	if metrics.RootSet.Indeterminate && c.Len() > 0 {
@@ -211,6 +220,12 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		_, _ = fmt.Fprintf(p.log,
 			"matlatl: notice [gaps-truncated] knowledge-gap list capped at %d; "+
 				"additional component pairs were not reported\n", graphmodel.MaxGaps)
+	}
+	if metrics.SuggestedLinksTruncated {
+		_, _ = fmt.Fprintf(p.log,
+			"matlatl: notice [suggested-links-truncated] suggested-link list capped at %d "+
+				"(or a hub neighbour above the fan-out limit was skipped); "+
+				"additional pairs were not reported\n", graphmodel.MaxSuggestedLinks)
 	}
 
 	// Resolve the structure-finding severity (default Info when unset) and the
@@ -249,6 +264,9 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		KnowledgeGapCount: report.CountByKind(analysis.KnowledgeGap),
 		UnderLinkedCount:  report.CountByKind(analysis.UnderLinked),
 		DeadEndCount:      report.CountByKind(analysis.DeadEnd),
+
+		SuggestedLinkCount:      report.CountByKind(analysis.SuggestedLink),
+		SuggestedLinksTruncated: metrics.SuggestedLinksTruncated,
 
 		StructureFindingsSeverity: structureSev,
 

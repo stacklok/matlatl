@@ -197,6 +197,16 @@ func fullReport(w io.Writer, p palette, v emit.View) error {
 		ew.line(p.dim("Knowledge gaps: none"))
 	}
 
+	// 6. Suggested links (closing note, ADR 0013).
+	switch {
+	case v.SuggestedLinksTruncated:
+		ew.line(p.dim(fmt.Sprintf("Suggested links: %d+ topology-based suggestion(s) (list truncated)", len(v.SuggestedLinks))))
+	case len(v.SuggestedLinks) > 0:
+		ew.line(p.dim(fmt.Sprintf("Suggested links: %d topology-based suggestion(s) (experimental)", len(v.SuggestedLinks))))
+	default:
+		ew.line(p.dim("Suggested links: none"))
+	}
+
 	return ew.err
 }
 

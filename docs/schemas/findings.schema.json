@@ -13,14 +13,14 @@
     "findings"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 3 },
+    "schemaVersion": { "type": "integer", "const": 4 },
     "tool": { "type": "string" },
     "summary": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "total", "brokenLink", "brokenAnchor", "ambiguous",
-        "orphan", "unreachable", "knowledgeGap", "underLinked", "deadEnd"
+        "orphan", "unreachable", "knowledgeGap", "underLinked", "deadEnd", "suggestedLink"
       ],
       "properties": {
         "total": { "type": "integer", "minimum": 0 },
@@ -31,7 +31,8 @@
         "unreachable": { "type": "integer", "minimum": 0 },
         "knowledgeGap": { "type": "integer", "minimum": 0 },
         "underLinked": { "type": "integer", "minimum": 0 },
-        "deadEnd": { "type": "integer", "minimum": 0 }
+        "deadEnd": { "type": "integer", "minimum": 0 },
+        "suggestedLink": { "type": "integer", "minimum": 0 }
       }
     },
     "remediationGuide": {
@@ -52,7 +53,7 @@
             "enum": [
               "broken-link", "broken-anchor", "ambiguous",
               "orphan", "unreachable", "under-linked", "dead-end",
-              "knowledge-gap", "dead-link"
+              "knowledge-gap", "suggested-link", "dead-link"
             ]
           },
           "severity": { "type": "string", "enum": ["info", "warning", "error"] },

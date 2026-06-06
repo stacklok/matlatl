@@ -1,6 +1,6 @@
 # Project Home
 
-> A markdown documentation corpus of 16 document(s) across 6 component(s), with 27 heading(s) and 27 resolved reference(s). Entries are ordered by importance (most-connected first).
+> A markdown documentation corpus of 18 document(s) across 6 component(s), with 29 heading(s) and 31 resolved reference(s). Entries are ordered by importance (most-connected first).
 
 ## Documentation
 
@@ -16,9 +16,10 @@
 This corpus is INCOMPLETE for navigation; an agent should not assume full coverage:
 
 - 2 orphan document(s) (nothing links to them)
-- 7 unreachable document(s) (not reachable from a root)
+- 9 unreachable document(s) (not reachable from a root)
 - 8 under-linked document(s) (few inbound links; hard to discover)
 - 1 dead-end document(s) (no onward links)
 - 3 broken link(s)
 - 1 broken anchor(s)
 - 1 ambiguous link(s)
+- 1 suggested link(s) (unlinked but topologically related; experimental)

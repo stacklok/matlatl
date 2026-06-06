@@ -122,7 +122,7 @@ func writeKnownGaps(b *strings.Builder, v emit.View) {
 	b.WriteString("## Known gaps\n\n")
 	c := v.Counts
 	total := c.Orphan + c.Unreachable + c.UnderLinked + c.DeadEnd +
-		c.BrokenLink + c.BrokenAnchor + c.Ambiguous
+		c.BrokenLink + c.BrokenAnchor + c.Ambiguous + c.SuggestedLink
 	if total == 0 {
 		b.WriteString("- None: every document is reachable and all links resolve.\n")
 		return
@@ -135,6 +135,7 @@ func writeKnownGaps(b *strings.Builder, v emit.View) {
 	fmt.Fprintf(b, "- %d broken link(s)\n", c.BrokenLink)
 	fmt.Fprintf(b, "- %d broken anchor(s)\n", c.BrokenAnchor)
 	fmt.Fprintf(b, "- %d ambiguous link(s)\n", c.Ambiguous)
+	fmt.Fprintf(b, "- %d suggested link(s) (unlinked but topologically related; experimental)\n", c.SuggestedLink)
 }
 
 // summaryLine is the one/two-sentence blockquote summary: what the corpus is

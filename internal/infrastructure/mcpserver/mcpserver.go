@@ -6,7 +6,7 @@
 // is reachable only from `matlatl serve`).
 //
 // The server runs the matlatl pipeline ONCE over the path at construction time
-// to build the frozen analysis (corpus, graph, metrics), then serves five
+// to build the frozen analysis (corpus, graph, metrics), then serves six
 // read-only tools that return the SAME structured data as the file artifacts by
 // reusing the emit.View + emit/graphjson layers — nothing is reinvented:
 //
@@ -16,6 +16,8 @@
 //   - path-between(a,b)     a navigational path a→b over the document projection
 //   - get-section(doc#slug) section info (level, title, doc) for an anchor
 //   - corpus-summary        the graph.json manifest (nodes/edges/components/HITS/…)
+//   - suggest-links([doc])  topology-based suggested links (ADR 0013): unlinked
+//     but structurally-close pairs, doc-scoped or global top-N
 //
 // Inputs are DocumentIDs; every tool validates them against the corpus and never
 // reads outside the scan root (the pipeline already enforces root containment;
@@ -141,6 +143,7 @@ func (a *Analysis) Tools() []server.ServerTool {
 		{Tool: pathBetweenTool(), Handler: a.handlePathBetween},
 		{Tool: getSectionTool(), Handler: a.handleGetSection},
 		{Tool: corpusSummaryTool(), Handler: a.handleCorpusSummary},
+		{Tool: suggestLinksTool(), Handler: a.handleSuggestLinks},
 	}
 }
 
@@ -178,7 +181,20 @@ func getSectionTool() mcp.Tool {
 
 func corpusSummaryTool() mcp.Tool {
 	return mcp.NewTool("corpus-summary",
-		mcp.WithDescription("Return the full graph.json manifest of the corpus: nodes, edges, sections, components, HITS hub/authority rankings, orphans, unreachable, broken links and knowledge gaps."),
+		mcp.WithDescription("Return the full graph.json manifest of the corpus: nodes, edges, sections, components, HITS hub/authority rankings, orphans, unreachable, broken links, knowledge gaps and topology-based suggested links."),
+	)
+}
+
+// suggestLinksGlobalTopN bounds the number of suggestions the global (no-doc)
+// suggest-links view returns, so an agent gets the highest-signal candidates
+// without the full capped list.
+const suggestLinksGlobalTopN = 10
+
+func suggestLinksTool() mcp.Tool {
+	return mcp.NewTool("suggest-links",
+		mcp.WithDescription("Return topology-based suggested links (experimental, ADR 0013): pairs of documents that share navigational neighbours but do not link to each other, ranked by Adamic/Adar. With 'doc', returns the suggested partners for that document; without it, returns the global top suggestions."),
+		mcp.WithString("doc",
+			mcp.Description("Optional DocumentID to scope suggestions to (its suggested link partners). Omit for the global top-N.")),
 	)
 }
 
@@ -300,4 +316,66 @@ func (a *Analysis) handleCorpusSummary(_ context.Context, _ mcp.CallToolRequest)
 	return mcp.NewToolResultStructured(manifest,
 		fmt.Sprintf("corpus: %d documents, %d edges, %d components",
 			manifest.Summary.Documents, manifest.Summary.Edges, manifest.Summary.Components)), nil
+}
+
+// suggestionPayload is the wire shape of one suggested link returned by
+// suggest-links. It mirrors the graph.json SuggestedLink fields.
+type suggestionPayload struct {
+	DocA             string  `json:"docA"`
+	DocB             string  `json:"docB"`
+	SharedNeighbours int     `json:"sharedNeighbours"`
+	Coupling         int     `json:"coupling"`
+	CoCitation       int     `json:"coCitation"`
+	AdamicAdar       float64 `json:"adamicAdar"`
+}
+
+func (a *Analysis) handleSuggestLinks(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	doc := req.GetString("doc", "")
+	all := a.view.SuggestedLinks // already ranked (Adamic/Adar DESC, tie-broken)
+
+	if doc != "" {
+		id, ok := a.docID(doc)
+		if !ok {
+			return mcp.NewToolResultError(fmt.Sprintf("unknown document %q", doc)), nil
+		}
+		partners := make([]suggestionPayload, 0)
+		for _, s := range all {
+			if s.DocA == id || s.DocB == id {
+				partners = append(partners, toSuggestionPayload(s))
+			}
+		}
+		return mcp.NewToolResultStructured(map[string]any{
+			"document":    id.String(),
+			"suggestions": partners,
+			"count":       len(partners),
+			"truncated":   a.view.SuggestedLinksTruncated,
+		}, fmt.Sprintf("%d suggested link(s) for %s", len(partners), id)), nil
+	}
+
+	// Global: the top-N highest-signal suggestions.
+	shown := all
+	if len(shown) > suggestLinksGlobalTopN {
+		shown = shown[:suggestLinksGlobalTopN]
+	}
+	out := make([]suggestionPayload, 0, len(shown))
+	for _, s := range shown {
+		out = append(out, toSuggestionPayload(s))
+	}
+	return mcp.NewToolResultStructured(map[string]any{
+		"suggestions": out,
+		"count":       len(out),
+		"total":       len(all),
+		"truncated":   a.view.SuggestedLinksTruncated,
+	}, fmt.Sprintf("%d of %d topology-based suggested link(s)", len(out), len(all))), nil
+}
+
+func toSuggestionPayload(s graphmodel.LinkSuggestion) suggestionPayload {
+	return suggestionPayload{
+		DocA:             s.DocA.String(),
+		DocB:             s.DocB.String(),
+		SharedNeighbours: s.SharedNeighbours,
+		Coupling:         s.Coupling,
+		CoCitation:       s.CoCitation,
+		AdamicAdar:       s.AdamicAdar,
+	}
 }

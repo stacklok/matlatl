@@ -73,6 +73,11 @@ type Config struct {
 	// findings (under-linked, dead-end). Default "info" (never fails check);
 	// "warning" promotes them so they fail `check --strict`.
 	StructureFindingsSeverity StructureFindingsSeverity
+	// LinkSuggestionMinShared is the minimum shared-neighbour count an unlinked
+	// pair must have to be reported as a suggested-link (ADR 0013). Config-only
+	// knob (no CLI flag). <=0 is normalized to the domain default (2) in
+	// PredictLinks.
+	LinkSuggestionMinShared int
 }
 
 // DefaultConfig returns a Config with sane defaults: scan the current

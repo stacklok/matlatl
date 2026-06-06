@@ -21,7 +21,7 @@ func newReportCommand() *cobra.Command {
 		Short: "Render a human-readable Markdown analysis report",
 		Long: "report scans, analyzes, and renders a committable GitHub-flavored " +
 			"Markdown report (corpus overview, broken links/anchors, orphans, " +
-			"unreachable, hubs/authorities, knowledge gaps).\n\n" +
+			"unreachable, hubs/authorities, knowledge gaps, link suggestions).\n\n" +
 			"With --out the report is written to report.md under the output directory; " +
 			"otherwise it is printed to stdout.",
 		Args:          usageArgs(cobra.MaximumNArgs(1)),

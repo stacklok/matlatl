@@ -4,20 +4,20 @@
 
 | Metric | Count |
 | --- | --- |
-| Documents | 16 |
-| Headings | 27 |
-| References | 27 |
+| Documents | 18 |
+| Headings | 29 |
+| References | 31 |
 | Components | 6 |
 | Broken links | 3 |
 | Broken anchors | 1 |
 | Ambiguous links | 1 |
 | Orphans | 2 |
-| Unreachable | 7 |
+| Unreachable | 9 |
 | Under-linked | 8 |
 | Dead-ends | 1 |
 | Knowledge gaps | 3 |
 
-**Structure: 3 core, 3 in, 2 out, 1 tendril, 7 disconnected**
+**Structure: 3 core, 3 in, 2 out, 1 tendril, 9 disconnected**
 
 ## Broken links and anchors
 
@@ -49,8 +49,8 @@ _Fewer inbound links than the discoverability threshold. Add inbound links from 
 - `docs/cycle/beta.md` — Cycle Beta
 - `docs/flow/aside.md` — Tendril Aside
 - `docs/flow/branch.md` — Downstream Branch
-- `docs/island/one.md` — Island One
-- `docs/island/two.md` — Island Two
+- `docs/island/four.md` — Island Four
+- `docs/island/three.md` — Island Three
 - `docs/links.md` — Link Showcase
 - `docs/stray.md` — Stray Page
 
@@ -67,7 +67,9 @@ _Not reachable from any root. Add an inbound link from a page that is itself rea
 - `docs/cycle/alpha.md` — Cycle Alpha
 - `docs/cycle/beta.md` — Cycle Beta
 - `docs/flow/aside.md` — Tendril Aside
+- `docs/island/four.md` — Island Four
 - `docs/island/one.md` — Island One
+- `docs/island/three.md` — Island Three
 - `docs/island/two.md` — Island Two
 - `docs/links.md` — Link Showcase
 - `docs/stray.md` — Stray Page
@@ -80,7 +82,7 @@ _Not reachable from any root. Add an inbound link from a page that is itself rea
 | 2 | Project Home (0.471) | Overview (0.588) |
 | 3 | User Guide (0.409) | Project Home (0.478) |
 | 4 | Overview (0.296) | Downstream Branch (0.133) |
-| 5 | Docs Index (0.245) | Cycle Alpha (0.000) |
+| 5 | Docs Index (0.245) | Island One (0.000) |
 
 ## Knowledge gaps
 
@@ -89,5 +91,13 @@ _Experimental: pairs of disconnected document clusters that may warrant a bridge
 | Cluster A | Cluster B |
 | --- | --- |
 | README.md | docs/cycle/alpha.md |
-| README.md | docs/island/one.md |
-| docs/cycle/alpha.md | docs/island/one.md |
+| README.md | docs/island/four.md |
+| docs/cycle/alpha.md | docs/island/four.md |
+
+## Suggested links
+
+_Experimental: unlinked document pairs that share neighbours, ranked by Adamic/Adar; topology suggests they may warrant a link (ADR 0013)._
+
+| From | To | Shared | A/A score |
+| --- | --- | --- | --- |
+| docs/island/four.md | docs/island/three.md | 2 | 1.820478 |

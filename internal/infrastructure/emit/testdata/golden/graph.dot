@@ -10,8 +10,10 @@ digraph matlatl {
   "n_4affafca6752c1cf" [label="Downstream Branch\ndocs/flow/branch.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=1.175];
   "n_4cea44cc464214b7" [label="Terminal Page\ndocs/flow/terminal.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=1.073];
   "n_70bb5115f916ef90" [label="User Guide\ndocs/guide.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=1.302];
-  "n_80bfc64e6fdbf514" [label="Island One\ndocs/island/one.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
-  "n_e5a2da93cbd610be" [label="Island Two\ndocs/island/two.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
+  "n_ced1fee869f24e2a" [label="Island Four\ndocs/island/four.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=0.900];
+  "n_80bfc64e6fdbf514" [label="Island One\ndocs/island/one.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.247];
+  "n_652a1a6c037e5a84" [label="Island Three\ndocs/island/three.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=0.900];
+  "n_e5a2da93cbd610be" [label="Island Two\ndocs/island/two.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.247];
   "n_afb4347eafb2315b" [label="Link Showcase\ndocs/links.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=0.900];
   "n_f8469fc8a448d4b9" [label="Project Notes\ndocs/project/notes.md", fillcolor="#ffebee", color="#c62828", penwidth=2, width=0.900];
   "n_240b3a164b4fe05f" [label="Stray Page\ndocs/stray.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=0.900];
@@ -32,7 +34,11 @@ digraph matlatl {
   "n_4affafca6752c1cf" -> "n_4cea44cc464214b7";
   "n_70bb5115f916ef90" -> "n_3f15cf6f633a5d62";
   "n_70bb5115f916ef90" -> "n_55587a0e3176141a";
+  "n_ced1fee869f24e2a" -> "n_80bfc64e6fdbf514";
+  "n_ced1fee869f24e2a" -> "n_e5a2da93cbd610be";
   "n_80bfc64e6fdbf514" -> "n_e5a2da93cbd610be";
+  "n_652a1a6c037e5a84" -> "n_80bfc64e6fdbf514";
+  "n_652a1a6c037e5a84" -> "n_e5a2da93cbd610be";
   "n_e5a2da93cbd610be" -> "n_80bfc64e6fdbf514";
   "n_afb4347eafb2315b" -> "n_3f15cf6f633a5d62";
   "n_afb4347eafb2315b" -> "n_70bb5115f916ef90";

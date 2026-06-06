@@ -1,6 +1,6 @@
 # Project Home
 
-> A markdown documentation corpus of 16 document(s) across 6 component(s), with 27 heading(s) and 27 resolved reference(s). Entries are ordered by importance (most-connected first).
+> A markdown documentation corpus of 18 document(s) across 6 component(s), with 29 heading(s) and 31 resolved reference(s). Entries are ordered by importance (most-connected first).
 
 ---
 

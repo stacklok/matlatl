@@ -516,10 +516,126 @@ func TestIntegration_GraphJSONToOut(t *testing.T) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("graph.json does not parse: %v", err)
 	}
-	if doc.SchemaVersion != 2 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
+	if doc.SchemaVersion != 3 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
 		t.Errorf("graph.json content unexpected: version=%d docs=%d nodes=%d", doc.SchemaVersion, doc.Summary.Documents, len(doc.Nodes))
 	}
 	assertNothingEscaped(t, outDir, []string{"graph.json"})
+}
+
+// TestIntegration_SuggestedLinks: the topology-based suggested-link signal
+// (ADR 0013) surfaces end-to-end through the real CLI — a suggested-link finding
+// in findings.json, a suggestedLinks entry in graph.json, the report section, and
+// (crucially) it does NOT change the exit code even under --strict.
+func TestIntegration_SuggestedLinks(t *testing.T) {
+	outDir := t.TempDir()
+	var out, errOut bytes.Buffer
+	// `emit --out` runs the full pipeline and writes the artifact bundle
+	// (findings.json + graph.json). The corpus fixture's island three/four pair is
+	// unlinked and shares two neighbours, so it yields a suggested-link.
+	if code := runArgs(context.Background(),
+		[]string{"emit", corpusFixture(t), "--out", outDir}, &out, &errOut); code != platform.ExitOK {
+		t.Fatalf("emit code = %v, want ExitOK (stderr=%q)", code, errOut.String())
+	}
+
+	// findings.json carries a suggested-link finding (Info) with its details.
+	fb, err := os.ReadFile(filepath.Join(outDir, "findings.json"))
+	if err != nil {
+		t.Fatalf("findings.json not written: %v", err)
+	}
+	var fdoc struct {
+		SchemaVersion int `json:"schemaVersion"`
+		Summary       struct {
+			SuggestedLink int `json:"suggestedLink"`
+		} `json:"summary"`
+		Findings []struct {
+			Kind     string            `json:"kind"`
+			Severity string            `json:"severity"`
+			Details  map[string]string `json:"details"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(fb, &fdoc); err != nil {
+		t.Fatalf("findings.json does not parse: %v", err)
+	}
+	if fdoc.SchemaVersion != 4 {
+		t.Errorf("findings.json schemaVersion = %d, want 4", fdoc.SchemaVersion)
+	}
+	if fdoc.Summary.SuggestedLink < 1 {
+		t.Errorf("findings.json summary.suggestedLink = %d, want >= 1", fdoc.Summary.SuggestedLink)
+	}
+	var found bool
+	for _, f := range fdoc.Findings {
+		if f.Kind == "suggested-link" {
+			found = true
+			if f.Severity != "info" {
+				t.Errorf("suggested-link severity = %q, want info", f.Severity)
+			}
+			if f.Details["suggestedTarget"] == "" || f.Details["sharedNeighbours"] == "" {
+				t.Errorf("suggested-link finding missing details: %+v", f.Details)
+			}
+		}
+	}
+	if !found {
+		t.Error("findings.json missing a suggested-link finding")
+	}
+
+	// graph.json carries the suggestedLinks array.
+	gb, err := os.ReadFile(filepath.Join(outDir, "graph.json"))
+	if err != nil {
+		t.Fatalf("graph.json not written: %v", err)
+	}
+	var gdoc struct {
+		Summary struct {
+			SuggestedLinks int `json:"suggestedLinks"`
+		} `json:"summary"`
+		SuggestedLinks []struct {
+			DocA             string `json:"docA"`
+			DocB             string `json:"docB"`
+			SharedNeighbours int    `json:"sharedNeighbours"`
+		} `json:"suggestedLinks"`
+	}
+	if err := json.Unmarshal(gb, &gdoc); err != nil {
+		t.Fatalf("graph.json does not parse: %v", err)
+	}
+	if len(gdoc.SuggestedLinks) < 1 || gdoc.Summary.SuggestedLinks < 1 {
+		t.Errorf("graph.json suggestedLinks empty: array=%d summary=%d",
+			len(gdoc.SuggestedLinks), gdoc.Summary.SuggestedLinks)
+	}
+
+	// The report renders a Suggested links section.
+	var rout, rerr bytes.Buffer
+	if rc := runArgs(context.Background(), []string{"report", corpusFixture(t)}, &rout, &rerr); rc != platform.ExitOK {
+		t.Fatalf("report code = %v, want ExitOK (stderr=%q)", rc, rerr.String())
+	}
+	if !strings.Contains(rout.String(), "## Suggested links") {
+		t.Error("report.md missing the Suggested links section")
+	}
+}
+
+// TestIntegration_SuggestedLinksDoNotGate: a corpus whose ONLY findings are
+// suggested links exits ExitOK even under --strict (ADR 0013: Info, ungated).
+func TestIntegration_SuggestedLinksDoNotGate(t *testing.T) {
+	// Build a tiny clean corpus where two docs share two neighbours but do not
+	// link to each other, and everything is reachable from the README root.
+	root := t.TempDir()
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// README links to all four so nothing is an orphan/unreachable. three and four
+	// both link to one and two (shared neighbours), but not to each other.
+	write("README.md", "# Home\n\n[one](one.md) [two](two.md) [three](three.md) [four](four.md)\n")
+	write("one.md", "# One\n\n[home](README.md)\n")
+	write("two.md", "# Two\n\n[home](README.md)\n")
+	write("three.md", "# Three\n\n[one](one.md) [two](two.md)\n")
+	write("four.md", "# Four\n\n[one](one.md) [two](two.md)\n")
+
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"check", root, "--strict"}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Errorf("check --strict on a suggested-link-only corpus = %v, want ExitOK (suggested links never gate); stderr=%q",
+			code, errOut.String())
+	}
 }
 
 // TestIntegration_EmitBundle: `emit --out` writes the full LLM artifact set,

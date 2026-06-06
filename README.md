@@ -33,7 +33,8 @@ corpus's macro-shape with a **bow-tie** classification (core / in / out / tendri
 
 ✅ Feature-complete across phases P0–P6: secure scan + parse, link/anchor
 resolution, the reference graph with orphan/unreachable/component/HITS/gap
-analysis, human emitters (terminal, Markdown, Mermaid, DOT, index), LLM
+analysis plus topology-based link suggestions, human emitters (terminal,
+Markdown, Mermaid, DOT, index), LLM
 emitters (`graph.json`, the `llms.txt` family, actionable `findings.json`),
 fan-out parsing, and a read-only MCP server. See [`docs/architecture.md`](docs/architecture.md)
 and the [ADRs](docs/adr/).

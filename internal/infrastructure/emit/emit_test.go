@@ -35,6 +35,16 @@ func allKindsReport() *analysis.AnalysisReport {
 			SuggestedFix: "Add onward internal links from \"d.md\" to related documents.",
 			Details:      map[string]string{"targetDocument": "d.md"},
 		},
+		analysis.Finding{
+			ID: "suggested-link:e.md:f.md", Kind: analysis.SuggestedLink, Severity: analysis.Info,
+			Location:     analysis.Location{Document: "e.md"},
+			Message:      "\"e.md\" and \"f.md\" share 2 connection(s) but do not link to each other",
+			SuggestedFix: "If these documents are related, add a navigational link between \"e.md\" and \"f.md\".",
+			Details: map[string]string{
+				"targetDocument": "e.md", "suggestedTarget": "f.md",
+				"sharedNeighbours": "2", "coupling": "1", "coCitation": "1", "adamicAdar": "1.442695",
+			},
+		},
 	)
 	return analysis.NewAnalysisReport(findings)
 }
@@ -244,7 +254,14 @@ func TestFindingsJSON_StructureKindsValidateAgainstSchema(t *testing.T) {
 	if _, ok := kinds["dead-end"]; !ok {
 		t.Error("emitted findings missing a dead-end finding")
 	}
-	for _, k := range []string{"under-linked", "dead-end"} {
+	// ADR 0013: the suggested-link kind + its details validate against the schema.
+	if _, ok := kinds["suggested-link"]; !ok {
+		t.Error("emitted findings missing a suggested-link finding")
+	}
+	if got := kinds["suggested-link"]["suggestedTarget"]; got != "f.md" {
+		t.Errorf("suggested-link detail suggestedTarget = %q, want f.md", got)
+	}
+	for _, k := range []string{"under-linked", "dead-end", "suggested-link"} {
 		if doc.RemediationGuide[k] == "" {
 			t.Errorf("remediationGuide missing entry for emitted kind %q", k)
 		}

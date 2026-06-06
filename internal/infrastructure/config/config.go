@@ -65,6 +65,10 @@ type File struct {
 	// absent; a present value must be one of those two (anything else is a hard
 	// error).
 	StructureFindingsSeverity *string
+	// LinkSuggestionMinShared is the shared-neighbour floor for the suggested-link
+	// signal (ADR 0013). nil when absent (the domain default of 2 applies); a
+	// present value must be >= 0 (negative is a hard error).
+	LinkSuggestionMinShared *int
 }
 
 // rawFile is the permissive decode target. We decode into a generic map first
@@ -184,6 +188,12 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		return File{}, nil, err
 	}
 
+	// --- linkSuggestionMinShared ---
+	linkMinShared, err := resolveLinkSuggestionMinShared(raw)
+	if err != nil {
+		return File{}, nil, err
+	}
+
 	// --- unknown keys (typo / future additive key): ignore + notice ---
 	notices = append(notices, unknownKeyNotices(path, raw)...)
 
@@ -192,7 +202,28 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		Roots:                     roots,
 		InboundThreshold:          threshold,
 		StructureFindingsSeverity: severity,
+		LinkSuggestionMinShared:   linkMinShared,
 	}, notices, nil
+}
+
+// resolveLinkSuggestionMinShared enforces the linkSuggestionMinShared row
+// (ADR 0013): absent → nil; a non-negative integer → parsed; any other shape
+// (non-int, negative) → hard error.
+func resolveLinkSuggestionMinShared(raw rawFile) (*int, error) {
+	v, present := raw["linkSuggestionMinShared"]
+	if !present || v == nil {
+		return nil, nil
+	}
+	n, ok := v.(int)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%s: `linkSuggestionMinShared` must be an integer, got %T", fileName, v)
+	}
+	if n < 0 {
+		return nil, fmt.Errorf(
+			"%s: `linkSuggestionMinShared` must be >= 0, got %d", fileName, n)
+	}
+	return &n, nil
 }
 
 // resolveInboundThreshold enforces the inboundThreshold row: absent → nil; a
@@ -295,6 +326,7 @@ func unknownKeyNotices(path string, raw rawFile) []application.Notice {
 	known := map[string]struct{}{
 		"version": {}, "roots": {},
 		"inboundThreshold": {}, "structureFindingsSeverity": {},
+		"linkSuggestionMinShared": {},
 	}
 	var unknown []string
 	for k := range raw {

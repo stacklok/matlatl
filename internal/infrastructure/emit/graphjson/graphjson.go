@@ -57,7 +57,9 @@ const GraphJSONName = "graph.json"
 // docs/schemas/graph.schema.json (kept in lockstep; a test validates against it).
 // v2 (ADR 0012) adds per-node bowtie/underLinked/deadEnd, top-level underLinked/
 // deadEnd arrays, a bowtie summary, and underLinked/deadEnd summary counts.
-const SchemaVersion = 2
+// v3 (ADR 0013) adds the top-level suggestedLinks array (topology-based
+// link-prediction suggestions) and a suggestedLinks summary count.
+const SchemaVersion = 3
 
 // HITSFloatPrecision is the FIXED number of decimal places HITS hub/authority
 // scores are rounded to in graph.json. HITS scores are L2-normalized into [0,1]
@@ -98,43 +100,45 @@ func (f *Float) UnmarshalJSON(b []byte) error {
 // Document is the top-level graph.json shape. Field order is the wire order
 // (encoding/json preserves struct field order); every slice field is sorted.
 type Document struct {
-	SchemaVersion int            `json:"schemaVersion"`
-	Tool          string         `json:"tool"`
-	GeneratedNote string         `json:"generatedNote"`
-	Summary       Summary        `json:"summary"`
-	Nodes         []Node         `json:"nodes"`
-	Edges         []Edge         `json:"edges"`
-	Sections      []Section      `json:"sections"`
-	Orphans       []string       `json:"orphans"`
-	Unreachable   []string       `json:"unreachable"`
-	UnderLinked   []string       `json:"underLinked"`
-	DeadEnd       []string       `json:"deadEnd"`
-	Bowtie        BowtieSummary  `json:"bowtie"`
-	BrokenLinks   []BrokenLink   `json:"brokenLinks"`
-	BrokenAnchors []BrokenAnchor `json:"brokenAnchors"`
-	Ambiguous     []Ambiguous    `json:"ambiguous"`
-	Components    Components     `json:"components"`
-	HITS          HITS           `json:"hits"`
-	Gaps          []Gap          `json:"gaps"`
-	RootSet       []string       `json:"rootSet"`
-	Reachability  Reachability   `json:"reachability"`
+	SchemaVersion  int             `json:"schemaVersion"`
+	Tool           string          `json:"tool"`
+	GeneratedNote  string          `json:"generatedNote"`
+	Summary        Summary         `json:"summary"`
+	Nodes          []Node          `json:"nodes"`
+	Edges          []Edge          `json:"edges"`
+	Sections       []Section       `json:"sections"`
+	Orphans        []string        `json:"orphans"`
+	Unreachable    []string        `json:"unreachable"`
+	UnderLinked    []string        `json:"underLinked"`
+	DeadEnd        []string        `json:"deadEnd"`
+	Bowtie         BowtieSummary   `json:"bowtie"`
+	BrokenLinks    []BrokenLink    `json:"brokenLinks"`
+	BrokenAnchors  []BrokenAnchor  `json:"brokenAnchors"`
+	Ambiguous      []Ambiguous     `json:"ambiguous"`
+	Components     Components      `json:"components"`
+	HITS           HITS            `json:"hits"`
+	Gaps           []Gap           `json:"gaps"`
+	SuggestedLinks []SuggestedLink `json:"suggestedLinks"`
+	RootSet        []string        `json:"rootSet"`
+	Reachability   Reachability    `json:"reachability"`
 }
 
 // Summary holds the corpus-overview counts.
 type Summary struct {
-	Documents     int `json:"documents"`
-	Sections      int `json:"sections"`
-	Edges         int `json:"edges"`
-	References    int `json:"references"`
-	Components    int `json:"components"`
-	Orphans       int `json:"orphans"`
-	Unreachable   int `json:"unreachable"`
-	UnderLinked   int `json:"underLinked"`
-	DeadEnd       int `json:"deadEnd"`
-	BrokenLinks   int `json:"brokenLinks"`
-	BrokenAnchors int `json:"brokenAnchors"`
-	Ambiguous     int `json:"ambiguous"`
-	KnowledgeGaps int `json:"knowledgeGaps"`
+	Documents      int `json:"documents"`
+	Sections       int `json:"sections"`
+	Edges          int `json:"edges"`
+	References     int `json:"references"`
+	Components     int `json:"components"`
+	Orphans        int `json:"orphans"`
+	Unreachable    int `json:"unreachable"`
+	UnderLinked    int `json:"underLinked"`
+	DeadEnd        int `json:"deadEnd"`
+	BrokenLinks    int `json:"brokenLinks"`
+	BrokenAnchors  int `json:"brokenAnchors"`
+	Ambiguous      int `json:"ambiguous"`
+	KnowledgeGaps  int `json:"knowledgeGaps"`
+	SuggestedLinks int `json:"suggestedLinks"`
 }
 
 // BowtieSummary is the corpus-level bow-tie tally relative to the giant SCC
@@ -253,6 +257,19 @@ type Gap struct {
 	RepresentativeB string `json:"representativeB"`
 }
 
+// SuggestedLink is a topology-based suggestion that two UNLINKED but
+// structurally-close documents may warrant a navigational link (ADR 0013). DocA
+// < DocB. The Adamic/Adar score reuses the fixed-precision Float type (the HITS
+// determinism mechanism) so output is byte-stable.
+type SuggestedLink struct {
+	DocA             string `json:"docA"`
+	DocB             string `json:"docB"`
+	SharedNeighbours int    `json:"sharedNeighbours"`
+	Coupling         int    `json:"coupling"`
+	CoCitation       int    `json:"coCitation"`
+	AdamicAdar       Float  `json:"adamicAdar"`
+}
+
 // Reachability mirrors the analysis reachability state. Indeterminate is true
 // when no root set was found (reachability was not computed); consumers must not
 // treat every non-reached doc as unreachable in that case (ADR 0007).
@@ -272,20 +289,21 @@ func Build(v emit.View) Document {
 		Tool:          "matlatl",
 		GeneratedNote: generatedNote,
 		// Initialize every slice to non-nil so the JSON shape is stable ([] not null).
-		Nodes:         []Node{},
-		Edges:         []Edge{},
-		Sections:      []Section{},
-		Orphans:       []string{},
-		Unreachable:   []string{},
-		UnderLinked:   []string{},
-		DeadEnd:       []string{},
-		BrokenLinks:   []BrokenLink{},
-		BrokenAnchors: []BrokenAnchor{},
-		Ambiguous:     []Ambiguous{},
-		Components:    Components{WCC: []Component{}, SCC: []Component{}},
-		HITS:          HITS{TopHubs: []Ranked{}, TopAuthorities: []Ranked{}},
-		Gaps:          []Gap{},
-		RootSet:       []string{},
+		Nodes:          []Node{},
+		Edges:          []Edge{},
+		Sections:       []Section{},
+		Orphans:        []string{},
+		Unreachable:    []string{},
+		UnderLinked:    []string{},
+		DeadEnd:        []string{},
+		BrokenLinks:    []BrokenLink{},
+		BrokenAnchors:  []BrokenAnchor{},
+		Ambiguous:      []Ambiguous{},
+		Components:     Components{WCC: []Component{}, SCC: []Component{}},
+		HITS:           HITS{TopHubs: []Ranked{}, TopAuthorities: []Ranked{}},
+		Gaps:           []Gap{},
+		SuggestedLinks: []SuggestedLink{},
+		RootSet:        []string{},
 	}
 
 	m := v.Metrics
@@ -343,23 +361,25 @@ func Build(v emit.View) Document {
 	doc.Components = Components{WCC: components(m.WCC), SCC: components(m.SCC)}
 	doc.HITS = HITS{TopHubs: ranked(v.TopHubs), TopAuthorities: ranked(v.TopAuthorities)}
 	doc.Gaps = gaps(v.Gaps)
+	doc.SuggestedLinks = suggestedLinks(v.SuggestedLinks)
 	doc.RootSet = identity.IDStrings(m.RootSet.Roots)
 	doc.Reachability = Reachability{Indeterminate: m.Orphans.Indeterminate}
 
 	doc.Summary = Summary{
-		Documents:     v.Counts.Documents,
-		Sections:      len(doc.Sections),
-		Edges:         len(doc.Edges),
-		References:    v.Counts.References,
-		Components:    len(doc.Components.WCC),
-		Orphans:       len(doc.Orphans),
-		Unreachable:   len(doc.Unreachable),
-		UnderLinked:   len(doc.UnderLinked),
-		DeadEnd:       len(doc.DeadEnd),
-		BrokenLinks:   len(doc.BrokenLinks),
-		BrokenAnchors: len(doc.BrokenAnchors),
-		Ambiguous:     len(doc.Ambiguous),
-		KnowledgeGaps: v.Counts.KnowledgeGap,
+		Documents:      v.Counts.Documents,
+		Sections:       len(doc.Sections),
+		Edges:          len(doc.Edges),
+		References:     v.Counts.References,
+		Components:     len(doc.Components.WCC),
+		Orphans:        len(doc.Orphans),
+		Unreachable:    len(doc.Unreachable),
+		UnderLinked:    len(doc.UnderLinked),
+		DeadEnd:        len(doc.DeadEnd),
+		BrokenLinks:    len(doc.BrokenLinks),
+		BrokenAnchors:  len(doc.BrokenAnchors),
+		Ambiguous:      len(doc.Ambiguous),
+		KnowledgeGaps:  v.Counts.KnowledgeGap,
+		SuggestedLinks: len(doc.SuggestedLinks),
 	}
 	return doc
 }
@@ -516,6 +536,24 @@ func gaps(gs []graphmodel.Gap) []Gap {
 			ComponentB:      g.ComponentB.String(),
 			RepresentativeA: g.RepresentativeA.String(),
 			RepresentativeB: g.RepresentativeB.String(),
+		})
+	}
+	return out
+}
+
+// suggestedLinks projects the domain link suggestions into the wire shape. The
+// Adamic/Adar score is rounded to the fixed precision (newFloat) so graph.json
+// is byte-stable. The slice is already ranked (Adamic/Adar DESC, tie-broken).
+func suggestedLinks(ss []graphmodel.LinkSuggestion) []SuggestedLink {
+	out := make([]SuggestedLink, 0, len(ss))
+	for _, s := range ss { // already ranked
+		out = append(out, SuggestedLink{
+			DocA:             s.DocA.String(),
+			DocB:             s.DocB.String(),
+			SharedNeighbours: s.SharedNeighbours,
+			Coupling:         s.Coupling,
+			CoCitation:       s.CoCitation,
+			AdamicAdar:       newFloat(s.AdamicAdar),
 		})
 	}
 	return out

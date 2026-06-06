@@ -211,6 +211,49 @@ func TestFindingsFromMetrics_StructureTiers(t *testing.T) {
 	}
 }
 
+// TestSuggestedLinkFinding covers the topology-based suggested-link mapping
+// (ADR 0013): kind/severity/ID/location, and the full structured Details set.
+func TestSuggestedLinkFinding(t *testing.T) {
+	m := &graphmodel.GraphMetrics{
+		SuggestedLinks: []graphmodel.LinkSuggestion{
+			{DocA: "a.md", DocB: "b.md", SharedNeighbours: 3, Coupling: 2, CoCitation: 1, AdamicAdar: 1.5},
+		},
+	}
+	got := findingsFromMetrics(m, graphmodel.DefaultInboundThreshold, StructureFindingsInfo)
+	if len(got) != 1 {
+		t.Fatalf("got %d findings, want 1 (suggested-link): %+v", len(got), got)
+	}
+	f := got[0]
+	if f.Kind != analysis.SuggestedLink {
+		t.Errorf("kind = %v, want SuggestedLink", f.Kind)
+	}
+	if f.Severity != analysis.Info {
+		t.Errorf("severity = %v, want Info (never gates the build)", f.Severity)
+	}
+	if f.Location.Document != "a.md" {
+		t.Errorf("location = %q, want a.md (DocA)", f.Location.Document)
+	}
+	if f.ID != "suggested-link:a.md:b.md" {
+		t.Errorf("ID = %q, want suggested-link:a.md:b.md", f.ID)
+	}
+	if !strings.Contains(f.Message, "a.md") || !strings.Contains(f.Message, "b.md") {
+		t.Errorf("message should name both docs: %q", f.Message)
+	}
+	wantDetails := map[string]string{
+		DetailTargetDocument:   "a.md",
+		DetailSuggestedTarget:  "b.md",
+		DetailSharedNeighbours: "3",
+		DetailCoupling:         "2",
+		DetailCoCitation:       "1",
+		DetailAdamicAdar:       "1.500000",
+	}
+	for k, want := range wantDetails {
+		if f.Details[k] != want {
+			t.Errorf("details[%q] = %q, want %q", k, f.Details[k], want)
+		}
+	}
+}
+
 func TestCheckExitCode(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -233,6 +276,9 @@ func TestCheckExitCode(t *testing.T) {
 		// ADR 0005: knowledge gaps are Info — they NEVER fail, even under --strict.
 		{"gap non-strict", Result{KnowledgeGapCount: 5}, false, platform.ExitOK},
 		{"gap strict", Result{KnowledgeGapCount: 5}, true, platform.ExitOK},
+		// ADR 0013: suggested links are Info — they NEVER fail, even under --strict.
+		{"suggested-link non-strict", Result{SuggestedLinkCount: 9}, false, platform.ExitOK},
+		{"suggested-link strict", Result{SuggestedLinkCount: 9}, true, platform.ExitOK},
 		// ADR 0005: opt-in external dead-link findings are non-deterministic and
 		// are deliberately kept OUT of the exit contract — they NEVER fail the
 		// build, even under --strict.

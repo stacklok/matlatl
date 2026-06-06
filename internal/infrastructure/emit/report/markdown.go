@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/stacklok/matlatl/internal/domain/analysis"
@@ -11,6 +12,10 @@ import (
 
 // ReportMarkdownName is the conventional committable report filename.
 const ReportMarkdownName = "report.md"
+
+// suggestedLinkTopN bounds how many suggested links the human reports surface
+// (mirrors the emit-package topN used for hubs/authorities).
+const suggestedLinkTopN = 5
 
 // Markdown renders a committable GitHub-flavored Markdown report from the View:
 // a corpus-overview table, a broken-link/anchor table (file, line, target,
@@ -151,6 +156,34 @@ func Markdown(v emit.View) []byte {
 		}
 		if v.GapsTruncated {
 			b.WriteString("\n_Note: the gap list was truncated (the corpus has many disconnected clusters)._\n")
+		}
+	}
+	b.WriteString("\n")
+
+	// Suggested links (ADR 0013): topology-based, additive to knowledge gaps.
+	b.WriteString("## Suggested links\n\n")
+	b.WriteString("_Experimental: unlinked document pairs that share neighbours, ranked by " +
+		"Adamic/Adar; topology suggests they may warrant a link (ADR 0013)._\n\n")
+	if len(v.SuggestedLinks) == 0 {
+		b.WriteString("None.\n")
+	} else {
+		b.WriteString("| From | To | Shared | A/A score |\n| --- | --- | --- | --- |\n")
+		shown := v.SuggestedLinks
+		if len(shown) > suggestedLinkTopN {
+			shown = shown[:suggestedLinkTopN]
+		}
+		for _, s := range shown {
+			fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
+				emit.EscapeTableCell(s.DocA.String()),
+				emit.EscapeTableCell(s.DocB.String()),
+				emit.EscapeTableCell(strconv.Itoa(s.SharedNeighbours)),
+				emit.EscapeTableCell(strconv.FormatFloat(s.AdamicAdar, 'f', 6, 64)))
+		}
+		if len(v.SuggestedLinks) > suggestedLinkTopN {
+			fmt.Fprintf(&b, "\n_Showing the top %d of %d suggestion(s)._\n", suggestedLinkTopN, len(v.SuggestedLinks))
+		}
+		if v.SuggestedLinksTruncated {
+			b.WriteString("\n_Note: the suggestion list was truncated (capped, or a hub neighbour was skipped)._\n")
 		}
 	}
 

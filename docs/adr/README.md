@@ -13,9 +13,10 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0004 | DDD layering and full-fat scope         | Accepted |
 | 0005 | `check` exit-code contract              | Accepted |
 | 0006 | Canonical anchor-slug dialect           | Accepted |
-| 0007 | Graph node semantics and the document projection | Accepted (superseded in part by 0012) |
+| 0007 | Graph node semantics and the document projection | Accepted (superseded in part by 0012, 0013) |
 | 0008 | Directory links resolve and confer navigational reachability | Accepted |
 | 0009 | `fix-prompt` serves acting agents with an embedded prompt | Accepted |
 | 0010 | How matlatl treats agent-tooling scaffolding | Accepted |
 | 0011 | Per-repo configuration file (`.matlatl.yml`) | Accepted |
 | 0012 | Graduated structure findings and bow-tie classification | Accepted |
+| 0013 | Topology-based link prediction (suggested links)        | Accepted |

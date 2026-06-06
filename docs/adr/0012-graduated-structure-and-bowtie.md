@@ -1,7 +1,7 @@
 # 12. Graduated structure findings and bow-tie classification
 
 Date: 2026-06-06
-Status: Accepted
+Status: Accepted (gap/discoverability-framing augmented in part by ADR 0013)
 
 ## Context
 

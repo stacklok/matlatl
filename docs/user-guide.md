@@ -79,6 +79,13 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
   entry point with no inbound links is its purpose, not a defect
   ([ADR 0010](adr/0010-agent-scaffolding-roots-and-default-ignores.md)).
 - **Knowledge gaps** — clusters of docs that are disconnected from each other.
+- **Suggested links** — pairs of docs that **share navigational neighbours but
+  don't link to each other**, surfaced by topology-based link prediction
+  (Adamic/Adar over the undirected neighbour closure, plus bibliographic coupling
+  and co-citation). An *additive* signal alongside knowledge gaps: gaps flag
+  wholly-disconnected clusters; suggestions flag concrete unlinked pairs that look
+  related. *Info severity, experimental* — **never** fails `check`, even under
+  `--strict`. See [ADR 0013](adr/0013-topology-link-prediction.md).
 - **Bow-tie structure** — a one-line read of the corpus's macro-shape relative to
   its giant strongly-connected core: how many docs are *core* / *in* (feed the
   core) / *out* (lead away from it) / *tendril* / *disconnected*. Reported in the
@@ -97,6 +104,10 @@ unreachable doc an inbound link from somewhere reachable.
 - `structureFindingsSeverity: warning` in `.matlatl.yml` promotes **both**
   under-linked and dead-end from Info to Warning, so they fail `check --strict`
   like orphans/unreachable. Default `info` (never fails the build).
+- `linkSuggestionMinShared: N` in `.matlatl.yml` sets the minimum shared-neighbour
+  count an unlinked pair must have to be surfaced as a **suggested link**
+  (ADR 0013). Config-only (no CLI flag); default `2`, `<=0` normalizes to `2`.
+  Lower it to `1` for more (noisier) suggestions; raise it to tighten the signal.
 
 #### Reading the bow-tie summary
 
@@ -151,9 +162,10 @@ fail — so dashboards get structured results either way.
 `matlatl emit --out <dir>` produces a bundle designed for agents:
 
 - **`graph.json`** — the machine-queryable corpus manifest (schema **version
-  2**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`),
+  3**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`),
   edges, orphans, under-linked/dead-end, a `bowtie` structure summary, broken
-  links, components, gaps. Validated against
+  links, components, gaps, and `suggestedLinks` (topology-based suggestions, each
+  with `sharedNeighbours`/`coupling`/`coCitation`/`adamicAdar`). Validated against
   [`docs/schemas/graph.schema.json`](schemas/graph.schema.json) and byte-stable
   run to run.
 - **`llms.txt`** — a curated index, most-important docs first, with a
@@ -163,7 +175,7 @@ fail — so dashboards get structured results either way.
 - **`findings.json`** — every finding is self-contained and actionable, plus a
   `remediationGuide` so an agent can fix issues without extra context. Validated
   against [`docs/schemas/findings.schema.json`](schemas/findings.schema.json)
-  (schema version 3) and byte-stable run to run.
+  (schema version 4) and byte-stable run to run.
 
 ### Fixing findings with an agent
 
@@ -194,8 +206,10 @@ $ matlatl serve . --address 0.0.0.0:9000   # bind elsewhere (e.g. for containers
 
 Speaks MCP over **streamable HTTP** at `/mcp` on `--address` (default
 `127.0.0.1:8080`) and exposes read-only tools: `what-links-to`,
-`list-orphans`, `path-between`, `get-section`, and `corpus-summary`. The server
-runs until interrupted and drains in-flight requests on shutdown.
+`list-orphans`, `path-between`, `get-section`, `corpus-summary`, and
+`suggest-links` (topology-based suggested links — pass a `doc` to scope it to one
+document's partners, or omit it for the global top suggestions). The server runs
+until interrupted and drains in-flight requests on shutdown.
 
 ## Ignoring files
 

@@ -37,6 +37,14 @@ type GraphMetrics struct {
 	// GapsTruncated reports that the gap list was capped at MaxGaps (the corpus
 	// has pathologically many disconnected clusters); surfaced as a notice.
 	GapsTruncated bool
+	// SuggestedLinks are topology-based link-prediction suggestions: UNLINKED but
+	// structurally-close document pairs (ADR 0013). An ADDITIVE signal alongside
+	// Gaps; ranked by Adamic/Adar, capped at MaxSuggestedLinks.
+	SuggestedLinks []LinkSuggestion
+	// SuggestedLinksTruncated reports the suggestion list was capped (MaxSuggestedLinks)
+	// or a hub neighbour was skipped as a generator (MaxNeighbourFanout); surfaced
+	// as a notice.
+	SuggestedLinksTruncated bool
 
 	// componentOf maps each document to its WCC ID, for emitters.
 	componentOf map[identity.DocumentID]identity.DocumentID
@@ -52,6 +60,9 @@ type AnalyzeOptions struct {
 	Hits HitsOptions
 	// Gaps tunes knowledge-gap detection.
 	Gaps GapOptions
+	// LinkPrediction tunes topology-based link prediction (ADR 0013). Zero values
+	// are normalized to the documented defaults inside PredictLinks.
+	LinkPrediction LinkPredictionOptions
 	// InboundThreshold is the under-linked discoverability floor (ADR 0012).
 	// Analyze normalizes a <=0 value up to DefaultInboundThreshold.
 	InboundThreshold int
@@ -77,21 +88,27 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 	// Reuse the WCCs computed above (single traversal, explicit data flow) rather
 	// than recomputing them inside gap detection.
 	gapResult := DetectGaps(wcc, opts.Gaps)
+	// Link prediction is an ADDITIVE signal alongside gaps (ADR 0013): it runs on
+	// the same projection but reports concrete unlinked, structurally-close PAIRS
+	// rather than wholly-disconnected component pairs.
+	linkResult := g.PredictLinks(opts.LinkPrediction)
 
 	return &GraphMetrics{
-		Graph:         g,
-		Hierarchy:     BuildHierarchyTree(c),
-		RootSet:       rootSet,
-		Reachability:  reach,
-		Degrees:       deg,
-		Orphans:       orphans,
-		WCC:           wcc,
-		SCC:           scc,
-		Bowtie:        bowtie,
-		HITS:          hits,
-		Gaps:          gapResult.Gaps,
-		GapsTruncated: gapResult.Truncated,
-		componentOf:   memberComponentIndex(wcc),
+		Graph:                   g,
+		Hierarchy:               BuildHierarchyTree(c),
+		RootSet:                 rootSet,
+		Reachability:            reach,
+		Degrees:                 deg,
+		Orphans:                 orphans,
+		WCC:                     wcc,
+		SCC:                     scc,
+		Bowtie:                  bowtie,
+		HITS:                    hits,
+		Gaps:                    gapResult.Gaps,
+		GapsTruncated:           gapResult.Truncated,
+		SuggestedLinks:          linkResult.Suggestions,
+		SuggestedLinksTruncated: linkResult.Truncated,
+		componentOf:             memberComponentIndex(wcc),
 	}
 }
 

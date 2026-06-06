@@ -327,6 +327,40 @@ func TestLoad_NewKeysNotFlaggedUnknown(t *testing.T) {
 	}
 }
 
+// --- ADR 0013: linkSuggestionMinShared ---
+
+func TestLoad_LinkSuggestionMinShared(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\nlinkSuggestionMinShared: 3\n")))
+	if err != nil {
+		t.Fatalf("valid linkSuggestionMinShared should load, got %v", err)
+	}
+	if file.LinkSuggestionMinShared == nil || *file.LinkSuggestionMinShared != 3 {
+		t.Errorf("linkSuggestionMinShared = %v, want pointer to 3", file.LinkSuggestionMinShared)
+	}
+}
+
+func TestLoad_LinkSuggestionMinSharedNegative(t *testing.T) {
+	if _, _, err := Load(rootWithBytes(t, []byte("linkSuggestionMinShared: -1\n"))); err == nil {
+		t.Fatal("negative linkSuggestionMinShared should be a HARD error")
+	}
+}
+
+func TestLoad_LinkSuggestionMinSharedWrongType(t *testing.T) {
+	if _, _, err := Load(rootWithBytes(t, []byte("linkSuggestionMinShared: \"two\"\n"))); err == nil {
+		t.Fatal("non-integer linkSuggestionMinShared should be a HARD error")
+	}
+}
+
+func TestLoad_LinkSuggestionMinSharedNotFlaggedUnknown(t *testing.T) {
+	_, notices, err := Load(rootWithBytes(t, []byte("linkSuggestionMinShared: 2\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if hasNoticeContaining(notices, "linkSuggestionMinShared") {
+		t.Errorf("known key linkSuggestionMinShared must not be flagged as unknown, got %v", notices)
+	}
+}
+
 // --- Contract row: top-level scalar/sequence (shape error) → HARD error ---
 
 func TestLoad_TopLevelScalar(t *testing.T) {

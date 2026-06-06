@@ -26,13 +26,15 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
 5. **Analyze** — reachability from the root set, the graduated structure ladder
    (isolated orphan → dead-end → under-linked) plus orthogonal unreachable
    classification, weak + strong components, bow-tie classification relative to
-   the giant SCC, HITS hub/authority, and knowledge-gap detection → a frozen
+   the giant SCC, HITS hub/authority, knowledge-gap detection, and topology-based
+   link prediction (the additive `suggested-link` signal) → a frozen
    `AnalysisReport` + `GraphMetrics`
    ([ADR 0007](adr/0007-graph-node-semantics.md),
-   [ADR 0012](adr/0012-graduated-structure-and-bowtie.md)). `GraphMetrics`
+   [ADR 0012](adr/0012-graduated-structure-and-bowtie.md),
+   [ADR 0013](adr/0013-topology-link-prediction.md)). `GraphMetrics`
    carries `Graph`, `Hierarchy`, `RootSet`, `Reachability`, `Degrees`, `Orphans`
    (isolated / dead-end / under-linked / unreachable), `WCC`, `SCC`, `Bowtie`,
-   `HITS`, and `Gaps`.
+   `HITS`, `Gaps`, and `SuggestedLinks`.
 6. **Emit** — render the report for humans (terminal, Markdown, Mermaid, DOT,
    index.md) and LLMs (graph.json, llms.txt family, findings.json; JUnit via `check`).
 
@@ -120,8 +122,9 @@ prove internal targets are refused **without a network call**.
 `matlatl serve [path]` runs the analysis once and exposes read-only MCP tools
 over **streamable HTTP** (`github.com/mark3labs/mcp-go`, isolated in
 `internal/infrastructure/mcpserver` — the only package importing the MCP lib):
-`what-links-to`, `list-orphans`, `path-between`, `get-section`, and
-`corpus-summary` (the graph.json manifest). The endpoint is served at `/mcp` on
+`what-links-to`, `list-orphans`, `path-between`, `get-section`,
+`corpus-summary` (the graph.json manifest), and `suggest-links` (topology-based
+suggested links, doc-scoped or global top-N; ADR 0013). The endpoint is served at `/mcp` on
 `--address` (default `127.0.0.1:8080`); the serving context drives a graceful
 drain on shutdown. Tools reuse the `emit.View` + `emit/graphjson` layers and
 validate every `DocumentID` against the corpus.

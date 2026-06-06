@@ -13,8 +13,8 @@ import (
 // CheckExitCode maps a run Result to the ADR 0005 exit code for `matlatl
 // check`. Broken links and broken anchors always fail (exit 1). Ambiguous links,
 // orphans and unreachable documents are warnings that fail only under --strict.
-// KnowledgeGap (Info) never affects the exit code. A clean repo or an empty
-// corpus returns ExitOK (0).
+// KnowledgeGap and SuggestedLink (both Info) never affect the exit code. A clean
+// repo or an empty corpus returns ExitOK (0).
 //
 // DeadLinkCount is DELIBERATELY excluded from the exit contract, even under
 // --strict (ADR 0005): external link checking is opt-in (--check-external) and
@@ -76,6 +76,13 @@ const (
 	// DetailBowtieBucket is a node's bow-tie bucket
 	// (core/in/out/tendril/disconnected); surfaced in graph.json node data.
 	DetailBowtieBucket = "bowtieBucket"
+	// Suggested-link detail keys (ADR 0013). DetailTargetDocument carries DocA (the
+	// finding's anchor document); these carry the rest of the pair and its scores.
+	DetailSuggestedTarget  = "suggestedTarget"
+	DetailSharedNeighbours = "sharedNeighbours"
+	DetailCoupling         = "coupling"
+	DetailCoCitation       = "coCitation"
+	DetailAdamicAdar       = "adamicAdar"
 )
 
 // findingsFromReferences turns resolved references into analysis Findings. Only

@@ -68,6 +68,11 @@ const (
 	// (a terminal node). Below-default it is Info; a config knob can promote it to
 	// Warning (ADR 0012).
 	DeadEnd
+	// SuggestedLink is a topology-based suggestion that two UNLINKED but
+	// structurally-close documents may warrant a navigational link (ADR 0013). It
+	// is always Info and NEVER gates the exit code (it is an experimental,
+	// additive discoverability hint, not a defect).
+	SuggestedLink
 	// DeadLink is an external (http/https) link that failed an opt-in liveness
 	// check (--check-external): unreachable, an error status, or refused by the
 	// SSRF guard. It is produced only when external checking is enabled, so it is
@@ -94,6 +99,8 @@ func (k FindingKind) String() string {
 		return "under-linked"
 	case DeadEnd:
 		return "dead-end"
+	case SuggestedLink:
+		return "suggested-link"
 	case DeadLink:
 		return "dead-link"
 	default:

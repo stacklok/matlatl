@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/stacklok/matlatl/internal/domain/analysis"
 	"github.com/stacklok/matlatl/internal/domain/graphmodel"
@@ -43,7 +44,41 @@ func findingsFromMetrics(m *graphmodel.GraphMetrics, threshold int, structureSev
 	for _, gap := range m.Gaps {
 		out = append(out, gapFinding(gap))
 	}
+	for _, s := range m.SuggestedLinks {
+		out = append(out, suggestedLinkFinding(s))
+	}
 	return out
+}
+
+// suggestedLinkFinding turns a topology-based link suggestion (ADR 0013) into an
+// Info finding. It is anchored at DocA (Location.Document) and carries the pair,
+// the shared-neighbour count, and the coupling/co-citation/Adamic-Adar scores in
+// Details so an agent can act without re-deriving them. Always Info: it NEVER
+// gates the exit code. The Adamic/Adar float is formatted at fixed precision so
+// the finding text is byte-stable.
+func suggestedLinkFinding(s graphmodel.LinkSuggestion) analysis.Finding {
+	return analysis.Finding{
+		ID:       fmt.Sprintf("%s:%s:%s", analysis.SuggestedLink, s.DocA, s.DocB),
+		Kind:     analysis.SuggestedLink,
+		Severity: analysis.Info,
+		Location: analysis.Location{Document: s.DocA},
+		Message: fmt.Sprintf(
+			"%q and %q share %d connection(s) but do not link to each other "+
+				"(topology suggests a relationship; experimental)",
+			s.DocA, s.DocB, s.SharedNeighbours),
+		SuggestedFix: fmt.Sprintf(
+			"If these documents are related, add a navigational link between %q and %q. "+
+				"They share %d neighbour(s) (bibliographic coupling %d, co-citation %d).",
+			s.DocA, s.DocB, s.SharedNeighbours, s.Coupling, s.CoCitation),
+		Details: map[string]string{
+			DetailTargetDocument:   s.DocA.String(),
+			DetailSuggestedTarget:  s.DocB.String(),
+			DetailSharedNeighbours: fmt.Sprintf("%d", s.SharedNeighbours),
+			DetailCoupling:         fmt.Sprintf("%d", s.Coupling),
+			DetailCoCitation:       fmt.Sprintf("%d", s.CoCitation),
+			DetailAdamicAdar:       strconv.FormatFloat(s.AdamicAdar, 'f', 6, 64),
+		},
+	}
 }
 
 func underLinkedFinding(id identity.DocumentID, inDeg, threshold int, sev analysis.Severity) analysis.Finding {

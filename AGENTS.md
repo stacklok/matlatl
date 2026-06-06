@@ -15,11 +15,12 @@ linked docs rather than re-deriving them.
     repos); 0004 layering + purity; 0005 `check` exit-code contract;
     0006 anchor-slug dialect; 0007 graph node semantics + the document
     projection; 0008 directory-link reachability; 0012 graduated structure
-    (orphan/under-linked/dead-end) + bow-tie classification.
+    (orphan/under-linked/dead-end) + bow-tie classification; 0013 topology-based
+    link prediction (the additive `suggested-link` signal).
 - **docs/schemas/** — published JSON Schemas for the two machine artifacts:
-  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 2)
+  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 3)
   and [findings.schema.json](docs/schemas/findings.schema.json) (findings schema
-  version 3). The emitter types are kept in lockstep and validated by tests; if
+  version 4). The emitter types are kept in lockstep and validated by tests; if
   you change an artifact's shape, change the schema and bump its version.
 - **[docs/user-guide.md](docs/user-guide.md)** /
   **[docs/dev-guide.md](docs/dev-guide.md)** — commands/flags/CI, and the layout
@@ -31,7 +32,10 @@ linked docs rather than re-deriving them.
   sibling domain packages — no cobra, goldmark, net/http, or any infrastructure/
   application package. There is a grep gate for this (see CONTRIBUTING.md).
 - **Determinism:** sorted iteration everywhere; artifacts are byte-stable and
-  golden-tested. Never iterate a map for output without sorting.
+  golden-tested. Never iterate a map for output without sorting. Float SUMS must
+  also be order-stable: the Adamic/Adar score (link prediction, ADR 0013) is
+  accumulated by iterating common neighbours in **sorted** order, so the float
+  addition order is fixed — never accumulate a float sum by ranging a map.
 - **Security (ADR 0003):** scanning is for untrusted repos — respect root
   containment, resource caps, output-path sanitization, and the SSRF guard.
 
@@ -48,8 +52,8 @@ matlatl serve .        # read-only MCP server over streamable HTTP (127.0.0.1:80
 `matlatl serve` is the **MCP entrypoint** for agents: it speaks MCP over
 streamable HTTP (at `/mcp` on `--address`, default `127.0.0.1:8080`)
 and exposes read-only tools (`what-links-to`, `list-orphans`, `path-between`,
-`get-section`, `corpus-summary`). Prefer it for live graph queries over parsing
-artifacts yourself.
+`get-section`, `corpus-summary`, `suggest-links`). Prefer it for live graph
+queries over parsing artifacts yourself.
 
 ## Dogfooding
 

@@ -1,6 +1,6 @@
 # Documentation index
 
-16 document(s).
+18 document(s).
 
 ## (root)
 
@@ -37,7 +37,9 @@
 
 | Document | Description | Modified |
 | --- | --- | --- |
+| `docs/island/four.md` | Island Four | 2026-06-06T12:50:37Z |
 | `docs/island/one.md` | Island One | 2026-06-05T13:36:58Z |
+| `docs/island/three.md` | Island Three | 2026-06-06T12:50:34Z |
 | `docs/island/two.md` | Island Two | 2026-06-05T13:36:58Z |
 
 ## docs/project

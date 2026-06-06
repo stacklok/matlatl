@@ -54,6 +54,11 @@ type View struct {
 	Gaps          []graphmodel.Gap
 	GapsTruncated bool
 
+	// SuggestedLinks are topology-based link-prediction suggestions (ADR 0013),
+	// ranked by Adamic/Adar upstream. An additive signal alongside Gaps.
+	SuggestedLinks          []graphmodel.LinkSuggestion
+	SuggestedLinksTruncated bool
+
 	// BrokenEdges are unresolved navigational references (origin → raw target),
 	// for the diagram emitters' red placeholder target nodes. Sorted upstream.
 	BrokenEdges []application.BrokenEdge
@@ -71,18 +76,19 @@ type View struct {
 
 // Counts are the corpus-overview tallies surfaced at the top of every report.
 type Counts struct {
-	Documents    int
-	Headings     int
-	References   int
-	BrokenLink   int
-	BrokenAnchor int
-	Ambiguous    int
-	Orphan       int
-	Unreachable  int
-	KnowledgeGap int
-	UnderLinked  int
-	DeadEnd      int
-	Components   int
+	Documents     int
+	Headings      int
+	References    int
+	BrokenLink    int
+	BrokenAnchor  int
+	Ambiguous     int
+	Orphan        int
+	Unreachable   int
+	KnowledgeGap  int
+	UnderLinked   int
+	DeadEnd       int
+	SuggestedLink int
+	Components    int
 }
 
 // DocView is a single document's presentation metadata, derived from its parsed
@@ -135,6 +141,8 @@ func BuildView(res application.Result) View {
 	v.DeadEnd = slices.Clone(m.Orphans.DeadEnd)
 	v.Gaps = slices.Clone(m.Gaps)
 	v.GapsTruncated = m.GapsTruncated
+	v.SuggestedLinks = slices.Clone(m.SuggestedLinks)
+	v.SuggestedLinksTruncated = m.SuggestedLinksTruncated
 	v.TopHubs = m.HITS.TopHubs(topN)
 	v.TopAuthorities = m.HITS.TopAuthorities(topN)
 	v.BrokenEdges = slices.Clone(res.BrokenEdges)
@@ -172,7 +180,7 @@ func BuildView(res application.Result) View {
 			case analysis.Ambiguous:
 				v.Ambiguous = append(v.Ambiguous, f)
 			case analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap,
-				analysis.UnderLinked, analysis.DeadEnd:
+				analysis.UnderLinked, analysis.DeadEnd, analysis.SuggestedLink:
 				// Carried via the dedicated View slices above, not the finding lists.
 			case analysis.DeadLink:
 				// Opt-in (--check-external) only; surfaced via findings.json, not
@@ -227,17 +235,18 @@ func (v View) TitleOf(id identity.DocumentID) string {
 
 func countsFromResult(res application.Result, m *graphmodel.GraphMetrics) Counts {
 	c := Counts{
-		Documents:    res.DocumentCount,
-		Headings:     res.HeadingCount,
-		References:   res.ReferenceCount,
-		BrokenLink:   res.BrokenLinkCount,
-		BrokenAnchor: res.BrokenAnchorCount,
-		Ambiguous:    res.AmbiguousCount,
-		Orphan:       res.OrphanCount,
-		Unreachable:  res.UnreachableCount,
-		KnowledgeGap: res.KnowledgeGapCount,
-		UnderLinked:  res.UnderLinkedCount,
-		DeadEnd:      res.DeadEndCount,
+		Documents:     res.DocumentCount,
+		Headings:      res.HeadingCount,
+		References:    res.ReferenceCount,
+		BrokenLink:    res.BrokenLinkCount,
+		BrokenAnchor:  res.BrokenAnchorCount,
+		Ambiguous:     res.AmbiguousCount,
+		Orphan:        res.OrphanCount,
+		Unreachable:   res.UnreachableCount,
+		KnowledgeGap:  res.KnowledgeGapCount,
+		UnderLinked:   res.UnderLinkedCount,
+		DeadEnd:       res.DeadEndCount,
+		SuggestedLink: res.SuggestedLinkCount,
 	}
 	if m != nil {
 		c.Components = len(m.WCC)

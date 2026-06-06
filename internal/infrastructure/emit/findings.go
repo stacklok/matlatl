@@ -25,7 +25,9 @@ const (
 // mapping each finding kind to a standalone how-to, so every finding is
 // self-contained for an agent. v3 (ADR 0012) adds the graduated structure
 // findings "under-linked" and "dead-end" (new kind values + summary counts).
-const FindingsSchemaVersion = 3
+// v4 (ADR 0013) adds the topology-based "suggested-link" finding (a new kind
+// value + a suggestedLink summary count).
+const FindingsSchemaVersion = 4
 
 // findingsDocument is the stable findings.json schema. Adding fields is
 // backward-compatible; renaming/removing is a breaking change and must bump
@@ -42,15 +44,16 @@ type findingsDocument struct {
 }
 
 type findingsSum struct {
-	Total        int `json:"total"`
-	BrokenLink   int `json:"brokenLink"`
-	BrokenAnchor int `json:"brokenAnchor"`
-	Ambiguous    int `json:"ambiguous"`
-	Orphan       int `json:"orphan"`
-	Unreachable  int `json:"unreachable"`
-	KnowledgeGap int `json:"knowledgeGap"`
-	UnderLinked  int `json:"underLinked"`
-	DeadEnd      int `json:"deadEnd"`
+	Total         int `json:"total"`
+	BrokenLink    int `json:"brokenLink"`
+	BrokenAnchor  int `json:"brokenAnchor"`
+	Ambiguous     int `json:"ambiguous"`
+	Orphan        int `json:"orphan"`
+	Unreachable   int `json:"unreachable"`
+	KnowledgeGap  int `json:"knowledgeGap"`
+	UnderLinked   int `json:"underLinked"`
+	DeadEnd       int `json:"deadEnd"`
+	SuggestedLink int `json:"suggestedLink"`
 }
 
 type findingJSON struct {
@@ -101,6 +104,10 @@ var remediationByKind = map[string]string{
 	analysis.DeadEnd.String(): "The document has inbound links but links to nothing onward, so navigation stops there. " +
 		"Add onward internal links from it to related documents so readers and agents can continue. To keep " +
 		"it intentionally terminal, add front matter `matlatl: orphan-intentional`.",
+	analysis.SuggestedLink.String(): "Two documents (`details.targetDocument` and `details.suggestedTarget`) share " +
+		"`details.sharedNeighbours` navigational neighbour(s) but do not link to each other. This is an " +
+		"experimental, topology-based discoverability hint (Adamic/Adar score `details.adamicAdar`), not an " +
+		"error. If the two documents are related, add a navigational link between them; otherwise ignore it.",
 	analysis.DeadLink.String(): "An external (http/https) link failed an opt-in liveness check (--check-external): it was " +
 		"unreachable, returned an error status (`details.statusCode`), or was refused by the SSRF guard " +
 		"(`details.blocked`). Verify the URL is correct and reachable; if it moved, update it, otherwise " +
@@ -115,7 +122,7 @@ var remediationByKind = map[string]string{
 var kindPresentationOrder = []analysis.FindingKind{
 	analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
 	analysis.Orphan, analysis.Unreachable, analysis.UnderLinked, analysis.DeadEnd,
-	analysis.KnowledgeGap, analysis.DeadLink,
+	analysis.KnowledgeGap, analysis.SuggestedLink, analysis.DeadLink,
 }
 
 // remediationGuideFor returns the remediation entries for exactly the kinds
@@ -140,15 +147,16 @@ func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
 		Tool:             "matlatl",
 		RemediationGuide: remediationGuideFor(report),
 		Summary: findingsSum{
-			Total:        report.Len(),
-			BrokenLink:   report.CountByKind(analysis.BrokenLink),
-			BrokenAnchor: report.CountByKind(analysis.BrokenAnchor),
-			Ambiguous:    report.CountByKind(analysis.Ambiguous),
-			Orphan:       report.CountByKind(analysis.Orphan),
-			Unreachable:  report.CountByKind(analysis.Unreachable),
-			KnowledgeGap: report.CountByKind(analysis.KnowledgeGap),
-			UnderLinked:  report.CountByKind(analysis.UnderLinked),
-			DeadEnd:      report.CountByKind(analysis.DeadEnd),
+			Total:         report.Len(),
+			BrokenLink:    report.CountByKind(analysis.BrokenLink),
+			BrokenAnchor:  report.CountByKind(analysis.BrokenAnchor),
+			Ambiguous:     report.CountByKind(analysis.Ambiguous),
+			Orphan:        report.CountByKind(analysis.Orphan),
+			Unreachable:   report.CountByKind(analysis.Unreachable),
+			KnowledgeGap:  report.CountByKind(analysis.KnowledgeGap),
+			UnderLinked:   report.CountByKind(analysis.UnderLinked),
+			DeadEnd:       report.CountByKind(analysis.DeadEnd),
+			SuggestedLink: report.CountByKind(analysis.SuggestedLink),
 		},
 		Findings: make([]findingJSON, 0, report.Len()),
 	}

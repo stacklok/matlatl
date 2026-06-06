@@ -47,8 +47,8 @@ func newRootCommand() *cobra.Command {
 		Short: "Analyze a repository's markdown documentation graph",
 		Long: "matlatl scans a repository's markdown, resolves its links, builds a " +
 			"reference graph, and analyzes it (reachability, orphans/unreachable, " +
-			"weak/strong components, HITS, knowledge gaps), then renders a human " +
-			"report.\n\n" +
+			"weak/strong components, HITS, knowledge gaps, link suggestions), then " +
+			"renders a human report.\n\n" +
 			"The default invocation prints a colorized terminal report; use --quiet " +
 			"for the one-line summary, or the report/graph/index subcommands for " +
 			"committable artifacts.",
@@ -206,6 +206,12 @@ func configFromFlags(cmd *cobra.Command, args []string) (application.Config, err
 	// loader validated the value is "info" | "warning".
 	if file.StructureFindingsSeverity != nil {
 		cfg.StructureFindingsSeverity = application.StructureFindingsSeverity(*file.StructureFindingsSeverity)
+	}
+
+	// Suggested-link shared-neighbour floor (ADR 0013): config-only knob (no flag).
+	// The loader validated the value is >= 0.
+	if file.LinkSuggestionMinShared != nil {
+		cfg.LinkSuggestionMinShared = *file.LinkSuggestionMinShared
 	}
 	return cfg, nil
 }

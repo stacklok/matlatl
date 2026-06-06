@@ -24,11 +24,12 @@
     "components",
     "hits",
     "gaps",
+    "suggestedLinks",
     "rootSet",
     "reachability"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 2 },
+    "schemaVersion": { "type": "integer", "const": 3 },
     "tool": { "type": "string" },
     "generatedNote": { "type": "string" },
     "summary": {
@@ -37,7 +38,7 @@
       "required": [
         "documents", "sections", "edges", "references", "components",
         "orphans", "unreachable", "underLinked", "deadEnd",
-        "brokenLinks", "brokenAnchors", "ambiguous", "knowledgeGaps"
+        "brokenLinks", "brokenAnchors", "ambiguous", "knowledgeGaps", "suggestedLinks"
       ],
       "properties": {
         "documents": { "type": "integer", "minimum": 0 },
@@ -52,7 +53,8 @@
         "brokenLinks": { "type": "integer", "minimum": 0 },
         "brokenAnchors": { "type": "integer", "minimum": 0 },
         "ambiguous": { "type": "integer", "minimum": 0 },
-        "knowledgeGaps": { "type": "integer", "minimum": 0 }
+        "knowledgeGaps": { "type": "integer", "minimum": 0 },
+        "suggestedLinks": { "type": "integer", "minimum": 0 }
       }
     },
     "nodes": {
@@ -210,6 +212,23 @@
           "componentB": { "type": "string" },
           "representativeA": { "type": "string" },
           "representativeB": { "type": "string" }
+        }
+      }
+    },
+    "suggestedLinks": {
+      "description": "Topology-based link-prediction suggestions (ADR 0013): pairs of documents that share navigational neighbours but do not link to each other, ranked by Adamic/Adar. An additive signal alongside `gaps`; capped, with truncation surfaced as a notice.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["docA", "docB", "sharedNeighbours", "coupling", "coCitation", "adamicAdar"],
+        "properties": {
+          "docA": { "type": "string" },
+          "docB": { "type": "string" },
+          "sharedNeighbours": { "type": "integer", "minimum": 0 },
+          "coupling": { "type": "integer", "minimum": 0 },
+          "coCitation": { "type": "integer", "minimum": 0 },
+          "adamicAdar": { "type": "number", "minimum": 0 }
         }
       }
     },

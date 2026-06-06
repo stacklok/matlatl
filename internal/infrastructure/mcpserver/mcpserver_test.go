@@ -68,15 +68,15 @@ func structured(t *testing.T, res *mcp.CallToolResult) map[string]any {
 	return m
 }
 
-// TestServer_Construction asserts NewServer registers all five tools.
+// TestServer_Construction asserts NewServer registers all six tools.
 func TestServer_Construction(t *testing.T) {
 	a := buildTestAnalysis(t)
-	if got := len(a.Tools()); got != 5 {
-		t.Fatalf("Tools() = %d, want 5", got)
+	if got := len(a.Tools()); got != 6 {
+		t.Fatalf("Tools() = %d, want 6", got)
 	}
 	// NewServer must not panic and must register the tools.
 	_ = NewServer(a)
-	want := []string{"what-links-to", "list-orphans", "path-between", "get-section", "corpus-summary"}
+	want := []string{"what-links-to", "list-orphans", "path-between", "get-section", "corpus-summary", "suggest-links"}
 	have := map[string]bool{}
 	for _, tl := range a.Tools() {
 		have[tl.Tool.Name] = true
@@ -183,6 +183,48 @@ func TestTool_CorpusSummary(t *testing.T) {
 	}
 	if len(res.Content) == 0 {
 		t.Fatal("corpus-summary returned no fallback text content")
+	}
+}
+
+// TestTool_SuggestLinks exercises the suggest-links tool: the global no-arg view,
+// a doc-scoped filter (the fixture's island three/four share two neighbours and
+// are unlinked, ADR 0013), and the unknown-doc error path.
+func TestTool_SuggestLinks(t *testing.T) {
+	a := buildTestAnalysis(t)
+
+	// Global: returns the ranked suggestion set with a count + total. The
+	// in-process handler returns the typed payload slice (no JSON round-trip).
+	g := structured(t, callTool(t, a, "suggest-links", nil))
+	suggs, ok := g["suggestions"].([]suggestionPayload)
+	if !ok {
+		t.Fatalf("global suggest-links missing typed suggestions slice: %+v", g)
+	}
+	if len(suggs) == 0 {
+		t.Fatal("expected at least one global suggestion for the fixture corpus")
+	}
+	// Payload shape: each suggestion carries the pair + scores.
+	if suggs[0].DocA == "" || suggs[0].DocB == "" || suggs[0].SharedNeighbours == 0 {
+		t.Errorf("suggestion payload incomplete: %+v", suggs[0])
+	}
+
+	// Doc-scoped: filter to one endpoint of the known island pair.
+	d := structured(t, callTool(t, a, "suggest-links", map[string]any{"doc": "docs/island/three.md"}))
+	if d["document"] != "docs/island/three.md" {
+		t.Errorf("doc-scoped result document = %v, want docs/island/three.md", d["document"])
+	}
+	ds, ok := d["suggestions"].([]suggestionPayload)
+	if !ok || len(ds) == 0 {
+		t.Fatalf("doc-scoped suggest-links should list three.md's partner four.md: %+v", d)
+	}
+	if ds[0].DocA != "docs/island/four.md" || ds[0].DocB != "docs/island/three.md" {
+		t.Errorf("partner pair = (%v,%v), want (docs/island/four.md, docs/island/three.md)",
+			ds[0].DocA, ds[0].DocB)
+	}
+
+	// Unknown document -> validated error, not a panic.
+	bad := callTool(t, a, "suggest-links", map[string]any{"doc": "../../etc/passwd"})
+	if !bad.IsError {
+		t.Error("expected error result for an unknown document")
 	}
 }
 

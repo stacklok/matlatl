@@ -1,7 +1,7 @@
 # 7. Graph node semantics and the document projection
 
 Date: 2026-06-05
-Status: Accepted (superseded in part by ADR 0012)
+Status: Accepted (superseded in part by ADR 0012; gap-framing superseded in part by ADR 0013)
 
 ## Context
 
