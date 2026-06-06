@@ -31,10 +31,10 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 | `matlatl [path]` | Scan + analyze, print a colorized terminal report (default). `--quiet` for a one-line summary. |
 | `matlatl check [path]` | Validate links/anchors as a **CI gate**. See exit codes below. |
 | `matlatl report [path]` | Render a committable Markdown analysis report (`--out` to write `report.md`). |
-| `matlatl graph [path]` | Emit the reference graph: `--format mermaid` (default), `dot`, or `json`. |
-| `matlatl index [path]` | Emit a navigation surface: `index.md`, or an `llms.txt` family artifact (`--llms`, `--full`, `--small`, `--graph`). |
+| `matlatl graph [path]` | Emit the reference graph: `--format mermaid` (default), `dot`, or `json`. `--tree` renders the hierarchy-tree variant instead (mermaid only). |
+| `matlatl index [path]` | Emit a navigation surface: `index.md`, or an `llms.txt` family artifact (`--llms`, `--full`, `--small`, `--graph`). `--title` overrides the `llms.txt` H1. |
 | `matlatl orphans [path]` | List isolated orphans, under-linked and dead-end docs (`--isolated-only`) and unreachable docs (`--unreachable-only`). |
-| `matlatl emit [path] --out <dir>` | Write the whole bundle: `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `findings.json`. |
+| `matlatl emit [path] --out <dir>` | Write the whole bundle: `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `findings.json` (`--title` overrides the `llms.txt` H1). |
 | `matlatl fix-prompt [path]` | Emit an agent-agnostic prompt (findings embedded inline) that tells an LLM coding agent how to fix them. Pipe it to any agent; `--errors-only` for broken links/anchors only; `--out` to write `fix-prompt.md`. |
 | `matlatl serve [path]` | Run the read-only MCP server (streamable HTTP) so an agent can query the graph. |
 | `matlatl version` | Print version information. |
@@ -240,7 +240,7 @@ fail — so dashboards get structured results either way.
 - **`findings.json`** — every finding is self-contained and actionable, plus a
   `remediationGuide` so an agent can fix issues without extra context. Validated
   against [`docs/schemas/findings.schema.json`](schemas/findings.schema.json)
-  (schema version 4) and byte-stable run to run.
+  (schema version 5) and byte-stable run to run.
 
 ### Fixing findings with an agent
 
