@@ -18,5 +18,10 @@ demo/
 # rather than a tool-wide default-ignore — this is that per-repo opt-out.
 .claude/
 
+# CLAUDE.md is a symlink to AGENTS.md (single source of truth, so Claude Code
+# picks up the same agent guide). matlatl doesn't follow symlinks (ADR 0003);
+# ignoring it keeps the repo's own dogfood run notice-clean.
+CLAUDE.md
+
 # Generated output directory.
 out/

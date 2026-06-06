@@ -163,18 +163,24 @@ func (s *Scanner) Scan(ctx context.Context, root string) (application.ScanResult
 			return nil
 		}
 
-		// No symlink following (ADR 0003): a symlinked entry is skipped and noticed.
+		// Respect ignore rules FIRST, for every entry (#8): an explicitly ignored
+		// path — including a symlink — must produce no notice and no corpus entry.
+		// This runs before the symlink and markdown checks so an ignored symlink is
+		// fully silent. The no-follow policy (ADR 0003) is unchanged: an ignored
+		// symlink is skipped regardless; only its notice is suppressed. (relForMatch
+		// is a path-relativization for matching — it does not follow the symlink.)
+		if rel, ok := relForMatch(realRoot, path); ok && matcher != nil && matcher.MatchesPath(rel) {
+			return nil
+		}
+
+		// No symlink following (ADR 0003): a non-ignored symlinked entry is skipped
+		// and noticed.
 		if d.Type()&fs.ModeSymlink != 0 {
 			notices = append(notices, s.symlinkNotice(realRoot, path))
 			return nil
 		}
 
 		if !identity.IsMarkdownPath(d.Name()) {
-			return nil
-		}
-
-		// Respect ignore rules for files too.
-		if rel, ok := relForMatch(realRoot, path); ok && matcher != nil && matcher.MatchesPath(rel) {
 			return nil
 		}
 

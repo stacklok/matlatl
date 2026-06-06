@@ -255,6 +255,32 @@ func TestScan_SymlinkToInsideRootStillSkipped(t *testing.T) {
 	}
 }
 
+// TestScan_IgnoredSymlinkProducesNoNotice pins #8: an explicitly ignored symlink
+// must be fully silent — no skipped-symlink notice and no corpus entry — because
+// the .matlatlignore match now runs before the symlink notice. (A NON-ignored
+// symlink still gets the notice; see TestScan_SymlinkToInsideRootStillSkipped.)
+func TestScan_IgnoredSymlinkProducesNoNotice(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on windows")
+	}
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "target.md"), "# target")
+	if err := os.Symlink(filepath.Join(root, "target.md"), filepath.Join(root, "alias.md")); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+	writeFile(t, filepath.Join(root, ".matlatlignore"), "alias.md\n")
+
+	res := scan(t, root, Config{})
+	// The ignored symlink is silenced: no skipped-symlink notice fires for it.
+	if hasNotice(res, application.NoticeSkippedSymlink) {
+		t.Error("an ignored symlink must not emit a skipped-symlink notice (#8)")
+	}
+	// The no-follow policy is unchanged: only the real target is in the corpus.
+	if got := ids(res); len(got) != 1 || got[0] != "target.md" {
+		t.Errorf("ids = %v, want only [target.md]; the symlink is never followed", got)
+	}
+}
+
 func TestScan_SymlinkedDirectoryNotTraversed(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on windows")
