@@ -46,16 +46,18 @@ func TestIntegration_ScanParseFixture(t *testing.T) {
 		}
 	}
 
-	// 13 documents (ignored/secret.md and draft-notes.md excluded by
+	// 16 documents (ignored/secret.md and draft-notes.md excluded by
 	// .matlatlignore): the P1/P2 docs plus the P3 analysis fixtures
 	// (CHANGELOG.md intentional-orphan, docs/cycle/{alpha,beta}.md cycle,
-	// docs/island/{one,two}.md disconnected cluster, docs/stray.md unreachable).
-	if c.Len() != 13 {
+	// docs/island/{one,two}.md disconnected cluster, docs/stray.md unreachable)
+	// plus the P7 bow-tie fixtures (docs/flow/{branch OUT, terminal OUT+dead-end,
+	// aside TENDRIL}).
+	if c.Len() != 16 {
 		var got []string
 		for _, d := range c.Documents() {
 			got = append(got, d.ID.String())
 		}
-		t.Fatalf("document count = %d, want 13; got %v", c.Len(), got)
+		t.Fatalf("document count = %d, want 16; got %v", c.Len(), got)
 	}
 
 	// The two READMEs are DISTINCT identities (ADR 0001).

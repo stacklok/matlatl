@@ -20,11 +20,12 @@ const (
 
 // FindingsSchemaVersion is the findings.json schema version. Adding optional
 // fields is backward-compatible; renaming/removing a field or a Details key is a
-// breaking change that bumps this. v2 (this phase) added per-finding "details"
+// breaking change that bumps this. v2 added per-finding "details"
 // (structured, machine-actionable context) and a top-level "remediationGuide"
 // mapping each finding kind to a standalone how-to, so every finding is
-// self-contained for an agent.
-const FindingsSchemaVersion = 2
+// self-contained for an agent. v3 (ADR 0012) adds the graduated structure
+// findings "under-linked" and "dead-end" (new kind values + summary counts).
+const FindingsSchemaVersion = 3
 
 // findingsDocument is the stable findings.json schema. Adding fields is
 // backward-compatible; renaming/removing is a breaking change and must bump
@@ -48,6 +49,8 @@ type findingsSum struct {
 	Orphan       int `json:"orphan"`
 	Unreachable  int `json:"unreachable"`
 	KnowledgeGap int `json:"knowledgeGap"`
+	UnderLinked  int `json:"underLinked"`
+	DeadEnd      int `json:"deadEnd"`
 }
 
 type findingJSON struct {
@@ -91,6 +94,13 @@ var remediationByKind = map[string]string{
 	analysis.KnowledgeGap.String(): "Two clusters of documentation (`details.componentA` and `details.componentB`) have no " +
 		"navigational links between them. This is an experimental heuristic, not an error. If the two areas " +
 		"are related, add a link between `details.representativeA` and `details.representativeB` to connect them.",
+	analysis.UnderLinked.String(): "The document has fewer inbound navigational links than the discoverability threshold " +
+		"(`details.inboundCount` holds the actual count), so readers and agents are unlikely to find it. " +
+		"Add inbound links from related, more-connected pages (an index or topic hub is ideal). To keep it " +
+		"intentionally sparse, add front matter `matlatl: orphan-intentional`.",
+	analysis.DeadEnd.String(): "The document has inbound links but links to nothing onward, so navigation stops there. " +
+		"Add onward internal links from it to related documents so readers and agents can continue. To keep " +
+		"it intentionally terminal, add front matter `matlatl: orphan-intentional`.",
 	analysis.DeadLink.String(): "An external (http/https) link failed an opt-in liveness check (--check-external): it was " +
 		"unreachable, returned an error status (`details.statusCode`), or was refused by the SSRF guard " +
 		"(`details.blocked`). Verify the URL is correct and reachable; if it moved, update it, otherwise " +
@@ -104,7 +114,8 @@ var remediationByKind = map[string]string{
 // cannot slip past one and be ordered inconsistently in the other.
 var kindPresentationOrder = []analysis.FindingKind{
 	analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
-	analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap, analysis.DeadLink,
+	analysis.Orphan, analysis.Unreachable, analysis.UnderLinked, analysis.DeadEnd,
+	analysis.KnowledgeGap, analysis.DeadLink,
 }
 
 // remediationGuideFor returns the remediation entries for exactly the kinds
@@ -136,6 +147,8 @@ func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
 			Orphan:       report.CountByKind(analysis.Orphan),
 			Unreachable:  report.CountByKind(analysis.Unreachable),
 			KnowledgeGap: report.CountByKind(analysis.KnowledgeGap),
+			UnderLinked:  report.CountByKind(analysis.UnderLinked),
+			DeadEnd:      report.CountByKind(analysis.DeadEnd),
 		},
 		Findings: make([]findingJSON, 0, report.Len()),
 	}

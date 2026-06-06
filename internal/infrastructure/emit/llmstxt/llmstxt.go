@@ -121,7 +121,8 @@ func writeLink(b *strings.Builder, d emit.DocView) {
 func writeKnownGaps(b *strings.Builder, v emit.View) {
 	b.WriteString("## Known gaps\n\n")
 	c := v.Counts
-	total := c.Orphan + c.Unreachable + c.BrokenLink + c.BrokenAnchor + c.Ambiguous
+	total := c.Orphan + c.Unreachable + c.UnderLinked + c.DeadEnd +
+		c.BrokenLink + c.BrokenAnchor + c.Ambiguous
 	if total == 0 {
 		b.WriteString("- None: every document is reachable and all links resolve.\n")
 		return
@@ -129,6 +130,8 @@ func writeKnownGaps(b *strings.Builder, v emit.View) {
 	b.WriteString("This corpus is INCOMPLETE for navigation; an agent should not assume full coverage:\n\n")
 	fmt.Fprintf(b, "- %d orphan document(s) (nothing links to them)\n", c.Orphan)
 	fmt.Fprintf(b, "- %d unreachable document(s) (not reachable from a root)\n", c.Unreachable)
+	fmt.Fprintf(b, "- %d under-linked document(s) (few inbound links; hard to discover)\n", c.UnderLinked)
+	fmt.Fprintf(b, "- %d dead-end document(s) (no onward links)\n", c.DeadEnd)
 	fmt.Fprintf(b, "- %d broken link(s)\n", c.BrokenLink)
 	fmt.Fprintf(b, "- %d broken anchor(s)\n", c.BrokenAnchor)
 	fmt.Fprintf(b, "- %d ambiguous link(s)\n", c.Ambiguous)

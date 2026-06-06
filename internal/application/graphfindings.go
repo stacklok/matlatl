@@ -9,13 +9,22 @@ import (
 )
 
 // findingsFromMetrics turns the P3 graph analysis into Findings: isolated
-// orphans (Orphan), unreachable documents (Unreachable), and knowledge-gap
-// bridge candidates (KnowledgeGap). Per ADR 0005 orphans/unreachable are
-// Warning (fail only under --strict) and gaps are Info (never fail). Output is
-// derived from already-sorted metric slices, so it is deterministic.
-func findingsFromMetrics(m *graphmodel.GraphMetrics) []analysis.Finding {
+// orphans (Orphan), unreachable documents (Unreachable), under-linked and
+// dead-end documents (the graduated structure tiers, ADR 0012), and
+// knowledge-gap bridge candidates (KnowledgeGap). Per ADR 0005 orphans/
+// unreachable are Warning (fail only under --strict) and gaps are Info (never
+// fail). Under-linked/dead-end default to Info but are promoted to Warning when
+// structureSev is StructureFindingsWarning (ADR 0012). threshold is the actual
+// (normalized) inbound discoverability threshold, carried into the under-linked
+// message + details. Output is derived from already-sorted metric slices, so it
+// is deterministic.
+func findingsFromMetrics(m *graphmodel.GraphMetrics, threshold int, structureSev StructureFindingsSeverity) []analysis.Finding {
 	if m == nil {
 		return nil
+	}
+	sev := analysis.Info
+	if structureSev == StructureFindingsWarning {
+		sev = analysis.Warning
 	}
 	var out []analysis.Finding
 
@@ -25,10 +34,51 @@ func findingsFromMetrics(m *graphmodel.GraphMetrics) []analysis.Finding {
 	for _, id := range m.Orphans.Unreachable {
 		out = append(out, unreachableFinding(id))
 	}
+	for _, id := range m.Orphans.UnderLinked {
+		out = append(out, underLinkedFinding(id, m.Degrees.Degree(id).In, threshold, sev))
+	}
+	for _, id := range m.Orphans.DeadEnd {
+		out = append(out, deadEndFinding(id, sev))
+	}
 	for _, gap := range m.Gaps {
 		out = append(out, gapFinding(gap))
 	}
 	return out
+}
+
+func underLinkedFinding(id identity.DocumentID, inDeg, threshold int, sev analysis.Severity) analysis.Finding {
+	return analysis.Finding{
+		ID:       fmt.Sprintf("%s:%s", analysis.UnderLinked, id),
+		Kind:     analysis.UnderLinked,
+		Severity: sev,
+		Location: analysis.Location{Document: id},
+		Message: fmt.Sprintf(
+			"%q has only %d inbound link(s) (below the discoverability threshold of %d); it is under-linked",
+			id, inDeg, threshold),
+		SuggestedFix: fmt.Sprintf(
+			"Add inbound links to %q from related pages so readers and agents can discover it; aim for at least %d. "+
+				"To keep it intentionally sparse, add front matter `matlatl: orphan-intentional`.", id, threshold),
+		Details: map[string]string{
+			DetailTargetDocument: id.String(),
+			DetailInboundCount:   fmt.Sprintf("%d", inDeg),
+		},
+	}
+}
+
+func deadEndFinding(id identity.DocumentID, sev analysis.Severity) analysis.Finding {
+	return analysis.Finding{
+		ID:       fmt.Sprintf("%s:%s", analysis.DeadEnd, id),
+		Kind:     analysis.DeadEnd,
+		Severity: sev,
+		Location: analysis.Location{Document: id},
+		Message:  fmt.Sprintf("%q is a dead-end: it has inbound links but links to nothing onward", id),
+		SuggestedFix: fmt.Sprintf(
+			"Add onward internal links from %q to related documents. "+
+				"To keep it intentionally terminal, add front matter `matlatl: orphan-intentional`.", id),
+		Details: map[string]string{
+			DetailTargetDocument: id.String(),
+		},
+	}
 }
 
 func orphanFinding(id identity.DocumentID) analysis.Finding {

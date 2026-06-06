@@ -13,14 +13,14 @@
     "findings"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 2 },
+    "schemaVersion": { "type": "integer", "const": 3 },
     "tool": { "type": "string" },
     "summary": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "total", "brokenLink", "brokenAnchor", "ambiguous",
-        "orphan", "unreachable", "knowledgeGap"
+        "orphan", "unreachable", "knowledgeGap", "underLinked", "deadEnd"
       ],
       "properties": {
         "total": { "type": "integer", "minimum": 0 },
@@ -29,7 +29,9 @@
         "ambiguous": { "type": "integer", "minimum": 0 },
         "orphan": { "type": "integer", "minimum": 0 },
         "unreachable": { "type": "integer", "minimum": 0 },
-        "knowledgeGap": { "type": "integer", "minimum": 0 }
+        "knowledgeGap": { "type": "integer", "minimum": 0 },
+        "underLinked": { "type": "integer", "minimum": 0 },
+        "deadEnd": { "type": "integer", "minimum": 0 }
       }
     },
     "remediationGuide": {
@@ -49,7 +51,8 @@
             "type": "string",
             "enum": [
               "broken-link", "broken-anchor", "ambiguous",
-              "orphan", "unreachable", "knowledge-gap", "dead-link"
+              "orphan", "unreachable", "under-linked", "dead-end",
+              "knowledge-gap", "dead-link"
             ]
           },
           "severity": { "type": "string", "enum": ["info", "warning", "error"] },

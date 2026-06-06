@@ -24,6 +24,16 @@ version: 1
 # flags.
 roots:
   - ".claude/agents/*.md"
+
+# Discoverability threshold for the under-linked finding (ADR 0012). A document
+# with fewer than this many inbound navigational links (but at least one outbound
+# link) is reported as under-linked. Default 3; <=0 is normalized to 3.
+inboundThreshold: 3
+
+# Severity of the graduated structure findings (under-linked, dead-end), ADR 0012.
+# "info" (default) reports them but never fails `check`, even --strict; "warning"
+# promotes BOTH so they fail `check --strict` like orphans/unreachable.
+structureFindingsSeverity: info
 ```
 
 ## Fields
@@ -78,6 +88,29 @@ files — entry points that nothing links to by design — from being reported a
 isolated orphans. This can only **remove** findings; it never adds any, so the
 `check` gate only softens.
 
+### `inboundThreshold` (integer, optional)
+
+The discoverability threshold for the **under-linked** structure finding
+(ADR 0012). A non-exempt document with **outbound** links but **fewer than
+`inboundThreshold` inbound** links is reported as under-linked.
+
+- Default **`3`** (Wikipedia's "discoverable" heuristic).
+- A value **`<= 0`** is normalized (floored) to `3` in the domain.
+- A **negative** value is a hard error; a **non-integer** is a hard error.
+- The `--inbound-threshold` CLI flag overrides this key when set explicitly.
+
+### `structureFindingsSeverity` (string, optional)
+
+The severity assigned to **both** graduated structure findings (under-linked and
+dead-end), ADR 0012.
+
+- `"info"` (**default**) — reported in every artifact but **never** fails
+  `check`, even under `--strict`.
+- `"warning"` — promotes both so they fail `check --strict` exactly like
+  orphan/unreachable/ambiguous.
+- Any other value is a hard error. There is no CLI flag for this; it is
+  config-only.
+
 ## What v1 does NOT configure
 
 - **Ignoring files** — `.matlatlignore` remains the sole ignore mechanism. The
@@ -101,6 +134,8 @@ would introduce them.
 | `version` missing | assume 1 + notice | run continues |
 | `version` > 1 or wrong type | hard error | 2 (usage) |
 | `roots` wrong type | hard error | 2 (usage) |
+| `inboundThreshold` negative or wrong type | hard error | 2 (usage) |
+| `structureFindingsSeverity` not `info`/`warning` or wrong type | hard error | 2 (usage) |
 | Unknown non-version key (typo / future key) | ignored + notice | run continues |
 | Bad glob in `roots` | notice (matches nothing) | run continues |
 

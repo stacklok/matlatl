@@ -1,6 +1,6 @@
 matlatl analysis report
 
-Corpus: 13 documents, 24 headings, 24 references across 6 components.
+Corpus: 16 documents, 27 headings, 27 references across 6 components.
 
 Broken links (3)
   docs/links.md:13 wikilink link target "does-not-exist" does not resolve to a document in the corpus
@@ -19,27 +19,45 @@ Isolated orphans (2)
   docs/project/notes.md
   docs/team/notes.md
 
-Unreachable (6)
+Unreachable (7)
   not reachable from any root — add an inbound link from a page reachable from a root
   docs/cycle/alpha.md
   docs/cycle/beta.md
+  docs/flow/aside.md
   docs/island/one.md
   docs/island/two.md
   docs/links.md
   docs/stray.md
 
+Under-linked (8)
+  fewer inbound links than the discoverability threshold — link them in from related pages
+  docs/cycle/alpha.md
+  docs/cycle/beta.md
+  docs/flow/aside.md
+  docs/flow/branch.md
+  docs/island/one.md
+  docs/island/two.md
+  docs/links.md
+  docs/stray.md
+
+Dead-ends (1)
+  inbound links but nothing onward — add outbound links to related documents
+  docs/flow/terminal.md
+
+Structure: 3 core, 3 in, 2 out, 1 tendril, 7 disconnected
+
 Top hubs (link out to many docs)
-  0.665  Link Showcase
-  0.475  Project Home
-  0.423  User Guide
-  0.242  Docs Index
-  0.242  Overview
+  0.654  Link Showcase
+  0.471  Project Home
+  0.409  User Guide
+  0.296  Overview
+  0.245  Docs Index
 
 Top authorities (linked to by many docs)
-  0.626  User Guide
-  0.603  Overview
-  0.494  Project Home
+  0.639  User Guide
+  0.588  Overview
+  0.478  Project Home
+  0.133  Downstream Branch
   0.000  Cycle Alpha
-  0.000  Cycle Beta
 
 Knowledge gaps: 3 disconnected cluster pair(s) that may warrant a bridge (experimental)

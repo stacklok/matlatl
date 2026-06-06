@@ -6,8 +6,31 @@ import (
 	"os"
 
 	"github.com/stacklok/matlatl/internal/domain/analysis"
+	"github.com/stacklok/matlatl/internal/domain/graphmodel"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 )
+
+// bowtieLine renders the one-line bow-tie structure summary shared by the
+// terminal and markdown reports (ADR 0012). When the giant SCC has a single
+// member there is no cyclic core, which the line says explicitly; otherwise it
+// reports the per-bucket counts relative to the core.
+func bowtieLine(v emit.View) string {
+	if v.Metrics == nil {
+		return "Structure: no cyclic core"
+	}
+	bw := v.Metrics.Bowtie
+	c := bw.Counts
+	if bw.GiantSCCSize <= 1 {
+		return fmt.Sprintf(
+			"Structure: no cyclic core (%d in, %d out, %d tendril, %d disconnected)",
+			c[graphmodel.BucketIn], c[graphmodel.BucketOut],
+			c[graphmodel.BucketTendril], c[graphmodel.BucketDisconnected])
+	}
+	return fmt.Sprintf(
+		"Structure: %d core, %d in, %d out, %d tendril, %d disconnected",
+		c[graphmodel.BucketCore], c[graphmodel.BucketIn], c[graphmodel.BucketOut],
+		c[graphmodel.BucketTendril], c[graphmodel.BucketDisconnected])
+}
 
 // TerminalOptions tunes the terminal report.
 type TerminalOptions struct {
@@ -119,6 +142,31 @@ func fullReport(w io.Writer, p palette, v emit.View) error {
 			ew.line("  " + p.yellow(id.String()))
 		}
 	}
+	ew.line("")
+
+	// Under-linked + dead-end — the graduated structure tiers (ADR 0012).
+	section(ew, p, "Under-linked", len(v.UnderLinked))
+	ew.line("  " + p.dim("fewer inbound links than the discoverability threshold — link them in from related pages"))
+	if len(v.UnderLinked) == 0 {
+		ew.line("  " + p.green("none"))
+	}
+	for _, id := range v.UnderLinked {
+		ew.line("  " + p.yellow(id.String()))
+	}
+	ew.line("")
+
+	section(ew, p, "Dead-ends", len(v.DeadEnd))
+	ew.line("  " + p.dim("inbound links but nothing onward — add outbound links to related documents"))
+	if len(v.DeadEnd) == 0 {
+		ew.line("  " + p.green("none"))
+	}
+	for _, id := range v.DeadEnd {
+		ew.line("  " + p.yellow(id.String()))
+	}
+	ew.line("")
+
+	// Bow-tie structure summary (macro-shape relative to the giant core).
+	ew.line(p.dim(bowtieLine(v)))
 	ew.line("")
 
 	// 4. Top hubs / authorities.

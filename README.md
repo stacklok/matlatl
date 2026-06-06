@@ -15,9 +15,12 @@ and builds two overlaid structures:
 - a **tree** — the folder / front-matter hierarchy plus intra-document section nesting, and
 - a **graph** — the typed cross-reference relationships between documents and sections.
 
-From those it detects **orphans** (truly isolated docs) and **unreachable** docs
-(no path from a root such as `README.md`), **broken links**, and **broken anchors**,
-then renders the result for three audiences:
+From those it detects a graduated set of structure problems — **orphans** (truly
+isolated docs), **under-linked** docs (too few inbound links to be discoverable),
+**dead-ends** (nothing onward) and **unreachable** docs (no path from a root such
+as `README.md`) — plus **broken links** and **broken anchors**, and maps the
+corpus's macro-shape with a **bow-tie** classification (core / in / out / tendril
+/ disconnected). It then renders the result for three audiences:
 
 - **Humans** — a colorized terminal report, a committable Markdown report, Mermaid and
   Graphviz/DOT diagrams, and a navigable `index.md`.

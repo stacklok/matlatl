@@ -27,8 +27,17 @@ func (r Result) CheckExitCode(strict bool) platform.ExitCode {
 	if r.BrokenLinkCount > 0 || r.BrokenAnchorCount > 0 {
 		return platform.ExitFindings
 	}
-	if strict && (r.AmbiguousCount > 0 || r.OrphanCount > 0 || r.UnreachableCount > 0) {
-		return platform.ExitFindings
+	if strict {
+		if r.AmbiguousCount > 0 || r.OrphanCount > 0 || r.UnreachableCount > 0 {
+			return platform.ExitFindings
+		}
+		// Graduated structure findings (under-linked, dead-end) fail --strict only
+		// when the configurable severity promotes them to Warning (ADR 0012). At
+		// the default Info severity they never affect the exit code.
+		if r.StructureFindingsSeverity == StructureFindingsWarning &&
+			(r.UnderLinkedCount > 0 || r.DeadEndCount > 0) {
+			return platform.ExitFindings
+		}
 	}
 	return platform.ExitOK
 }
@@ -61,6 +70,12 @@ const (
 	// Present only on --check-external runs (kept out of the default output).
 	DetailStatusCode = "statusCode"
 	DetailBlocked    = "blocked"
+	// DetailInboundCount is the actual inbound-link count of an under-linked
+	// document (the data behind the discoverability-threshold comparison).
+	DetailInboundCount = "inboundCount"
+	// DetailBowtieBucket is a node's bow-tie bucket
+	// (core/in/out/tendril/disconnected); surfaced in graph.json node data.
+	DetailBowtieBucket = "bowtieBucket"
 )
 
 // findingsFromReferences turns resolved references into analysis Findings. Only

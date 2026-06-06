@@ -1,7 +1,7 @@
 # 7. Graph node semantics and the document projection
 
 Date: 2026-06-05
-Status: Accepted
+Status: Accepted (superseded in part by ADR 0012)
 
 ## Context
 
@@ -73,6 +73,10 @@ reached. Documented and enforced in `graphmodel.DefaultNavigationalTypes`.
   - Unreachable → "add an inbound link from a page reachable from a root."
   (A document can be both; we emit the more specific Orphan and suppress the
   redundant Unreachable for the same doc.)
+  ADR 0012 refines this orphan notion into a graduated ladder — fully-isolated
+  (this bullet), **dead-end** (in>0, out==0), and **under-linked** (out>0, few
+  inbound links) — with **in-degree 0 AND out-degree 0** remaining the
+  most-severe orphan tier.
 - **Components:** Weakly-Connected Components (undirected projection) and
   Strongly-Connected Components (directed projection).
 - **HITS:** hub/authority scores over the directed projection.

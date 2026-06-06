@@ -20,10 +20,12 @@ func newOrphansCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "orphans [path]",
 		Short: "List orphaned and unreachable documents",
-		Long: "orphans lists isolated orphans (no inbound or outbound navigational " +
-			"links) and unreachable documents (not reachable from the root set), per " +
-			"ADR 0007. Use --isolated-only or --unreachable-only to filter. This " +
-			"command always exits 0; gate CI with `check --strict`.",
+		Long: "orphans lists structurally weak documents: isolated orphans (no inbound " +
+			"or outbound navigational links), unreachable documents (not reachable from " +
+			"the root set), under-linked documents (fewer inbound links than the " +
+			"discoverability threshold) and dead-ends (inbound links but nothing onward), " +
+			"per ADR 0007 / ADR 0012. Use --isolated-only or --unreachable-only to filter. " +
+			"This command always exits 0; gate CI with `check --strict`.",
 		Args:          usageArgs(cobra.MaximumNArgs(1)),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -64,6 +66,22 @@ func newOrphansCommand() *cobra.Command {
 					_, _ = fmt.Fprintln(out, "  (none)")
 				}
 				for _, id := range view.Orphans {
+					_, _ = fmt.Fprintf(out, "  %s\n", id)
+				}
+
+				_, _ = fmt.Fprintf(out, "Under-linked (%d):\n", len(view.UnderLinked))
+				if len(view.UnderLinked) == 0 {
+					_, _ = fmt.Fprintln(out, "  (none)")
+				}
+				for _, id := range view.UnderLinked {
+					_, _ = fmt.Fprintf(out, "  %s\n", id)
+				}
+
+				_, _ = fmt.Fprintf(out, "Dead-ends (%d):\n", len(view.DeadEnd))
+				if len(view.DeadEnd) == 0 {
+					_, _ = fmt.Fprintln(out, "  (none)")
+				}
+				for _, id := range view.DeadEnd {
 					_, _ = fmt.Fprintf(out, "  %s\n", id)
 				}
 			}

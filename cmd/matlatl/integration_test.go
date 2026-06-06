@@ -308,6 +308,106 @@ func TestIntegration_CheckStrictWithOrphans(t *testing.T) {
 	}
 }
 
+// underLinkedCorpus stages a corpus shaped to produce UNDER-LINKED (but no
+// orphan/dead-end/broken) findings: a README root links to a hub, the hub links
+// to several leaves, and each leaf links back to README. Every leaf has out>0
+// (so none is a dead-end) and in=1 (< default threshold 3, so all under-linked),
+// and the whole graph is reachable from README (no unreachable). It returns the
+// staged directory.
+func underLinkedCorpus(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// README -> hub; hub -> leafA/leafB; leaves -> README (so out>0 and reachable).
+	writeFile("README.md", "# Readme\n\nSee [hub](hub.md).\n")
+	writeFile("hub.md", "# Hub\n\nSee [a](leafA.md) and [b](leafB.md).\n")
+	writeFile("leafA.md", "# Leaf A\n\nBack to [home](README.md).\n")
+	writeFile("leafB.md", "# Leaf B\n\nBack to [home](README.md).\n")
+	return dir
+}
+
+// TestIntegration_OrphansSurfacesUnderLinked: `matlatl orphans` lists the
+// under-linked documents (and dead-ends) alongside isolated orphans (ADR 0012).
+func TestIntegration_OrphansSurfacesUnderLinked(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"orphans", underLinkedCorpus(t)}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("orphans code = %v, want ExitOK (always 0)", code)
+	}
+	s := out.String()
+	if !strings.Contains(s, "Under-linked") {
+		t.Errorf("orphans output missing the Under-linked section:\n%s", s)
+	}
+	// hub.md has in=1 (<3) and out=2 → under-linked. leafA/leafB in=1 → under-linked.
+	for _, want := range []string{"hub.md", "leafA.md", "leafB.md"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("orphans output missing under-linked doc %q:\n%s", want, s)
+		}
+	}
+	if !strings.Contains(s, "Dead-ends") {
+		t.Errorf("orphans output missing the Dead-ends section:\n%s", s)
+	}
+}
+
+// TestIntegration_CheckUnderLinkedDefaultSeverity: an under-linked-only corpus
+// passes `check --strict` at the DEFAULT (info) structure-finding severity —
+// under-linked/dead-end never gate the build unless explicitly promoted
+// (ADR 0012). This is the user-reachable proof of the configurable-severity
+// default.
+func TestIntegration_CheckUnderLinkedDefaultSeverity(t *testing.T) {
+	dir := underLinkedCorpus(t)
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"check", dir, "--strict"}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("under-linked-only check --strict code = %v, want ExitOK at default severity (stdout=%q stderr=%q)",
+			code, out.String(), errOut.String())
+	}
+}
+
+// TestIntegration_CheckUnderLinkedWarningSeverity: promoting the structure
+// findings to "warning" via .matlatl.yml makes the same under-linked-only corpus
+// fail `check --strict` (ADR 0012 configurable knob).
+func TestIntegration_CheckUnderLinkedWarningSeverity(t *testing.T) {
+	dir := underLinkedCorpus(t)
+	if err := os.WriteFile(filepath.Join(dir, ".matlatl.yml"),
+		[]byte("structureFindingsSeverity: warning\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"check", dir, "--strict"}, &out, &errOut)
+	if code != platform.ExitFindings {
+		t.Fatalf("warning-severity under-linked check --strict code = %v, want ExitFindings (stdout=%q stderr=%q)",
+			code, out.String(), errOut.String())
+	}
+}
+
+// TestIntegration_InboundThresholdFlag: --inbound-threshold 1 means a single
+// inbound link is enough, so the under-linked-only corpus produces no
+// under-linked finding (hub/leaves all have in>=1).
+func TestIntegration_InboundThresholdFlag(t *testing.T) {
+	dir := underLinkedCorpus(t)
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(),
+		[]string{"orphans", dir, "--inbound-threshold", "1"}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("orphans code = %v, want ExitOK", code)
+	}
+	s := out.String()
+	// With threshold 1, the Under-linked section should report (none).
+	idx := strings.Index(s, "Under-linked")
+	if idx < 0 {
+		t.Fatalf("missing Under-linked section:\n%s", s)
+	}
+	// hub.md must NOT be listed as under-linked anymore.
+	if strings.Contains(s[idx:], "hub.md") {
+		t.Errorf("with --inbound-threshold 1, hub.md (in=1) must not be under-linked:\n%s", s)
+	}
+}
+
 // --- P4 human-emitter integration tests ---
 
 // TestIntegration_ReportToOut: `report --out` writes a non-empty, parseable
@@ -416,7 +516,7 @@ func TestIntegration_GraphJSONToOut(t *testing.T) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("graph.json does not parse: %v", err)
 	}
-	if doc.SchemaVersion != 1 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
+	if doc.SchemaVersion != 2 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
 		t.Errorf("graph.json content unexpected: version=%d docs=%d nodes=%d", doc.SchemaVersion, doc.Summary.Documents, len(doc.Nodes))
 	}
 	assertNothingEscaped(t, outDir, []string{"graph.json"})

@@ -36,7 +36,14 @@ func Markdown(v emit.View) []byte {
 	writeRow(&b, "Ambiguous links", c.Ambiguous)
 	writeRow(&b, "Orphans", c.Orphan)
 	writeRow(&b, "Unreachable", c.Unreachable)
+	writeRow(&b, "Under-linked", c.UnderLinked)
+	writeRow(&b, "Dead-ends", c.DeadEnd)
 	writeRow(&b, "Knowledge gaps", c.KnowledgeGap)
+	b.WriteString("\n")
+
+	// One-line bow-tie structure summary (ADR 0012): the macro-shape of the
+	// corpus relative to its giant strongly-connected core.
+	writeBowtie(&b, v)
 	b.WriteString("\n")
 
 	// Broken links + anchors table (combined; Kind column distinguishes).
@@ -80,6 +87,21 @@ func Markdown(v emit.View) []byte {
 	b.WriteString("_No inbound or outbound navigational links. Link them in from a relevant page, or delete them. " +
 		"To keep one intentionally unlinked, add front matter `matlatl: orphan-intentional`._\n\n")
 	writeDocList(&b, v, v.Orphans)
+	b.WriteString("\n")
+
+	// Under-linked.
+	b.WriteString("## Under-linked\n\n")
+	b.WriteString("_Fewer inbound links than the discoverability threshold. Add inbound links from related, " +
+		"more-connected pages so readers and agents can find them. To keep one intentionally sparse, add " +
+		"front matter `matlatl: orphan-intentional`._\n\n")
+	writeDocList(&b, v, v.UnderLinked)
+	b.WriteString("\n")
+
+	// Dead-ends.
+	b.WriteString("## Dead-ends\n\n")
+	b.WriteString("_Have inbound links but link to nothing onward. Add onward internal links to related " +
+		"documents. To keep one intentionally terminal, add front matter `matlatl: orphan-intentional`._\n\n")
+	writeDocList(&b, v, v.DeadEnd)
 	b.WriteString("\n")
 
 	// Unreachable.
@@ -133,6 +155,14 @@ func Markdown(v emit.View) []byte {
 	}
 
 	return []byte(b.String())
+}
+
+// writeBowtie writes the one-line bow-tie structure summary into the markdown
+// report (e.g. "Structure: 3 core, 1 in, 2 out, 0 tendril, 1 disconnected").
+func writeBowtie(b *strings.Builder, v emit.View) {
+	b.WriteString("**")
+	b.WriteString(bowtieLine(v))
+	b.WriteString("**\n")
 }
 
 func writeRow(b *strings.Builder, label string, n int) {

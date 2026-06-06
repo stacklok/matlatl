@@ -10,6 +10,12 @@ flowchart LR
   class n_5295eacd95c7d93f unreachable
   n_843e8ecab59eacc5["Cycle Beta — docs/cycle/beta.md"]
   class n_843e8ecab59eacc5 unreachable
+  n_f83ee9bdaa3ab217["Tendril Aside — docs/flow/aside.md"]
+  class n_f83ee9bdaa3ab217 unreachable
+  n_4affafca6752c1cf["Downstream Branch — docs/flow/branch.md"]
+  class n_4affafca6752c1cf c1
+  n_4cea44cc464214b7["Terminal Page — docs/flow/terminal.md"]
+  class n_4cea44cc464214b7 c1
   n_70bb5115f916ef90["User Guide — docs/guide.md"]
   class n_70bb5115f916ef90 c1
   n_80bfc64e6fdbf514["Island One — docs/island/one.md"]
@@ -40,6 +46,8 @@ flowchart LR
   n_8dfa32f968d6cc20 --> n_70bb5115f916ef90
   n_5295eacd95c7d93f --> n_843e8ecab59eacc5
   n_843e8ecab59eacc5 --> n_5295eacd95c7d93f
+  n_f83ee9bdaa3ab217 --> n_4affafca6752c1cf
+  n_4affafca6752c1cf --> n_4cea44cc464214b7
   n_70bb5115f916ef90 --> n_3f15cf6f633a5d62
   n_70bb5115f916ef90 --> n_55587a0e3176141a
   n_80bfc64e6fdbf514 --> n_e5a2da93cbd610be
@@ -48,6 +56,7 @@ flowchart LR
   n_afb4347eafb2315b --> n_70bb5115f916ef90
   n_afb4347eafb2315b --> n_55587a0e3176141a
   n_240b3a164b4fe05f --> n_3f15cf6f633a5d62
+  n_55587a0e3176141a --> n_4affafca6752c1cf
   n_55587a0e3176141a --> n_70bb5115f916ef90
   classDef c0 fill:#e3f2fd,stroke:#90a4ae,color:#000;
   classDef c1 fill:#f1f8e9,stroke:#90a4ae,color:#000;

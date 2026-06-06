@@ -60,6 +60,14 @@ const (
 	Ambiguous
 	// KnowledgeGap is a detected documentation gap.
 	KnowledgeGap
+	// UnderLinked is a document with fewer inbound links than the discoverability
+	// threshold (but at least one outbound link). Below-default it is Info; a
+	// config knob can promote it to Warning (ADR 0012).
+	UnderLinked
+	// DeadEnd is a document with inbound links but no outbound navigational links
+	// (a terminal node). Below-default it is Info; a config knob can promote it to
+	// Warning (ADR 0012).
+	DeadEnd
 	// DeadLink is an external (http/https) link that failed an opt-in liveness
 	// check (--check-external): unreachable, an error status, or refused by the
 	// SSRF guard. It is produced only when external checking is enabled, so it is
@@ -82,6 +90,10 @@ func (k FindingKind) String() string {
 		return "ambiguous"
 	case KnowledgeGap:
 		return "knowledge-gap"
+	case UnderLinked:
+		return "under-linked"
+	case DeadEnd:
+		return "dead-end"
 	case DeadLink:
 		return "dead-link"
 	default:

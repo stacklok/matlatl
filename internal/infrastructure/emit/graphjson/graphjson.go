@@ -55,7 +55,9 @@ const GraphJSONName = "graph.json"
 // SchemaVersion is the graph.json schema version. Additive fields are
 // backward-compatible; renaming/removing a field bumps this. It is mirrored by
 // docs/schemas/graph.schema.json (kept in lockstep; a test validates against it).
-const SchemaVersion = 1
+// v2 (ADR 0012) adds per-node bowtie/underLinked/deadEnd, top-level underLinked/
+// deadEnd arrays, a bowtie summary, and underLinked/deadEnd summary counts.
+const SchemaVersion = 2
 
 // HITSFloatPrecision is the FIXED number of decimal places HITS hub/authority
 // scores are rounded to in graph.json. HITS scores are L2-normalized into [0,1]
@@ -105,6 +107,9 @@ type Document struct {
 	Sections      []Section      `json:"sections"`
 	Orphans       []string       `json:"orphans"`
 	Unreachable   []string       `json:"unreachable"`
+	UnderLinked   []string       `json:"underLinked"`
+	DeadEnd       []string       `json:"deadEnd"`
+	Bowtie        BowtieSummary  `json:"bowtie"`
 	BrokenLinks   []BrokenLink   `json:"brokenLinks"`
 	BrokenAnchors []BrokenAnchor `json:"brokenAnchors"`
 	Ambiguous     []Ambiguous    `json:"ambiguous"`
@@ -124,10 +129,26 @@ type Summary struct {
 	Components    int `json:"components"`
 	Orphans       int `json:"orphans"`
 	Unreachable   int `json:"unreachable"`
+	UnderLinked   int `json:"underLinked"`
+	DeadEnd       int `json:"deadEnd"`
 	BrokenLinks   int `json:"brokenLinks"`
 	BrokenAnchors int `json:"brokenAnchors"`
 	Ambiguous     int `json:"ambiguous"`
 	KnowledgeGaps int `json:"knowledgeGaps"`
+}
+
+// BowtieSummary is the corpus-level bow-tie tally relative to the giant SCC
+// (the "core"): the per-bucket document counts plus the giant SCC's ID and size.
+// A giantSCCSize of 1 means the corpus has no cyclic core (every SCC is a
+// singleton); the buckets are still populated deterministically (ADR 0012).
+type BowtieSummary struct {
+	Core         int    `json:"core"`
+	In           int    `json:"in"`
+	Out          int    `json:"out"`
+	Tendril      int    `json:"tendril"`
+	Disconnected int    `json:"disconnected"`
+	GiantSCC     string `json:"giantScc"`
+	GiantSCCSize int    `json:"giantSccSize"`
 }
 
 // Node is a document (or section) vertex with its presentation + analysis data.
@@ -146,6 +167,12 @@ type Node struct {
 	Reachable         bool   `json:"reachable"`
 	Orphan            bool   `json:"orphan"`
 	IntentionalOrphan bool   `json:"intentionalOrphan"`
+	// UnderLinked / DeadEnd are the graduated structure tiers (ADR 0012);
+	// mutually exclusive with Orphan and each other.
+	UnderLinked bool `json:"underLinked"`
+	DeadEnd     bool `json:"deadEnd"`
+	// Bowtie is the node's bow-tie bucket: core/in/out/tendril/disconnected.
+	Bowtie string `json:"bowtie"`
 }
 
 // Edge is a directed document-projection navigational edge. Health is always
@@ -250,6 +277,8 @@ func Build(v emit.View) Document {
 		Sections:      []Section{},
 		Orphans:       []string{},
 		Unreachable:   []string{},
+		UnderLinked:   []string{},
+		DeadEnd:       []string{},
 		BrokenLinks:   []BrokenLink{},
 		BrokenAnchors: []BrokenAnchor{},
 		Ambiguous:     []Ambiguous{},
@@ -266,6 +295,8 @@ func Build(v emit.View) Document {
 
 	reachable, indeterminate := emit.ReachableSet(m)
 	orphanSet := identity.IDSet(v.Orphans)
+	underLinkedSet := identity.IDSet(v.UnderLinked)
+	deadEndSet := identity.IDSet(v.DeadEnd)
 
 	for _, d := range v.Docs { // sorted by ID
 		hub, auth := m.HITS.Score(d.ID)
@@ -276,6 +307,8 @@ func Build(v emit.View) Document {
 			isReachable = true
 		}
 		_, isOrphan := orphanSet[d.ID]
+		_, isUnderLinked := underLinkedSet[d.ID]
+		_, isDeadEnd := deadEndSet[d.ID]
 		doc.Nodes = append(doc.Nodes, Node{
 			ID:                d.ID.String(),
 			Kind:              "doc",
@@ -291,6 +324,9 @@ func Build(v emit.View) Document {
 			Reachable:         isReachable,
 			Orphan:            isOrphan,
 			IntentionalOrphan: d.Intentional,
+			UnderLinked:       isUnderLinked,
+			DeadEnd:           isDeadEnd,
+			Bowtie:            d.Bowtie,
 		})
 	}
 
@@ -298,6 +334,9 @@ func Build(v emit.View) Document {
 	doc.Sections = sectionsFrom(v)
 	doc.Orphans = identity.IDStrings(v.Orphans)
 	doc.Unreachable = identity.IDStrings(v.Unreachable)
+	doc.UnderLinked = identity.IDStrings(v.UnderLinked)
+	doc.DeadEnd = identity.IDStrings(v.DeadEnd)
+	doc.Bowtie = bowtieSummary(m.Bowtie)
 	doc.BrokenLinks = brokenLinks(v.BrokenLinks)
 	doc.BrokenAnchors = brokenAnchors(v.BrokenAnchors)
 	doc.Ambiguous = ambiguous(v.Ambiguous)
@@ -315,6 +354,8 @@ func Build(v emit.View) Document {
 		Components:    len(doc.Components.WCC),
 		Orphans:       len(doc.Orphans),
 		Unreachable:   len(doc.Unreachable),
+		UnderLinked:   len(doc.UnderLinked),
+		DeadEnd:       len(doc.DeadEnd),
 		BrokenLinks:   len(doc.BrokenLinks),
 		BrokenAnchors: len(doc.BrokenAnchors),
 		Ambiguous:     len(doc.Ambiguous),
@@ -452,6 +493,19 @@ func ranked(rs []graphmodel.RankedDocument) []Ranked {
 		out = append(out, Ranked{ID: r.ID.String(), Score: newFloat(r.Score)})
 	}
 	return out
+}
+
+// bowtieSummary projects the domain bow-tie report into the wire summary.
+func bowtieSummary(r graphmodel.BowtieReport) BowtieSummary {
+	return BowtieSummary{
+		Core:         r.Counts[graphmodel.BucketCore],
+		In:           r.Counts[graphmodel.BucketIn],
+		Out:          r.Counts[graphmodel.BucketOut],
+		Tendril:      r.Counts[graphmodel.BucketTendril],
+		Disconnected: r.Counts[graphmodel.BucketDisconnected],
+		GiantSCC:     r.GiantSCC.String(),
+		GiantSCCSize: r.GiantSCCSize,
+	}
 }
 
 func gaps(gs []graphmodel.Gap) []Gap {

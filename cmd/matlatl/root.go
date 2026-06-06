@@ -36,6 +36,8 @@ func newRootCommand() *cobra.Command {
 		quiet         bool
 		verbose       bool
 		roots         []string
+
+		inboundThreshold int
 	)
 
 	var noColor bool
@@ -108,6 +110,10 @@ func newRootCommand() *cobra.Command {
 			"comma-separated. Added to the autodetected roots (README.md/index.md/type:index). "+
 			"Globs use path.Match: a single `*` does NOT cross `/`, and `**` is not supported "+
 			"(e.g. `docs/*.md`, not `docs/**`)")
+	root.PersistentFlags().IntVar(&inboundThreshold, "inbound-threshold", 0,
+		"discoverability threshold for the under-linked finding: a document with fewer than this "+
+			"many inbound navigational links (but at least one outbound link) is flagged under-linked. "+
+			"0 means use the default (3); overrides .matlatl.yml inboundThreshold")
 
 	root.AddCommand(
 		newCheckCommand(),
@@ -184,6 +190,23 @@ func configFromFlags(cmd *cobra.Command, args []string) (application.Config, err
 	union = append(union, file.Roots...)
 	union = append(union, flagRoots...)
 	cfg.Roots = union
+
+	// Under-linked discoverability threshold (ADR 0012). Precedence:
+	// --inbound-threshold flag (when explicitly set) > .matlatl.yml > default.
+	if file.InboundThreshold != nil {
+		cfg.InboundThreshold = *file.InboundThreshold
+	}
+	if flags.Changed("inbound-threshold") {
+		if t, err := flags.GetInt("inbound-threshold"); err == nil {
+			cfg.InboundThreshold = t
+		}
+	}
+
+	// Structure-finding severity (ADR 0012): config-only knob (no flag). The
+	// loader validated the value is "info" | "warning".
+	if file.StructureFindingsSeverity != nil {
+		cfg.StructureFindingsSeverity = application.StructureFindingsSeverity(*file.StructureFindingsSeverity)
+	}
 	return cfg, nil
 }
 

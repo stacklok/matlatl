@@ -15,6 +15,30 @@ import (
 	"github.com/stacklok/matlatl/internal/domain/analysis"
 )
 
+// allKindsReport adds the graduated structure findings (under-linked, dead-end)
+// on top of the broken/ambiguous set, so the new findings.schema kind-enum
+// entries are POSITIVELY exercised by an emitted value (a kept-distinct fixture
+// so sampleReport's exact-count assertions stay meaningful).
+func allKindsReport() *analysis.AnalysisReport {
+	findings := append(sampleReport().Findings(),
+		analysis.Finding{
+			ID: "under-linked:c.md", Kind: analysis.UnderLinked, Severity: analysis.Info,
+			Location:     analysis.Location{Document: "c.md"},
+			Message:      "\"c.md\" has only 1 inbound link(s) (below the discoverability threshold of 3); it is under-linked",
+			SuggestedFix: "Add inbound links to \"c.md\" from related pages.",
+			Details:      map[string]string{"targetDocument": "c.md", "inboundCount": "1"},
+		},
+		analysis.Finding{
+			ID: "dead-end:d.md", Kind: analysis.DeadEnd, Severity: analysis.Info,
+			Location:     analysis.Location{Document: "d.md"},
+			Message:      "\"d.md\" is a dead-end: it has inbound links but links to nothing onward",
+			SuggestedFix: "Add onward internal links from \"d.md\" to related documents.",
+			Details:      map[string]string{"targetDocument": "d.md"},
+		},
+	)
+	return analysis.NewAnalysisReport(findings)
+}
+
 func sampleReport() *analysis.AnalysisReport {
 	return analysis.NewAnalysisReport([]analysis.Finding{
 		{
@@ -151,6 +175,79 @@ func TestFindingsJSON_ValidatesAgainstSchema(t *testing.T) {
 	if errs := validateFindingsNode(data, schema, "$"); len(errs) > 0 {
 		sort.Strings(errs)
 		t.Errorf("findings.json does not satisfy findings.schema.json:\n  %v", errs)
+	}
+}
+
+// TestFindingsJSON_StructureKindsValidateAgainstSchema positively exercises the
+// findings.schema v3 additions: it emits a report containing under-linked and
+// dead-end findings, validates the bytes against the published schema (so the
+// new `kind` enum members and the underLinked/deadEnd summary fields are hit by
+// real emitted values), and asserts the summary counts + the kinds appear.
+func TestFindingsJSON_StructureKindsValidateAgainstSchema(t *testing.T) {
+	b, err := FindingsJSON(allKindsReport())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data any
+	if err := json.Unmarshal(b, &data); err != nil {
+		t.Fatal(err)
+	}
+	schemaPath, err := filepath.Abs(filepath.Join("..", "..", "..", "docs", "schemas", "findings.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(sb, &schema); err != nil {
+		t.Fatalf("parse schema: %v", err)
+	}
+	if errs := validateFindingsNode(data, schema, "$"); len(errs) > 0 {
+		sort.Strings(errs)
+		t.Errorf("findings.json with structure kinds does not satisfy schema:\n  %v", errs)
+	}
+
+	// Positively assert the new kinds + summary counts are present in the bytes.
+	var doc struct {
+		Summary struct {
+			UnderLinked int `json:"underLinked"`
+			DeadEnd     int `json:"deadEnd"`
+		} `json:"summary"`
+		RemediationGuide map[string]string `json:"remediationGuide"`
+		Findings         []struct {
+			Kind     string            `json:"kind"`
+			Severity string            `json:"severity"`
+			Details  map[string]string `json:"details"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Summary.UnderLinked != 1 || doc.Summary.DeadEnd != 1 {
+		t.Errorf("summary structure counts wrong: underLinked=%d deadEnd=%d", doc.Summary.UnderLinked, doc.Summary.DeadEnd)
+	}
+	kinds := map[string]map[string]string{}
+	for _, f := range doc.Findings {
+		kinds[f.Kind] = f.Details
+		if (f.Kind == "under-linked" || f.Kind == "dead-end") && f.Severity != "info" {
+			t.Errorf("%s default severity = %q, want info", f.Kind, f.Severity)
+		}
+	}
+	if _, ok := kinds["under-linked"]; !ok {
+		t.Error("emitted findings missing an under-linked finding")
+	}
+	if got := kinds["under-linked"]["inboundCount"]; got != "1" {
+		t.Errorf("under-linked detail inboundCount = %q, want 1", got)
+	}
+	if _, ok := kinds["dead-end"]; !ok {
+		t.Error("emitted findings missing a dead-end finding")
+	}
+	for _, k := range []string{"under-linked", "dead-end"} {
+		if doc.RemediationGuide[k] == "" {
+			t.Errorf("remediationGuide missing entry for emitted kind %q", k)
+		}
 	}
 }
 

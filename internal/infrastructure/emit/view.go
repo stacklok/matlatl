@@ -39,6 +39,10 @@ type View struct {
 	// sorted by DocumentID. Intentional orphans are already suppressed upstream.
 	Orphans     []identity.DocumentID
 	Unreachable []identity.DocumentID
+	// UnderLinked and DeadEnd are the graduated structure tiers (ADR 0012), sorted
+	// by DocumentID. Mutually exclusive with Orphans and each other.
+	UnderLinked []identity.DocumentID
+	DeadEnd     []identity.DocumentID
 	// ReachabilityIndeterminate mirrors the metrics flag (no root set found).
 	ReachabilityIndeterminate bool
 
@@ -76,6 +80,8 @@ type Counts struct {
 	Orphan       int
 	Unreachable  int
 	KnowledgeGap int
+	UnderLinked  int
+	DeadEnd      int
 	Components   int
 }
 
@@ -100,6 +106,9 @@ type DocView struct {
 	Component identity.DocumentID
 	// Intentional reports the document opted out of orphan/unreachable findings.
 	Intentional bool
+	// Bowtie is the document's bow-tie bucket
+	// (core/in/out/tendril/disconnected), pure structure data (ADR 0012).
+	Bowtie string
 }
 
 // topN bounds how many hubs/authorities the human reports surface.
@@ -122,6 +131,8 @@ func BuildView(res application.Result) View {
 	v.ReachabilityIndeterminate = m.Orphans.Indeterminate
 	v.Orphans = slices.Clone(m.Orphans.Isolated)
 	v.Unreachable = slices.Clone(m.Orphans.Unreachable)
+	v.UnderLinked = slices.Clone(m.Orphans.UnderLinked)
+	v.DeadEnd = slices.Clone(m.Orphans.DeadEnd)
 	v.Gaps = slices.Clone(m.Gaps)
 	v.GapsTruncated = m.GapsTruncated
 	v.TopHubs = m.HITS.TopHubs(topN)
@@ -142,6 +153,7 @@ func BuildView(res application.Result) View {
 			InDegree:    deg.In,
 			OutDegree:   deg.Out,
 			Component:   m.ComponentOf(doc.ID),
+			Bowtie:      m.Bowtie.BucketOf(doc.ID).String(),
 		}
 		if _, ok := intentional[doc.ID]; ok {
 			dv.Intentional = true
@@ -159,7 +171,8 @@ func BuildView(res application.Result) View {
 				v.BrokenAnchors = append(v.BrokenAnchors, f)
 			case analysis.Ambiguous:
 				v.Ambiguous = append(v.Ambiguous, f)
-			case analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap:
+			case analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap,
+				analysis.UnderLinked, analysis.DeadEnd:
 				// Carried via the dedicated View slices above, not the finding lists.
 			case analysis.DeadLink:
 				// Opt-in (--check-external) only; surfaced via findings.json, not
@@ -223,6 +236,8 @@ func countsFromResult(res application.Result, m *graphmodel.GraphMetrics) Counts
 		Orphan:       res.OrphanCount,
 		Unreachable:  res.UnreachableCount,
 		KnowledgeGap: res.KnowledgeGapCount,
+		UnderLinked:  res.UnderLinkedCount,
+		DeadEnd:      res.DeadEndCount,
 	}
 	if m != nil {
 		c.Components = len(m.WCC)

@@ -14,11 +14,12 @@ linked docs rather than re-deriving them.
   - 0001 identity is the repo-relative path; 0003 security model (untrusted
     repos); 0004 layering + purity; 0005 `check` exit-code contract;
     0006 anchor-slug dialect; 0007 graph node semantics + the document
-    projection; 0008 directory-link reachability.
+    projection; 0008 directory-link reachability; 0012 graduated structure
+    (orphan/under-linked/dead-end) + bow-tie classification.
 - **docs/schemas/** — published JSON Schemas for the two machine artifacts:
-  [graph.schema.json](docs/schemas/graph.schema.json) and
-  [findings.schema.json](docs/schemas/findings.schema.json) (findings schema
-  version 2). The emitter types are kept in lockstep and validated by tests; if
+  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 2)
+  and [findings.schema.json](docs/schemas/findings.schema.json) (findings schema
+  version 3). The emitter types are kept in lockstep and validated by tests; if
   you change an artifact's shape, change the schema and bump its version.
 - **[docs/user-guide.md](docs/user-guide.md)** /
   **[docs/dev-guide.md](docs/dev-guide.md)** — commands/flags/CI, and the layout

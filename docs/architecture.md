@@ -23,10 +23,16 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    document projection that analysis runs over are pinned in
    [ADR 0007](adr/0007-graph-node-semantics.md); directory links (`adr/`) resolve
    and confer reachability per [ADR 0008](adr/0008-directory-links.md).
-5. **Analyze** — reachability from the root set, orphan vs. unreachable
-   classification, weak + strong components, HITS hub/authority, knowledge-gap
-   detection → a frozen `AnalysisReport`
-   ([ADR 0007](adr/0007-graph-node-semantics.md)).
+5. **Analyze** — reachability from the root set, the graduated structure ladder
+   (isolated orphan → dead-end → under-linked) plus orthogonal unreachable
+   classification, weak + strong components, bow-tie classification relative to
+   the giant SCC, HITS hub/authority, and knowledge-gap detection → a frozen
+   `AnalysisReport` + `GraphMetrics`
+   ([ADR 0007](adr/0007-graph-node-semantics.md),
+   [ADR 0012](adr/0012-graduated-structure-and-bowtie.md)). `GraphMetrics`
+   carries `Graph`, `Hierarchy`, `RootSet`, `Reachability`, `Degrees`, `Orphans`
+   (isolated / dead-end / under-linked / unreachable), `WCC`, `SCC`, `Bowtie`,
+   `HITS`, and `Gaps`.
 6. **Emit** — render the report for humans (terminal, Markdown, Mermaid, DOT,
    index.md) and LLMs (graph.json, llms.txt family, findings.json; JUnit via `check`).
 

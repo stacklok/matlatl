@@ -27,6 +27,9 @@ type GraphMetrics struct {
 	WCC Components
 	// SCC are the strongly-connected components (cycles collapse to one).
 	SCC Components
+	// Bowtie is the bow-tie classification of every document relative to the
+	// giant SCC (core/in/out/tendril/disconnected). Pure data, not findings.
+	Bowtie BowtieReport
 	// HITS holds hub/authority scores.
 	HITS HitsScores
 	// Gaps are experimental knowledge-gap bridge candidates.
@@ -49,6 +52,9 @@ type AnalyzeOptions struct {
 	Hits HitsOptions
 	// Gaps tunes knowledge-gap detection.
 	Gaps GapOptions
+	// InboundThreshold is the under-linked discoverability floor (ADR 0012).
+	// Analyze normalizes a <=0 value up to DefaultInboundThreshold.
+	InboundThreshold int
 }
 
 // Analyze runs the full P3 analysis over a pre-built graph and the corpus,
@@ -56,12 +62,17 @@ type AnalyzeOptions struct {
 // corpus + resolved references. This is the single entry point the pipeline
 // calls. All sub-results are deterministic.
 func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMetrics {
+	threshold := opts.InboundThreshold
+	if threshold <= 0 {
+		threshold = DefaultInboundThreshold
+	}
 	rootSet := ResolveRootSet(c, opts.RootGlobs)
 	reach := g.ComputeReachability(rootSet)
 	deg := g.BuildDegreeIndex()
-	orphans := g.DetectOrphans(c, rootSet, deg, reach)
+	orphans := g.DetectOrphans(c, rootSet, deg, reach, OrphanOptions{InboundThreshold: threshold})
 	wcc := g.WeaklyConnectedComponents()
 	scc := g.StronglyConnectedComponents()
+	bowtie := g.ClassifyBowtie(scc, wcc)
 	hits := g.ComputeHITS(opts.Hits)
 	// Reuse the WCCs computed above (single traversal, explicit data flow) rather
 	// than recomputing them inside gap detection.
@@ -76,6 +87,7 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 		Orphans:       orphans,
 		WCC:           wcc,
 		SCC:           scc,
+		Bowtie:        bowtie,
 		HITS:          hits,
 		Gaps:          gapResult.Gaps,
 		GapsTruncated: gapResult.Truncated,

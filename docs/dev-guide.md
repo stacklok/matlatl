@@ -114,10 +114,12 @@ why output is byte-identical at any worker count. See [ADR 0004](adr/0004-ddd-la
 
 ## Adding things
 
-- **A new finding kind** — add to `analysis.FindingKind`, produce it in
-  `application` with a concrete `SuggestedFix` and structured `Details`, add a
-  `remediationGuide` entry in the findings emitter, and cover it in
-  `TestCheckExitCode` + a golden.
+- **A new finding kind** — add to `analysis.FindingKind` (keep `DeadLink` last so
+  `Valid()` holds), update its `String()`, produce it in `application` with a
+  concrete `SuggestedFix` and structured `Details`, add a `remediationGuide` entry
+  **and** a `kindPresentationOrder` entry in the findings emitter (a test asserts
+  every kind has remediation), bump `FindingsSchemaVersion` + the schema if the
+  artifact shape changes, and cover it in `TestCheckExitCode` + a golden.
 - **A new emitter** — put it in `internal/infrastructure/emit/...`, render from
   the frozen `emit.View`/`GraphMetrics` (never mutate the domain), write through
   the `FSWriter`/`safeJoin` guard, escape labels per format, and add a golden +

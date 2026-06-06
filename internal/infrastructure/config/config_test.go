@@ -251,6 +251,82 @@ func TestLoad_UnknownKey(t *testing.T) {
 	}
 }
 
+// --- ADR 0012: inboundThreshold + structureFindingsSeverity ---
+
+func TestLoad_InboundThreshold(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\ninboundThreshold: 5\n")))
+	if err != nil {
+		t.Fatalf("valid inboundThreshold should load, got %v", err)
+	}
+	if file.InboundThreshold == nil || *file.InboundThreshold != 5 {
+		t.Errorf("inboundThreshold = %v, want pointer to 5", file.InboundThreshold)
+	}
+}
+
+func TestLoad_InboundThresholdZeroAllowed(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("inboundThreshold: 0\n")))
+	if err != nil {
+		t.Fatalf("inboundThreshold 0 should load (normalized to default in domain), got %v", err)
+	}
+	if file.InboundThreshold == nil || *file.InboundThreshold != 0 {
+		t.Errorf("inboundThreshold = %v, want pointer to 0", file.InboundThreshold)
+	}
+}
+
+func TestLoad_InboundThresholdNegative(t *testing.T) {
+	if _, _, err := Load(rootWithBytes(t, []byte("inboundThreshold: -1\n"))); err == nil {
+		t.Fatal("negative inboundThreshold should be a HARD error")
+	}
+}
+
+func TestLoad_InboundThresholdWrongType(t *testing.T) {
+	if _, _, err := Load(rootWithBytes(t, []byte("inboundThreshold: \"three\"\n"))); err == nil {
+		t.Fatal("non-integer inboundThreshold should be a HARD error")
+	}
+}
+
+func TestLoad_StructureFindingsSeverity(t *testing.T) {
+	for _, v := range []string{"info", "warning"} {
+		file, _, err := Load(rootWithBytes(t, []byte("structureFindingsSeverity: "+v+"\n")))
+		if err != nil {
+			t.Fatalf("severity %q should load, got %v", v, err)
+		}
+		if file.StructureFindingsSeverity == nil || *file.StructureFindingsSeverity != v {
+			t.Errorf("structureFindingsSeverity = %v, want pointer to %q", file.StructureFindingsSeverity, v)
+		}
+	}
+}
+
+func TestLoad_StructureFindingsSeverityInvalid(t *testing.T) {
+	if _, _, err := Load(rootWithBytes(t, []byte("structureFindingsSeverity: loud\n"))); err == nil {
+		t.Fatal("an invalid severity should be a HARD error")
+	}
+}
+
+func TestLoad_NewKeysAbsentAreNil(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\nroots: [\"docs/*.md\"]\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if file.InboundThreshold != nil {
+		t.Errorf("absent inboundThreshold should be nil, got %v", *file.InboundThreshold)
+	}
+	if file.StructureFindingsSeverity != nil {
+		t.Errorf("absent structureFindingsSeverity should be nil, got %v", *file.StructureFindingsSeverity)
+	}
+}
+
+func TestLoad_NewKeysNotFlaggedUnknown(t *testing.T) {
+	_, notices, err := Load(rootWithBytes(t,
+		[]byte("inboundThreshold: 4\nstructureFindingsSeverity: warning\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if hasNoticeContaining(notices, "inboundThreshold") || hasNoticeContaining(notices, "structureFindingsSeverity") {
+		t.Errorf("known keys must not be flagged as unknown, got %v", notices)
+	}
+}
+
 // --- Contract row: top-level scalar/sequence (shape error) → HARD error ---
 
 func TestLoad_TopLevelScalar(t *testing.T) {

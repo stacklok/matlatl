@@ -86,6 +86,15 @@ type Result struct {
 	OrphanCount       int
 	UnreachableCount  int
 	KnowledgeGapCount int
+	// UnderLinkedCount / DeadEndCount are the graduated structure-tier tallies
+	// (ADR 0012). They affect the exit code only when StructureFindingsSeverity is
+	// Warning (consulted by CheckExitCode).
+	UnderLinkedCount int
+	DeadEndCount     int
+	// StructureFindingsSeverity is the resolved severity of under-linked/dead-end
+	// findings for this run, carried so CheckExitCode can decide whether they gate
+	// --strict.
+	StructureFindingsSeverity StructureFindingsSeverity
 	// DeadLinkCount is the number of failed external links (only non-zero when
 	// --check-external is enabled). It does not affect the default run.
 	DeadLinkCount int
@@ -184,8 +193,9 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	// as orphans) do not also generate an O(k^2) blow-up of singleton gaps
 	// (ADR 0007).
 	metrics := graphmodel.Analyze(graph, c, graphmodel.AnalyzeOptions{
-		RootGlobs: p.cfg.Roots,
-		Gaps:      graphmodel.GapOptions{MinComponentSize: 2},
+		RootGlobs:        p.cfg.Roots,
+		Gaps:             graphmodel.GapOptions{MinComponentSize: 2},
+		InboundThreshold: p.cfg.InboundThreshold, // <=0 normalized to default in Analyze
 	})
 	if metrics.RootSet.Indeterminate && c.Len() > 0 {
 		_, _ = fmt.Fprintln(p.log,
@@ -203,8 +213,20 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 				"additional component pairs were not reported\n", graphmodel.MaxGaps)
 	}
 
+	// Resolve the structure-finding severity (default Info when unset) and the
+	// actual inbound threshold the domain used (it floors <=0 to the default), so
+	// the finding messages/details and the exit-code decision all agree.
+	structureSev := p.cfg.StructureFindingsSeverity
+	if !structureSev.Valid() {
+		structureSev = StructureFindingsInfo
+	}
+	threshold := p.cfg.InboundThreshold
+	if threshold <= 0 {
+		threshold = graphmodel.DefaultInboundThreshold
+	}
+
 	findings := findingsFromReferences(refs)
-	findings = append(findings, findingsFromMetrics(metrics)...)
+	findings = append(findings, findingsFromMetrics(metrics, threshold, structureSev)...)
 	// Opt-in external link checking (--check-external). OFF by default so the
 	// deterministic output is unchanged. DeadLink findings are appended only when
 	// the checker is wired and enabled (ADR 0003); they never affect the default
@@ -225,12 +247,17 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		OrphanCount:       report.CountByKind(analysis.Orphan),
 		UnreachableCount:  report.CountByKind(analysis.Unreachable),
 		KnowledgeGapCount: report.CountByKind(analysis.KnowledgeGap),
-		DeadLinkCount:     report.CountByKind(analysis.DeadLink),
-		Report:            report,
-		Metrics:           metrics,
-		Corpus:            c,
-		BrokenEdges:       brokenEdges,
-		Notices:           scan.Notices,
+		UnderLinkedCount:  report.CountByKind(analysis.UnderLinked),
+		DeadEndCount:      report.CountByKind(analysis.DeadEnd),
+
+		StructureFindingsSeverity: structureSev,
+
+		DeadLinkCount: report.CountByKind(analysis.DeadLink),
+		Report:        report,
+		Metrics:       metrics,
+		Corpus:        c,
+		BrokenEdges:   brokenEdges,
+		Notices:       scan.Notices,
 	}
 	return platform.ExitOK, res, nil
 }

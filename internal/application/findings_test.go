@@ -90,7 +90,7 @@ func TestFindingID_Stable(t *testing.T) {
 // (Orphan/Warning), unreachable docs (Unreachable/Warning), and knowledge-gap
 // bridge candidates (KnowledgeGap/Info), with severities per ADR 0005.
 func TestFindingsFromMetrics(t *testing.T) {
-	if got := findingsFromMetrics(nil); got != nil {
+	if got := findingsFromMetrics(nil, graphmodel.DefaultInboundThreshold, StructureFindingsInfo); got != nil {
 		t.Errorf("findingsFromMetrics(nil) = %v, want nil", got)
 	}
 
@@ -104,7 +104,7 @@ func TestFindingsFromMetrics(t *testing.T) {
 		},
 	}
 
-	got := findingsFromMetrics(m)
+	got := findingsFromMetrics(m, graphmodel.DefaultInboundThreshold, StructureFindingsInfo)
 	byKind := map[analysis.FindingKind]analysis.Finding{}
 	for _, f := range got {
 		byKind[f.Kind] = f
@@ -148,6 +148,69 @@ func TestFindingsFromMetrics(t *testing.T) {
 	}
 }
 
+// TestFindingsFromMetrics_StructureTiers covers the graduated structure findings
+// (under-linked, dead-end): message/details and the configurable severity knob
+// (ADR 0012). Default severity is Info; the warning knob promotes both.
+func TestFindingsFromMetrics_StructureTiers(t *testing.T) {
+	m := &graphmodel.GraphMetrics{
+		Orphans: graphmodel.OrphanReport{
+			UnderLinked: []identity.DocumentID{"lonely.md"},
+			DeadEnd:     []identity.DocumentID{"terminal.md"},
+		},
+		Degrees: graphmodel.DegreeIndex{
+			"lonely.md":   {In: 1, Out: 2},
+			"terminal.md": {In: 4, Out: 0},
+		},
+	}
+
+	// Default severity: Info.
+	got := findingsFromMetrics(m, 3, StructureFindingsInfo)
+	byKind := map[analysis.FindingKind]analysis.Finding{}
+	for _, f := range got {
+		byKind[f.Kind] = f
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d findings, want 2 (under-linked, dead-end): %+v", len(got), got)
+	}
+
+	ul := byKind[analysis.UnderLinked]
+	if ul.Severity != analysis.Info {
+		t.Errorf("under-linked default severity = %v, want Info", ul.Severity)
+	}
+	if ul.Location.Document != "lonely.md" {
+		t.Errorf("under-linked location = %q, want lonely.md", ul.Location.Document)
+	}
+	// Message carries actual inbound count (1) and threshold (3).
+	if !strings.Contains(ul.Message, "only 1 inbound") || !strings.Contains(ul.Message, "threshold of 3") {
+		t.Errorf("under-linked message should carry count+threshold: %q", ul.Message)
+	}
+	if ul.Details[DetailInboundCount] != "1" {
+		t.Errorf("under-linked details inboundCount = %q, want 1", ul.Details[DetailInboundCount])
+	}
+	if ul.Details[DetailTargetDocument] != "lonely.md" {
+		t.Errorf("under-linked details targetDocument = %q, want lonely.md", ul.Details[DetailTargetDocument])
+	}
+
+	de := byKind[analysis.DeadEnd]
+	if de.Severity != analysis.Info {
+		t.Errorf("dead-end default severity = %v, want Info", de.Severity)
+	}
+	if !strings.Contains(de.Message, "dead-end") || !strings.Contains(de.Message, "terminal.md") {
+		t.Errorf("dead-end message wrong: %q", de.Message)
+	}
+	if de.Details[DetailTargetDocument] != "terminal.md" {
+		t.Errorf("dead-end details targetDocument = %q, want terminal.md", de.Details[DetailTargetDocument])
+	}
+
+	// Warning knob: both promoted to Warning.
+	warned := findingsFromMetrics(m, 3, StructureFindingsWarning)
+	for _, f := range warned {
+		if f.Severity != analysis.Warning {
+			t.Errorf("%s severity under warning knob = %v, want Warning", f.Kind, f.Severity)
+		}
+	}
+}
+
 func TestCheckExitCode(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -175,6 +238,17 @@ func TestCheckExitCode(t *testing.T) {
 		// build, even under --strict.
 		{"dead-link non-strict", Result{DeadLinkCount: 7}, false, platform.ExitOK},
 		{"dead-link strict", Result{DeadLinkCount: 7}, true, platform.ExitOK},
+		// ADR 0012: under-linked/dead-end default to Info severity — they NEVER
+		// fail, even under --strict, when the severity knob is the default (info).
+		{"under-linked info strict", Result{UnderLinkedCount: 3, StructureFindingsSeverity: StructureFindingsInfo}, true, platform.ExitOK},
+		{"dead-end info strict", Result{DeadEndCount: 2, StructureFindingsSeverity: StructureFindingsInfo}, true, platform.ExitOK},
+		// Zero-value severity (unset) is treated as Info: still never fails.
+		{"under-linked unset-sev strict", Result{UnderLinkedCount: 3}, true, platform.ExitOK},
+		// ADR 0012: with the warning knob, under-linked/dead-end fail --strict but
+		// still pass without it.
+		{"under-linked warning non-strict", Result{UnderLinkedCount: 3, StructureFindingsSeverity: StructureFindingsWarning}, false, platform.ExitOK},
+		{"under-linked warning strict", Result{UnderLinkedCount: 3, StructureFindingsSeverity: StructureFindingsWarning}, true, platform.ExitFindings},
+		{"dead-end warning strict", Result{DeadEndCount: 2, StructureFindingsSeverity: StructureFindingsWarning}, true, platform.ExitFindings},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

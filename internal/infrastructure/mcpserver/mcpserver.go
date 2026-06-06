@@ -156,7 +156,7 @@ func whatLinksToTool() mcp.Tool {
 
 func listOrphansTool() mcp.Tool {
 	return mcp.NewTool("list-orphans",
-		mcp.WithDescription("List orphan documents: isolated (no inbound or outbound navigational links) and unreachable (not reachable from the root set). Intentional orphans are suppressed."),
+		mcp.WithDescription("List structurally weak documents: isolated (no inbound or outbound navigational links), unreachable (not reachable from the root set), under-linked (fewer inbound links than the discoverability threshold), and dead-end (inbound links but nothing onward). Intentional orphans are suppressed."),
 	)
 }
 
@@ -222,11 +222,16 @@ func (a *Analysis) handleWhatLinksTo(_ context.Context, req mcp.CallToolRequest)
 func (a *Analysis) handleListOrphans(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	orphans := identity.IDStrings(a.view.Orphans)
 	unreachable := identity.IDStrings(a.view.Unreachable)
+	underLinked := identity.IDStrings(a.view.UnderLinked)
+	deadEnd := identity.IDStrings(a.view.DeadEnd)
 	return mcp.NewToolResultStructured(map[string]any{
 		"isolated":                  orphans,
 		"unreachable":               unreachable,
+		"underLinked":               underLinked,
+		"deadEnd":                   deadEnd,
 		"reachabilityIndeterminate": a.view.ReachabilityIndeterminate,
-	}, fmt.Sprintf("%d isolated orphan(s), %d unreachable document(s)", len(orphans), len(unreachable))), nil
+	}, fmt.Sprintf("%d isolated orphan(s), %d unreachable, %d under-linked, %d dead-end document(s)",
+		len(orphans), len(unreachable), len(underLinked), len(deadEnd))), nil
 }
 
 func (a *Analysis) handlePathBetween(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

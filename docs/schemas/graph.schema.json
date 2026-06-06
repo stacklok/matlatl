@@ -15,6 +15,9 @@
     "sections",
     "orphans",
     "unreachable",
+    "underLinked",
+    "deadEnd",
+    "bowtie",
     "brokenLinks",
     "brokenAnchors",
     "ambiguous",
@@ -25,7 +28,7 @@
     "reachability"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 1 },
+    "schemaVersion": { "type": "integer", "const": 2 },
     "tool": { "type": "string" },
     "generatedNote": { "type": "string" },
     "summary": {
@@ -33,8 +36,8 @@
       "additionalProperties": false,
       "required": [
         "documents", "sections", "edges", "references", "components",
-        "orphans", "unreachable", "brokenLinks", "brokenAnchors",
-        "ambiguous", "knowledgeGaps"
+        "orphans", "unreachable", "underLinked", "deadEnd",
+        "brokenLinks", "brokenAnchors", "ambiguous", "knowledgeGaps"
       ],
       "properties": {
         "documents": { "type": "integer", "minimum": 0 },
@@ -44,6 +47,8 @@
         "components": { "type": "integer", "minimum": 0 },
         "orphans": { "type": "integer", "minimum": 0 },
         "unreachable": { "type": "integer", "minimum": 0 },
+        "underLinked": { "type": "integer", "minimum": 0 },
+        "deadEnd": { "type": "integer", "minimum": 0 },
         "brokenLinks": { "type": "integer", "minimum": 0 },
         "brokenAnchors": { "type": "integer", "minimum": 0 },
         "ambiguous": { "type": "integer", "minimum": 0 },
@@ -58,7 +63,7 @@
         "required": [
           "id", "kind", "title", "path", "description", "category",
           "inDegree", "outDegree", "component", "hubScore", "authorityScore",
-          "reachable", "orphan", "intentionalOrphan"
+          "reachable", "orphan", "intentionalOrphan", "underLinked", "deadEnd", "bowtie"
         ],
         "properties": {
           "id": { "type": "string" },
@@ -74,7 +79,13 @@
           "authorityScore": { "type": "number", "minimum": 0 },
           "reachable": { "type": "boolean" },
           "orphan": { "type": "boolean" },
-          "intentionalOrphan": { "type": "boolean" }
+          "intentionalOrphan": { "type": "boolean" },
+          "underLinked": { "type": "boolean" },
+          "deadEnd": { "type": "boolean" },
+          "bowtie": {
+            "type": "string",
+            "enum": ["core", "in", "out", "tendril", "disconnected"]
+          }
         }
       }
     },
@@ -109,6 +120,23 @@
     },
     "orphans": { "type": "array", "items": { "type": "string" } },
     "unreachable": { "type": "array", "items": { "type": "string" } },
+    "underLinked": { "type": "array", "items": { "type": "string" } },
+    "deadEnd": { "type": "array", "items": { "type": "string" } },
+    "bowtie": {
+      "description": "Corpus-level bow-tie classification relative to the giant strongly-connected component (the 'core'): per-bucket document counts plus the giant SCC id and size. A giantSccSize of 1 means there is no cyclic core (every SCC is a singleton).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core", "in", "out", "tendril", "disconnected", "giantScc", "giantSccSize"],
+      "properties": {
+        "core": { "type": "integer", "minimum": 0 },
+        "in": { "type": "integer", "minimum": 0 },
+        "out": { "type": "integer", "minimum": 0 },
+        "tendril": { "type": "integer", "minimum": 0 },
+        "disconnected": { "type": "integer", "minimum": 0 },
+        "giantScc": { "type": "string" },
+        "giantSccSize": { "type": "integer", "minimum": 0 }
+      }
+    },
     "brokenLinks": {
       "type": "array",
       "items": {

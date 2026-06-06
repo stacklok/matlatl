@@ -56,6 +56,15 @@ type File struct {
 	// IDs (repo-root-relative, slash-separated) with the same path.Match
 	// semantics as the --root flag. UNIONED with conventions and --root.
 	Roots []string
+	// InboundThreshold is the under-linked discoverability floor (ADR 0012). nil
+	// when the key is absent (the CLI then keeps its own default/flag value); a
+	// present value must be >= 0 (negative is a hard error).
+	InboundThreshold *int
+	// StructureFindingsSeverity selects the severity of the graduated structure
+	// findings (under-linked, dead-end): "info" (default) or "warning". nil when
+	// absent; a present value must be one of those two (anything else is a hard
+	// error).
+	StructureFindingsSeverity *string
 }
 
 // rawFile is the permissive decode target. We decode into a generic map first
@@ -163,10 +172,67 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		return File{}, nil, err
 	}
 
+	// --- inboundThreshold ---
+	threshold, err := resolveInboundThreshold(raw)
+	if err != nil {
+		return File{}, nil, err
+	}
+
+	// --- structureFindingsSeverity ---
+	severity, err := resolveStructureFindingsSeverity(raw)
+	if err != nil {
+		return File{}, nil, err
+	}
+
 	// --- unknown keys (typo / future additive key): ignore + notice ---
 	notices = append(notices, unknownKeyNotices(path, raw)...)
 
-	return File{Version: version, Roots: roots}, notices, nil
+	return File{
+		Version:                   version,
+		Roots:                     roots,
+		InboundThreshold:          threshold,
+		StructureFindingsSeverity: severity,
+	}, notices, nil
+}
+
+// resolveInboundThreshold enforces the inboundThreshold row: absent → nil; a
+// non-negative integer → parsed; any other shape (non-int, negative) → hard
+// error (a thing matlatl understands but that is wrong is loud, ADR 0011).
+func resolveInboundThreshold(raw rawFile) (*int, error) {
+	v, present := raw["inboundThreshold"]
+	if !present || v == nil {
+		return nil, nil
+	}
+	n, ok := v.(int)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%s: `inboundThreshold` must be an integer, got %T", fileName, v)
+	}
+	if n < 0 {
+		return nil, fmt.Errorf(
+			"%s: `inboundThreshold` must be >= 0, got %d", fileName, n)
+	}
+	return &n, nil
+}
+
+// resolveStructureFindingsSeverity enforces the structureFindingsSeverity row:
+// absent → nil; "info" | "warning" → parsed; any other string or shape → hard
+// error.
+func resolveStructureFindingsSeverity(raw rawFile) (*string, error) {
+	v, present := raw["structureFindingsSeverity"]
+	if !present || v == nil {
+		return nil, nil
+	}
+	s, ok := v.(string)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%s: `structureFindingsSeverity` must be a string, got %T", fileName, v)
+	}
+	if s != "info" && s != "warning" {
+		return nil, fmt.Errorf(
+			"%s: `structureFindingsSeverity` must be %q or %q, got %q", fileName, "info", "warning", s)
+	}
+	return &s, nil
 }
 
 // resolveVersion enforces the version rows of the contract: missing → assume 1
@@ -226,7 +292,10 @@ func resolveRoots(raw rawFile) ([]string, error) {
 // one notice each, sorted for determinism. This catches typos (`rootz:`) while
 // tolerating future additive keys (ADR 0011 governing rule).
 func unknownKeyNotices(path string, raw rawFile) []application.Notice {
-	known := map[string]struct{}{"version": {}, "roots": {}}
+	known := map[string]struct{}{
+		"version": {}, "roots": {},
+		"inboundThreshold": {}, "structureFindingsSeverity": {},
+	}
 	var unknown []string
 	for k := range raw {
 		if _, ok := known[k]; !ok {

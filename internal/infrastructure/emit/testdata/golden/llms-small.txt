@@ -1,6 +1,6 @@
 # Project Home
 
-> A markdown documentation corpus of 13 document(s) across 6 component(s), with 24 heading(s) and 24 resolved reference(s). Entries are ordered by importance (most-connected first).
+> A markdown documentation corpus of 16 document(s) across 6 component(s), with 27 heading(s) and 27 resolved reference(s). Entries are ordered by importance (most-connected first).
 
 ---
 
@@ -37,6 +37,9 @@ No front matter here, so the title falls back to this H1.
 ## Details
 
 Some details with a [relative link](../guide.md#installation).
+
+It also links out to a downstream [branch](../flow/branch.md) that leads away
+from the core and never links back, exercising the bow-tie OUT side.
 
 ---
 

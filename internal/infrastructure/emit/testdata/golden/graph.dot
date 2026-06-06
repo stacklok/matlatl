@@ -6,6 +6,9 @@ digraph matlatl {
   "n_8dfa32f968d6cc20" [label="Docs Index\ndocs/README.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=0.900];
   "n_5295eacd95c7d93f" [label="Cycle Alpha\ndocs/cycle/alpha.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
   "n_843e8ecab59eacc5" [label="Cycle Beta\ndocs/cycle/beta.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
+  "n_f83ee9bdaa3ab217" [label="Tendril Aside\ndocs/flow/aside.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=0.900];
+  "n_4affafca6752c1cf" [label="Downstream Branch\ndocs/flow/branch.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=1.175];
+  "n_4cea44cc464214b7" [label="Terminal Page\ndocs/flow/terminal.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=1.073];
   "n_70bb5115f916ef90" [label="User Guide\ndocs/guide.md", fillcolor="#f1f8e9", color="#90a4ae", penwidth=1, width=1.302];
   "n_80bfc64e6fdbf514" [label="Island One\ndocs/island/one.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
   "n_e5a2da93cbd610be" [label="Island Two\ndocs/island/two.md", fillcolor="#fff8e1", color="#ff8f00", penwidth=2, width=1.073];
@@ -25,6 +28,8 @@ digraph matlatl {
   "n_8dfa32f968d6cc20" -> "n_70bb5115f916ef90";
   "n_5295eacd95c7d93f" -> "n_843e8ecab59eacc5";
   "n_843e8ecab59eacc5" -> "n_5295eacd95c7d93f";
+  "n_f83ee9bdaa3ab217" -> "n_4affafca6752c1cf";
+  "n_4affafca6752c1cf" -> "n_4cea44cc464214b7";
   "n_70bb5115f916ef90" -> "n_3f15cf6f633a5d62";
   "n_70bb5115f916ef90" -> "n_55587a0e3176141a";
   "n_80bfc64e6fdbf514" -> "n_e5a2da93cbd610be";
@@ -33,5 +38,6 @@ digraph matlatl {
   "n_afb4347eafb2315b" -> "n_70bb5115f916ef90";
   "n_afb4347eafb2315b" -> "n_55587a0e3176141a";
   "n_240b3a164b4fe05f" -> "n_3f15cf6f633a5d62";
+  "n_55587a0e3176141a" -> "n_4affafca6752c1cf";
   "n_55587a0e3176141a" -> "n_70bb5115f916ef90";
 }

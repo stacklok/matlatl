@@ -33,7 +33,7 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 | `matlatl report [path]` | Render a committable Markdown analysis report (`--out` to write `report.md`). |
 | `matlatl graph [path]` | Emit the reference graph: `--format mermaid` (default), `dot`, or `json`. |
 | `matlatl index [path]` | Emit a navigation surface: `index.md`, or an `llms.txt` family artifact (`--llms`, `--full`, `--small`, `--graph`). |
-| `matlatl orphans [path]` | List orphaned (`--isolated-only`) and unreachable (`--unreachable-only`) docs. |
+| `matlatl orphans [path]` | List isolated orphans, under-linked and dead-end docs (`--isolated-only`) and unreachable docs (`--unreachable-only`). |
 | `matlatl emit [path] --out <dir>` | Write the whole bundle: `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `findings.json`. |
 | `matlatl fix-prompt [path]` | Emit an agent-agnostic prompt (findings embedded inline) that tells an LLM coding agent how to fix them. Pipe it to any agent; `--errors-only` for broken links/anchors only; `--out` to write `fix-prompt.md`. |
 | `matlatl serve [path]` | Run the read-only MCP server (streamable HTTP) so an agent can query the graph. |
@@ -59,19 +59,58 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 - **Ambiguous links** — e.g. `[[notes]]` when two `notes.md` exist. matlatl
   refuses to guess and shows you the candidates.
 - **Orphans** — documents with **no** inbound or outbound links (truly isolated).
+- **Under-linked** — documents that link onward but have **fewer inbound links
+  than the discoverability threshold** (default **3**; see `inboundThreshold`).
+  Hard to discover, even though not isolated. *Info severity by default* — never
+  fails `check` unless you promote it (see `structureFindingsSeverity`).
+- **Dead-ends** — documents that have inbound links but **link to nothing
+  onward**. Navigation stops there. Also *Info severity by default*.
+  (These three — orphan, under-linked, dead-end — form a single **graduated
+  ladder**: each non-exempt doc lands in at most one, most-severe first; see
+  [ADR 0012](adr/0012-graduated-structure-and-bowtie.md).)
 - **Unreachable** — documents you can't reach by following links from a root
   (`README.md`, `index.md`, `SKILL.md`, or a `type: index` front-matter doc).
   They differ from orphans: an unreachable doc may link outward but nothing leads
-  *to* it. **Any root** — whether configured with `--root` or detected by a
-  convention (`README.md`/`index.md`/`SKILL.md`/`type: index`) — is itself exempt
-  from both the unreachable and the orphan findings: a declared entry point with
-  no inbound links is its purpose, not a defect
+  *to* it. Unreachable is **orthogonal** to under-linked/dead-end (a doc can be
+  both); only a fully-isolated orphan suppresses it. **Any root** — whether
+  configured with `--root` or detected by a convention
+  (`README.md`/`index.md`/`SKILL.md`/`type: index`) — is itself exempt from
+  **all** of the orphan/under-linked/dead-end/unreachable findings: a declared
+  entry point with no inbound links is its purpose, not a defect
   ([ADR 0010](adr/0010-agent-scaffolding-roots-and-default-ignores.md)).
 - **Knowledge gaps** — clusters of docs that are disconnected from each other.
+- **Bow-tie structure** — a one-line read of the corpus's macro-shape relative to
+  its giant strongly-connected core: how many docs are *core* / *in* (feed the
+  core) / *out* (lead away from it) / *tendril* / *disconnected*. Reported in the
+  human report, `graph.json`, and over MCP — it is descriptive **data**, not a
+  finding.
 
-Orphans and unreachable docs come with **different** remediation hints, because
-the fix differs: link an orphan in (or delete it); give an unreachable doc an
-inbound link from somewhere reachable.
+Orphans, under-linked, dead-end and unreachable docs come with **different**
+remediation hints, because the fix differs: link an orphan in (or delete it); add
+inbound links to an under-linked doc; add onward links from a dead-end; give an
+unreachable doc an inbound link from somewhere reachable.
+
+### Tuning the structure findings
+
+- `--inbound-threshold N` (or `inboundThreshold: N` in `.matlatl.yml`) sets the
+  under-linked discoverability threshold. Default `3`; `<=0` normalizes to `3`.
+- `structureFindingsSeverity: warning` in `.matlatl.yml` promotes **both**
+  under-linked and dead-end from Info to Warning, so they fail `check --strict`
+  like orphans/unreachable. Default `info` (never fails the build).
+
+#### Reading the bow-tie summary
+
+- **core** — the central cycle every other tier orbits; a healthy hub-and-spoke
+  corpus has a sizeable core.
+- **in** — docs that reach the core but the core doesn't reach back (entry
+  funnels).
+- **out** — docs the core reaches but that don't lead back (terminal branches).
+- **tendril** — attached to the core's neighbourhood but neither feeding nor fed
+  by it.
+- **disconnected** — a separate island entirely.
+- A report that says **"no cyclic core"** means the corpus is acyclic (every SCC
+  is a singleton) — common and not a problem; the in/out/tendril/disconnected
+  counts still describe the shape.
 
 ### Keeping a doc intentionally unlinked
 
@@ -111,10 +150,12 @@ fail — so dashboards get structured results either way.
 
 `matlatl emit --out <dir>` produces a bundle designed for agents:
 
-- **`graph.json`** — the machine-queryable corpus manifest: nodes (with
-  importance scores), edges, orphans, broken links, components, gaps. Validated
-  against [`docs/schemas/graph.schema.json`](schemas/graph.schema.json) and
-  byte-stable run to run.
+- **`graph.json`** — the machine-queryable corpus manifest (schema **version
+  2**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`),
+  edges, orphans, under-linked/dead-end, a `bowtie` structure summary, broken
+  links, components, gaps. Validated against
+  [`docs/schemas/graph.schema.json`](schemas/graph.schema.json) and byte-stable
+  run to run.
 - **`llms.txt`** — a curated index, most-important docs first, with a
   "Known gaps" section flagging what's incomplete (per the `llms.txt` convention).
 - **`llms-full.txt` / `llms-small.txt`** — concatenated clean bodies (each with a
@@ -122,7 +163,7 @@ fail — so dashboards get structured results either way.
 - **`findings.json`** — every finding is self-contained and actionable, plus a
   `remediationGuide` so an agent can fix issues without extra context. Validated
   against [`docs/schemas/findings.schema.json`](schemas/findings.schema.json)
-  (schema version 2) and byte-stable run to run.
+  (schema version 3) and byte-stable run to run.
 
 ### Fixing findings with an agent
 

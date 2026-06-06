@@ -1,0 +1,6 @@
+# This minimal two-document corpus is the "fully clean" fixture: every link
+# resolves and every doc is reachable. Each doc has a single inbound link, which
+# is below the default under-linked discoverability threshold (3, ADR 0012), so
+# we pin the threshold to 1 here to keep the fixture genuinely finding-free.
+version: 1
+inboundThreshold: 1

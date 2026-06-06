@@ -4,16 +4,20 @@
 
 | Metric | Count |
 | --- | --- |
-| Documents | 13 |
-| Headings | 24 |
-| References | 24 |
+| Documents | 16 |
+| Headings | 27 |
+| References | 27 |
 | Components | 6 |
 | Broken links | 3 |
 | Broken anchors | 1 |
 | Ambiguous links | 1 |
 | Orphans | 2 |
-| Unreachable | 6 |
+| Unreachable | 7 |
+| Under-linked | 8 |
+| Dead-ends | 1 |
 | Knowledge gaps | 3 |
+
+**Structure: 3 core, 3 in, 2 out, 1 tendril, 7 disconnected**
 
 ## Broken links and anchors
 
@@ -37,12 +41,32 @@ _No inbound or outbound navigational links. Link them in from a relevant page, o
 - `docs/project/notes.md` — Project Notes
 - `docs/team/notes.md` — Team Notes
 
+## Under-linked
+
+_Fewer inbound links than the discoverability threshold. Add inbound links from related, more-connected pages so readers and agents can find them. To keep one intentionally sparse, add front matter `matlatl: orphan-intentional`._
+
+- `docs/cycle/alpha.md` — Cycle Alpha
+- `docs/cycle/beta.md` — Cycle Beta
+- `docs/flow/aside.md` — Tendril Aside
+- `docs/flow/branch.md` — Downstream Branch
+- `docs/island/one.md` — Island One
+- `docs/island/two.md` — Island Two
+- `docs/links.md` — Link Showcase
+- `docs/stray.md` — Stray Page
+
+## Dead-ends
+
+_Have inbound links but link to nothing onward. Add onward internal links to related documents. To keep one intentionally terminal, add front matter `matlatl: orphan-intentional`._
+
+- `docs/flow/terminal.md` — Terminal Page
+
 ## Unreachable
 
 _Not reachable from any root. Add an inbound link from a page that is itself reachable from a root._
 
 - `docs/cycle/alpha.md` — Cycle Alpha
 - `docs/cycle/beta.md` — Cycle Beta
+- `docs/flow/aside.md` — Tendril Aside
 - `docs/island/one.md` — Island One
 - `docs/island/two.md` — Island Two
 - `docs/links.md` — Link Showcase
@@ -52,11 +76,11 @@ _Not reachable from any root. Add an inbound link from a page that is itself rea
 
 | Rank | Hub | Authority |
 | --- | --- | --- |
-| 1 | Link Showcase (0.665) | User Guide (0.626) |
-| 2 | Project Home (0.475) | Overview (0.603) |
-| 3 | User Guide (0.423) | Project Home (0.494) |
-| 4 | Docs Index (0.242) | Cycle Alpha (0.000) |
-| 5 | Overview (0.242) | Cycle Beta (0.000) |
+| 1 | Link Showcase (0.654) | User Guide (0.639) |
+| 2 | Project Home (0.471) | Overview (0.588) |
+| 3 | User Guide (0.409) | Project Home (0.478) |
+| 4 | Overview (0.296) | Downstream Branch (0.133) |
+| 5 | Docs Index (0.245) | Cycle Alpha (0.000) |
 
 ## Knowledge gaps
 

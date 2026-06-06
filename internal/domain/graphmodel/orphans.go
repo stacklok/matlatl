@@ -91,52 +91,104 @@ func (g *ReferenceGraph) ComputeReachability(rs RootSet) Reachability {
 	return Reachability{Reached: reachedList, Unreachable: unreachable}
 }
 
-// OrphanReport classifies documents into isolated orphans and unreachable docs,
-// with intentional orphans suppressed (ADR 0007).
+// DefaultInboundThreshold is the under-linked discoverability floor: a document
+// with fewer than this many inbound navigational links (but at least one
+// outbound link, so it is not a dead-end) is reported as under-linked. The
+// default of 3 follows Wikipedia's "discoverable" heuristic. A configured
+// threshold of <=0 is normalized up to this value (Analyze does the floor).
+const DefaultInboundThreshold = 3
+
+// OrphanReport classifies documents into a single-bucket structure ladder
+// (isolated orphan, dead-end, under-linked) plus the orthogonal unreachable set,
+// with intentional orphans and roots suppressed (ADR 0007, ADR 0012).
 type OrphanReport struct {
-	// Isolated documents have in-degree 0 AND out-degree 0 in the projection.
+	// Isolated documents have in-degree 0 AND out-degree 0 in the projection
+	// (the most-severe orphan tier).
 	Isolated []identity.DocumentID
+	// DeadEnd documents have inbound links but link to nothing onward (in>0 &&
+	// out==0). Mutually exclusive with Isolated and UnderLinked (single bucket).
+	DeadEnd []identity.DocumentID
+	// UnderLinked documents have outbound links but fewer inbound links than the
+	// discoverability threshold (out>0 && 0<=in<threshold, excluding the in==0
+	// dead-of-isolated case which is Isolated). Mutually exclusive with the other
+	// tiers.
+	UnderLinked []identity.DocumentID
 	// Unreachable documents are not reached from the root set (excluding those
 	// already reported as Isolated, to avoid double-reporting the same doc).
+	// Orthogonal to Dead-end/Under-linked: only a fully-isolated Orphan suppresses
+	// it (ADR 0012).
 	Unreachable []identity.DocumentID
 	// Indeterminate mirrors Reachability.Indeterminate: when true, Unreachable is
-	// empty (reachability was not computed) but Isolated is still populated.
+	// empty (reachability was not computed) but the structure tiers are still
+	// populated.
 	Indeterminate bool
 }
 
-// DetectOrphans computes the orphan/unreachable classification. Isolated orphans
-// are degree-based (in==0 && out==0) and always computed; unreachable is only
-// computed when reachability is determinate. Two kinds of node are exempt from
-// the isolated-orphan finding: intentional orphans (front-matter
-// `matlatl: orphan-intentional`) and root-set members (configured OR convention)
-// — a declared entry point with no inbound links is its purpose, not a defect
-// (ADR 0007). Because a root with out-edges is already non-isolated by degree,
-// the root exemption only affects EDGELESS roots (the agent-doc case). Results
-// are sorted.
-func (g *ReferenceGraph) DetectOrphans(c *corpus.Corpus, rootSet RootSet, deg DegreeIndex, reach Reachability) OrphanReport {
+// OrphanOptions tunes the structure-ladder classification.
+type OrphanOptions struct {
+	// InboundThreshold is the under-linked discoverability floor: a non-exempt
+	// document with outbound links but fewer than this many inbound links is
+	// under-linked. Callers should pass a normalized (>=1) value; DetectOrphans
+	// floors a <=0 value up to DefaultInboundThreshold defensively.
+	InboundThreshold int
+}
+
+// DetectOrphans computes the structure-ladder + unreachable classification
+// (ADR 0007, ADR 0012). Each non-exempt document falls into AT MOST ONE
+// structure bucket, in priority order:
+//
+//  1. in==0 && out==0          → Isolated (fully-isolated orphan, most severe).
+//  2. else out==0 (in>0)       → DeadEnd.
+//  3. else in<threshold (out>0) → UnderLinked.
+//
+// Unreachable is computed independently (only when reachability is determinate)
+// and is suppressed ONLY by a fully-isolated Orphan — dead-end/under-linked do
+// NOT suppress it. Two kinds of node are exempt from ALL structure tiers:
+// intentional orphans (front-matter `matlatl: orphan-intentional`) and root-set
+// members (configured OR convention) — a declared entry point is its purpose,
+// not a defect (ADR 0007). Results are sorted (g.documents is sorted and we
+// append in that order).
+func (g *ReferenceGraph) DetectOrphans(c *corpus.Corpus, rootSet RootSet, deg DegreeIndex, reach Reachability, opts OrphanOptions) OrphanReport {
+	threshold := opts.InboundThreshold
+	if threshold <= 0 {
+		threshold = DefaultInboundThreshold
+	}
+
 	intentional := identity.IDSet(IntentionalOrphans(c))
 
-	// One exemption set for the isolated finding: intentional orphans + roots.
-	// A root with out-degree > 0 is already non-isolated, so in practice this
-	// only suppresses edgeless roots.
-	exemptIsolated := identity.IDSet(rootSet.Roots)
+	// One exemption set for the structure ladder: intentional orphans + roots.
+	// A root with out-degree > 0 is already non-isolated, so in practice the root
+	// exemption only matters for edgeless roots; but it also (intentionally)
+	// suppresses under-linked/dead-end for any declared root.
+	exempt := identity.IDSet(rootSet.Roots)
 	for id := range intentional {
-		exemptIsolated[id] = struct{}{}
+		exempt[id] = struct{}{}
 	}
 
-	var isolated []identity.DocumentID
+	var isolated, deadEnd, underLinked []identity.DocumentID
 	isolatedSet := make(map[identity.DocumentID]struct{})
 	for _, id := range g.documents {
-		if _, skip := exemptIsolated[id]; skip {
+		if _, skip := exempt[id]; skip {
 			continue
 		}
-		if deg[id].In == 0 && deg[id].Out == 0 {
+		in, out := deg[id].In, deg[id].Out
+		switch {
+		case in == 0 && out == 0:
 			isolated = append(isolated, id)
 			isolatedSet[id] = struct{}{}
+		case out == 0: // in>0
+			deadEnd = append(deadEnd, id)
+		case in < threshold: // out>0
+			underLinked = append(underLinked, id)
 		}
 	}
 
-	report := OrphanReport{Isolated: isolated, Indeterminate: reach.Indeterminate}
+	report := OrphanReport{
+		Isolated:      isolated,
+		DeadEnd:       deadEnd,
+		UnderLinked:   underLinked,
+		Indeterminate: reach.Indeterminate,
+	}
 	if reach.Indeterminate {
 		return report
 	}
