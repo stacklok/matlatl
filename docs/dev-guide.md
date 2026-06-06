@@ -37,12 +37,15 @@ testdata/                fixture corpora + golden artifacts
    wires it together. Enforced in CI by a grep over `go list -deps` (see below).
 2. **Determinism.** Every collection is iterated in sorted order; every artifact
    is byte-stable. Go map iteration order must never leak into output. Floats
-   (HITS, navigability) are emitted at fixed precision. The **Float determinism
-   rule:** plain `float64` lives in the domain; the fixed-precision `Float` wire
-   type lives ONLY in the `graphjson` layer (`newFloat` rounds before storing, so
-   equal inputs render to equal bytes). Sum floats in sorted order and read
-   medians from a histogram, never a float sort. Golden tests assert
-   byte-stability.
+   (HITS, navigability, betweenness) are emitted at fixed precision. The **Float
+   determinism rule:** plain `float64` lives in the domain; the fixed-precision
+   `Float` wire type lives ONLY in the `graphjson` layer (`newFloat` rounds before
+   storing, so equal inputs render to equal bytes). Sum floats in sorted order and
+   read medians from a histogram, never a float sort. The Brandes betweenness pass
+   (`centrality.go`) is a worked example: it iterates sources in sorted order and
+   accumulates dependencies over **sorted predecessor lists** (built by the
+   sorted-neighbour expansion in `ForEachSourceBFS`), so every float division/sum
+   runs in a fixed order. Golden tests assert byte-stability.
 3. **Security is not a phase.** Root containment, resource caps, output-path
    sanitization, label escaping, and the SSRF guard are tested with adversarial
    fixtures. See [ADR 0003](adr/0003-security-model.md).
@@ -119,23 +122,31 @@ why output is byte-identical at any worker count. See [ADR 0004](adr/0004-ddd-la
 
 ## Adding things
 
-- **A new finding kind** — add to `analysis.FindingKind` (keep `DeadLink` last so
-  `Valid()` holds), update its `String()`, produce it in `application` with a
-  concrete `SuggestedFix` and structured `Details`, add a `remediationGuide` entry
-  **and** a `kindPresentationOrder` entry in the findings emitter (a test asserts
-  every kind has remediation), bump `FindingsSchemaVersion` + the schema if the
-  artifact shape changes, and cover it in `TestCheckExitCode` + a golden.
+- **A new finding kind** — append to the `analysis.FindingKind` iota (keep the
+  newest kind last and update `Valid()`'s upper bound to it — currently `Bridge`),
+  update its `String()`, produce it in `application` with a concrete
+  `SuggestedFix` and structured `Details`, add a `remediationGuide` entry **and** a
+  `kindPresentationOrder` entry in the findings emitter (a test asserts every kind
+  has remediation), bump `FindingsSchemaVersion` + the schema if the artifact
+  shape changes, and cover it in `TestCheckExitCode` + a golden. If the kind is a
+  non-gating Info hint (like `suggested-link`, `articulation-point`, `bridge`),
+  leave `CheckExitCode` untouched so it never gates — even under `--strict`.
 - **A new emitter** — put it in `internal/infrastructure/emit/...`, render from
   the frozen `emit.View`/`GraphMetrics` (never mutate the domain), write through
   the `FSWriter`/`safeJoin` guard, escape labels per format, and add a golden +
   byte-stability test.
-- **A new graph metric over distances** — reuse the shared streaming APSP helper
-  `ReferenceGraph.ForEachSourceDistances` (`graphmodel/apsp.go`): one BFS per
-  source, a single reused distance map, no V² matrix (`O(V)` transient memory).
-  It is intentionally minimal — betweenness centrality (P10) will need BFS
-  discovery order + predecessor counts (sigma), which it should expose via a
-  *sibling* helper following the same per-source streaming shape, NOT by adding
-  out-parameters here. See [ADR 0014](adr/0014-navigability-metrics.md).
+- **A new graph metric over distances** — reuse the streaming APSP family in
+  `graphmodel/apsp.go`: `ForEachSourceDistances` (one BFS per source, a single
+  reused distance map, no V² matrix, `O(V)` transient memory) for distance-only
+  consumers, or its sibling `ForEachSourceBFS` when you also need the BFS
+  discovery order, shortest-path predecessors and path counts (σ) — as Brandes'
+  betweenness does (`centrality.go`). Both share the same per-source streaming
+  shape (sorted sources, sorted neighbours, reused maps the callback must not
+  retain); add another sibling rather than bolting out-parameters onto an existing
+  one. Compute betweenness over the **directed** projection and cut structure
+  (articulation/bridges, `articulation.go`) over the **undirected** closure — the
+  same split navigability uses. See [ADR 0014](adr/0014-navigability-metrics.md)
+  and [ADR 0015](adr/0015-critical-path-analysis.md).
 - **A new library** — record the decision (or the choice to hand-roll) in
   [ADR 0002](adr/0002-library-choices.md). Keep it out of `domain`.
 - **A new ADR** — copy the format of an existing one, add it to

@@ -13,14 +13,15 @@
     "findings"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 4 },
+    "schemaVersion": { "type": "integer", "const": 5 },
     "tool": { "type": "string" },
     "summary": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "total", "brokenLink", "brokenAnchor", "ambiguous",
-        "orphan", "unreachable", "knowledgeGap", "underLinked", "deadEnd", "suggestedLink"
+        "orphan", "unreachable", "knowledgeGap", "underLinked", "deadEnd", "suggestedLink",
+        "articulationPoint", "bridge"
       ],
       "properties": {
         "total": { "type": "integer", "minimum": 0 },
@@ -32,7 +33,9 @@
         "knowledgeGap": { "type": "integer", "minimum": 0 },
         "underLinked": { "type": "integer", "minimum": 0 },
         "deadEnd": { "type": "integer", "minimum": 0 },
-        "suggestedLink": { "type": "integer", "minimum": 0 }
+        "suggestedLink": { "type": "integer", "minimum": 0 },
+        "articulationPoint": { "type": "integer", "minimum": 0 },
+        "bridge": { "type": "integer", "minimum": 0 }
       }
     },
     "remediationGuide": {
@@ -53,7 +56,8 @@
             "enum": [
               "broken-link", "broken-anchor", "ambiguous",
               "orphan", "unreachable", "under-linked", "dead-end",
-              "knowledge-gap", "suggested-link", "dead-link"
+              "knowledge-gap", "suggested-link", "dead-link",
+              "articulation-point", "bridge"
             ]
           },
           "severity": { "type": "string", "enum": ["info", "warning", "error"] },

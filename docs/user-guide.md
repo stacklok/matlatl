@@ -94,6 +94,15 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 - **Navigability metrics** — a handful of corpus-level scalars that summarize how
   navigable the whole corpus is. Descriptive **data**, not findings — they
   **never** fail `check` ([ADR 0014](adr/0014-navigability-metrics.md)).
+- **Load-bearing docs** — the documents with the highest **betweenness
+  centrality**: those most navigation flows through (the corpus's key
+  connectors). Descriptive **data**, like HITS — never a finding.
+- **Critical structure** — the **articulation points** (documents whose removal
+  fragments the corpus) and **bridges** (links that are the only connection
+  between two clusters): the single points of failure in the link graph. Surfaced
+  **both** as `articulation-point` / `bridge` findings (*Info, experimental* —
+  **never** fail `check`, even `--strict`) and as `graph.json` data. See
+  [ADR 0015](adr/0015-critical-path-analysis.md).
 
 Orphans, under-linked, dead-end and unreachable docs come with **different**
 remediation hints, because the fix differs: link an orphan in (or delete it); add
@@ -154,6 +163,28 @@ These are scalars to track over time, not pass/fail gates: a healthy reference
 corpus trends toward higher compactness and shorter path lengths as you link it
 together.
 
+#### Reading the critical-path analysis
+
+The `## Load-bearing docs` and `## Critical structure` report sections (and the
+`betweenness` / `articulationPoints` / `bridges` blocks in `graph.json`) answer
+"what breaks if this goes?" ([ADR 0015](adr/0015-critical-path-analysis.md)):
+
+- **Load-bearing docs** — the top documents by **betweenness centrality**, the
+  fraction of shortest paths between *other* docs that pass through them. A doc
+  with high betweenness is a relay: most navigation routes through it, so moving
+  or unlinking it has outsized impact. Per-node `betweenness` (in `[0,1]`) is on
+  every `graph.json` node; the top set is also in the `betweenness` block.
+- **Articulation points** — documents that are **cut vertices** of the undirected
+  link graph: remove one and the corpus splits into more disconnected pieces. Add
+  a redundant link path around it, or treat it as deliberately load-bearing.
+- **Bridges** — links that are **cut edges**: the single connection between two
+  clusters. Add another path between the clusters so the one link isn't a single
+  point of failure.
+
+Articulation points and bridges are reported as `articulation-point` / `bridge`
+findings (Info) so they show up in `findings.json` with remediation guidance, but
+they never gate `check` — a tree-shaped corpus legitimately has many of them.
+
 ### Keeping a doc intentionally unlinked
 
 Add to its front matter:
@@ -193,10 +224,13 @@ fail — so dashboards get structured results either way.
 `matlatl emit --out <dir>` produces a bundle designed for agents:
 
 - **`graph.json`** — the machine-queryable corpus manifest (schema **version
-  3**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`),
-  edges, orphans, under-linked/dead-end, a `bowtie` structure summary, broken
-  links, components, gaps, and `suggestedLinks` (topology-based suggestions, each
-  with `sharedNeighbours`/`coupling`/`coCitation`/`adamicAdar`). Validated against
+  5**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`,
+  `betweenness` and `isArticulation`), edges, orphans, under-linked/dead-end, a
+  `bowtie` structure summary, broken links, components, gaps, `suggestedLinks`
+  (topology-based suggestions, each with
+  `sharedNeighbours`/`coupling`/`coCitation`/`adamicAdar`), a `betweenness` block
+  (top load-bearing docs), and `articulationPoints` / `bridges` (the critical
+  structure). Validated against
   [`docs/schemas/graph.schema.json`](schemas/graph.schema.json) and byte-stable
   run to run.
 - **`llms.txt`** — a curated index, most-important docs first, with a
@@ -237,9 +271,11 @@ $ matlatl serve . --address 0.0.0.0:9000   # bind elsewhere (e.g. for containers
 
 Speaks MCP over **streamable HTTP** at `/mcp` on `--address` (default
 `127.0.0.1:8080`) and exposes read-only tools: `what-links-to`,
-`list-orphans`, `path-between`, `get-section`, `corpus-summary`, and
+`list-orphans`, `path-between`, `get-section`, `corpus-summary`,
 `suggest-links` (topology-based suggested links — pass a `doc` to scope it to one
-document's partners, or omit it for the global top suggestions). The server runs
+document's partners, or omit it for the global top suggestions), and
+`critical-docs` (the critical-path structure — top load-bearing docs by
+betweenness plus the articulation points and bridges). The server runs
 until interrupted and drains in-flight requests on shutdown.
 
 ## Ignoring files

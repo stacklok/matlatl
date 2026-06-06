@@ -50,6 +50,14 @@ type View struct {
 	TopHubs        []graphmodel.RankedDocument
 	TopAuthorities []graphmodel.RankedDocument
 
+	// TopBetweenness are the load-bearing docs ranked by betweenness centrality
+	// (ADR 0015), descending, tie-broken by ID. ArticulationPoints (cut vertices)
+	// and Bridges (cut edges) are the corpus' critical structure: single points of
+	// failure in the link graph. All pure data, surfaced in the reports/graph.json.
+	TopBetweenness     []graphmodel.RankedDocument
+	ArticulationPoints []identity.DocumentID
+	Bridges            []graphmodel.Bridge
+
 	// Gaps are experimental knowledge-gap bridge candidates (sorted upstream).
 	Gaps          []graphmodel.Gap
 	GapsTruncated bool
@@ -120,6 +128,10 @@ type DocView struct {
 	// Bowtie is the document's bow-tie bucket
 	// (core/in/out/tendril/disconnected), pure structure data (ADR 0012).
 	Bowtie string
+	// Betweenness is the document's betweenness-centrality score (ADR 0015): how
+	// load-bearing it is as a connector. IsArticulation marks it a cut vertex.
+	Betweenness    float64
+	IsArticulation bool
 }
 
 // topN bounds how many hubs/authorities the human reports surface.
@@ -151,6 +163,9 @@ func BuildView(res application.Result) View {
 	v.Navigability = m.Navigability
 	v.TopHubs = m.HITS.TopHubs(topN)
 	v.TopAuthorities = m.HITS.TopAuthorities(topN)
+	v.TopBetweenness = m.Betweenness.TopBetweenness(topN)
+	v.ArticulationPoints = slices.Clone(m.Critical.ArticulationPoints)
+	v.Bridges = slices.Clone(m.Critical.Bridges)
 	v.BrokenEdges = slices.Clone(res.BrokenEdges)
 
 	intentional := identity.IDSet(graphmodel.IntentionalOrphans(c))
@@ -159,15 +174,17 @@ func BuildView(res application.Result) View {
 		title, desc := titleAndDescription(doc)
 		deg := m.Degrees.Degree(doc.ID)
 		dv := DocView{
-			ID:          doc.ID,
-			Title:       title,
-			Description: desc,
-			Category:    path.Dir(doc.ID.String()),
-			ModTime:     doc.ModTime,
-			InDegree:    deg.In,
-			OutDegree:   deg.Out,
-			Component:   m.ComponentOf(doc.ID),
-			Bowtie:      m.Bowtie.BucketOf(doc.ID).String(),
+			ID:             doc.ID,
+			Title:          title,
+			Description:    desc,
+			Category:       path.Dir(doc.ID.String()),
+			ModTime:        doc.ModTime,
+			InDegree:       deg.In,
+			OutDegree:      deg.Out,
+			Component:      m.ComponentOf(doc.ID),
+			Bowtie:         m.Bowtie.BucketOf(doc.ID).String(),
+			Betweenness:    m.Betweenness.Score(doc.ID),
+			IsArticulation: m.Critical.IsArticulation(doc.ID),
 		}
 		if _, ok := intentional[doc.ID]; ok {
 			dv.Intentional = true
@@ -186,7 +203,8 @@ func BuildView(res application.Result) View {
 			case analysis.Ambiguous:
 				v.Ambiguous = append(v.Ambiguous, f)
 			case analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap,
-				analysis.UnderLinked, analysis.DeadEnd, analysis.SuggestedLink:
+				analysis.UnderLinked, analysis.DeadEnd, analysis.SuggestedLink,
+				analysis.ArticulationPoint, analysis.Bridge:
 				// Carried via the dedicated View slices above, not the finding lists.
 			case analysis.DeadLink:
 				// Opt-in (--check-external) only; surfaced via findings.json, not

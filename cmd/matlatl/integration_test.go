@@ -430,6 +430,10 @@ func TestIntegration_ReportToOut(t *testing.T) {
 	if !strings.Contains(string(b), "## Navigability") || !strings.Contains(string(b), "Compactness:") {
 		t.Errorf("report.md missing the Navigability section:\n%s", b)
 	}
+	// The critical-path sections (ADR 0015) render end-to-end.
+	if !strings.Contains(string(b), "## Load-bearing docs") || !strings.Contains(string(b), "## Critical structure") {
+		t.Errorf("report.md missing the Load-bearing docs / Critical structure sections:\n%s", b)
+	}
 	assertNothingEscaped(t, outDir, []string{"report.md"})
 }
 
@@ -513,25 +517,48 @@ func TestIntegration_GraphJSONToOut(t *testing.T) {
 	var doc struct {
 		SchemaVersion int `json:"schemaVersion"`
 		Summary       struct {
-			Documents    int `json:"documents"`
-			Navigability struct {
+			Documents          int `json:"documents"`
+			ArticulationPoints int `json:"articulationPoints"`
+			Bridges            int `json:"bridges"`
+			Navigability       struct {
 				Compactness    float64 `json:"compactness"`
 				Diameter       int     `json:"diameter"`
 				ReachablePairs int     `json:"reachablePairs"`
 			} `json:"navigability"`
 		} `json:"summary"`
-		Nodes []json.RawMessage `json:"nodes"`
+		Betweenness struct {
+			TopDocs []json.RawMessage `json:"topDocs"`
+		} `json:"betweenness"`
+		ArticulationPoints []string          `json:"articulationPoints"`
+		Bridges            []json.RawMessage `json:"bridges"`
+		Nodes              []struct {
+			Betweenness    float64 `json:"betweenness"`
+			IsArticulation bool    `json:"isArticulation"`
+		} `json:"nodes"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("graph.json does not parse: %v", err)
 	}
-	if doc.SchemaVersion != 4 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
+	if doc.SchemaVersion != 5 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
 		t.Errorf("graph.json content unexpected: version=%d docs=%d nodes=%d", doc.SchemaVersion, doc.Summary.Documents, len(doc.Nodes))
 	}
 	// summary.navigability (ADR 0014) is present with sensible values: the fixture
 	// corpus is connected enough to have a positive compactness and finite pairs.
 	if doc.Summary.Navigability.ReachablePairs == 0 || doc.Summary.Navigability.Diameter == 0 {
 		t.Errorf("graph.json summary.navigability looks empty: %+v", doc.Summary.Navigability)
+	}
+	// Critical-path data (ADR 0015, v5): the betweenness block, the
+	// articulationPoints/bridges arrays and the per-node fields are present, and
+	// the fixture corpus has a non-trivial critical structure.
+	if len(doc.Betweenness.TopDocs) == 0 {
+		t.Errorf("graph.json betweenness.topDocs missing")
+	}
+	if len(doc.ArticulationPoints) == 0 || len(doc.Bridges) == 0 {
+		t.Errorf("graph.json articulationPoints/bridges empty: %d/%d", len(doc.ArticulationPoints), len(doc.Bridges))
+	}
+	if doc.Summary.ArticulationPoints != len(doc.ArticulationPoints) || doc.Summary.Bridges != len(doc.Bridges) {
+		t.Errorf("summary counts disagree with arrays: ap %d!=%d, br %d!=%d",
+			doc.Summary.ArticulationPoints, len(doc.ArticulationPoints), doc.Summary.Bridges, len(doc.Bridges))
 	}
 	assertNothingEscaped(t, outDir, []string{"graph.json"})
 }
@@ -570,8 +597,8 @@ func TestIntegration_SuggestedLinks(t *testing.T) {
 	if err := json.Unmarshal(fb, &fdoc); err != nil {
 		t.Fatalf("findings.json does not parse: %v", err)
 	}
-	if fdoc.SchemaVersion != 4 {
-		t.Errorf("findings.json schemaVersion = %d, want 4", fdoc.SchemaVersion)
+	if fdoc.SchemaVersion != 5 {
+		t.Errorf("findings.json schemaVersion = %d, want 5", fdoc.SchemaVersion)
 	}
 	if fdoc.Summary.SuggestedLink < 1 {
 		t.Errorf("findings.json summary.suggestedLink = %d, want >= 1", fdoc.Summary.SuggestedLink)

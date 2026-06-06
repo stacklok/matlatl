@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stacklok/matlatl/internal/domain/analysis"
 	"github.com/stacklok/matlatl/internal/domain/corpus"
 	"github.com/stacklok/matlatl/internal/domain/identity"
 	"github.com/stacklok/matlatl/internal/domain/reference"
@@ -469,6 +470,78 @@ func TestPipeline_Run_LowCompactnessNotice(t *testing.T) {
 			t.Errorf("did not expect a [low-compactness] notice for a well-connected 10-doc corpus, got:\n%s", log.String())
 		}
 	})
+}
+
+// TestPipeline_Run_CriticalStructureFindings pins the ADR 0015 critical-path
+// findings: a corpus shaped as the chain README.md -> a.md -> b.md -> c.md has
+// b.md (and a.md) as articulation points and every edge as a bridge. The
+// findings must be present, both Info, and — crucially — must NOT gate the exit
+// code even under --strict (they are resilience hints, not defects).
+func TestPipeline_Run_CriticalStructureFindings(t *testing.T) {
+	const root = "README.md"
+	chain := map[string]string{
+		root:   "a.md",
+		"a.md": "b.md",
+		"b.md": "c.md",
+	}
+	files := []ScannedFile{sf(root), sf("a.md"), sf("b.md"), sf("c.md")}
+	parser := &fakeParser{refsFor: func(file ScannedFile) []reference.RawReference {
+		target, ok := chain[file.ID.String()]
+		if !ok {
+			return nil
+		}
+		return []reference.RawReference{
+			{Origin: file.ID, RawTarget: target, Type: reference.RelativeLink, Line: 1},
+		}
+	}}
+	scanner := &fakeScanner{result: ScanResult{Files: files}}
+	cfg := DefaultConfig()
+	cfg.ParseWorkers = 1
+	cfg.Strict = true
+	p := NewPipeline(cfg, scanner, newFakeFactory(parser), nil)
+	code, res, err := p.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+	if code != platform.ExitOK {
+		t.Fatalf("pipeline code = %v, want ExitOK", code)
+	}
+
+	// The findings are present in the report.
+	if res.ArticulationPointCount == 0 {
+		t.Errorf("expected at least one articulation-point finding, got 0")
+	}
+	if res.BridgeCount == 0 {
+		t.Errorf("expected at least one bridge finding, got 0")
+	}
+	// b.md must be an articulation point (interior of the reachable chain).
+	foundB := false
+	for _, f := range res.Report.Findings() {
+		switch f.Kind {
+		case analysis.ArticulationPoint:
+			if f.Severity != analysis.Info {
+				t.Errorf("articulation-point finding severity = %v, want Info", f.Severity)
+			}
+			if f.Location.Document == "b.md" {
+				foundB = true
+			}
+		case analysis.Bridge:
+			if f.Severity != analysis.Info {
+				t.Errorf("bridge finding severity = %v, want Info", f.Severity)
+			}
+		}
+	}
+	if !foundB {
+		t.Errorf("expected b.md to be reported as an articulation point")
+	}
+
+	// Non-gating proof: even under --strict, the critical-path findings alone do
+	// not fail the build. (This fixture is a connected, fully reachable chain with
+	// no broken links, so the ONLY findings that could gate are these — and they
+	// must not.)
+	if ec := res.CheckExitCode(true); ec != platform.ExitOK {
+		t.Errorf("CheckExitCode(strict=true) = %v, want ExitOK (critical-path findings never gate)", ec)
+	}
 }
 
 func TestDefaultConfig(t *testing.T) {

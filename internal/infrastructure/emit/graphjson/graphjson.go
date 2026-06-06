@@ -62,7 +62,11 @@ const GraphJSONName = "graph.json"
 // v4 (ADR 0014) adds a summary.navigability object (compactness, stratum,
 // characteristic/median path length, clustering coefficient, diameter,
 // reachablePairs) — corpus-level navigability scalars, pure data.
-const SchemaVersion = 4
+// v5 (ADR 0015) adds critical-path analysis: per-node betweenness (number) and
+// isArticulation (bool); a top-level betweenness object {topDocs:[{id,score}]};
+// top-level articulationPoints ([]string) and bridges ([]{from,to}); and
+// summary.articulationPoints / summary.bridges counts — all pure data.
+const SchemaVersion = 5
 
 // HITSFloatPrecision is the FIXED number of decimal places HITS hub/authority
 // scores are rounded to in graph.json. HITS scores are L2-normalized into [0,1]
@@ -120,10 +124,15 @@ type Document struct {
 	Ambiguous      []Ambiguous     `json:"ambiguous"`
 	Components     Components      `json:"components"`
 	HITS           HITS            `json:"hits"`
+	Betweenness    Betweenness     `json:"betweenness"`
 	Gaps           []Gap           `json:"gaps"`
 	SuggestedLinks []SuggestedLink `json:"suggestedLinks"`
-	RootSet        []string        `json:"rootSet"`
-	Reachability   Reachability    `json:"reachability"`
+	// ArticulationPoints are cut vertices; Bridges are cut edges of the undirected
+	// closure (ADR 0015) — the corpus' single points of failure, pure data.
+	ArticulationPoints []string     `json:"articulationPoints"`
+	Bridges            []Bridge     `json:"bridges"`
+	RootSet            []string     `json:"rootSet"`
+	Reachability       Reachability `json:"reachability"`
 }
 
 // Summary holds the corpus-overview counts.
@@ -142,6 +151,10 @@ type Summary struct {
 	Ambiguous      int `json:"ambiguous"`
 	KnowledgeGaps  int `json:"knowledgeGaps"`
 	SuggestedLinks int `json:"suggestedLinks"`
+	// ArticulationPoints / Bridges are the critical-path structure counts
+	// (ADR 0015): cut vertices and cut edges of the undirected closure.
+	ArticulationPoints int `json:"articulationPoints"`
+	Bridges            int `json:"bridges"`
 	// Navigability holds the corpus-level navigability scalars (ADR 0014). Floats
 	// use the fixed-precision Float type so graph.json stays byte-stable.
 	Navigability Navigability `json:"navigability"`
@@ -196,6 +209,12 @@ type Node struct {
 	DeadEnd     bool `json:"deadEnd"`
 	// Bowtie is the node's bow-tie bucket: core/in/out/tendril/disconnected.
 	Bowtie string `json:"bowtie"`
+	// Betweenness is the node's directed betweenness-centrality score in [0,1]
+	// (ADR 0015): how load-bearing it is as a shortest-path connector. Fixed
+	// precision (Float) so graph.json is byte-stable. IsArticulation marks it a
+	// cut vertex of the undirected closure.
+	Betweenness    Float `json:"betweenness"`
+	IsArticulation bool  `json:"isArticulation"`
 }
 
 // Edge is a directed document-projection navigational edge. Health is always
@@ -268,6 +287,20 @@ type Ranked struct {
 	Score Float  `json:"score"`
 }
 
+// Betweenness holds the top load-bearing documents by betweenness centrality
+// (ADR 0015), parallel to the HITS block. Scores use the fixed-precision Float
+// type so graph.json is byte-stable.
+type Betweenness struct {
+	TopDocs []Ranked `json:"topDocs"`
+}
+
+// Bridge is a cut edge of the undirected closure (ADR 0015): the only link
+// between two parts of the corpus. from < to canonically.
+type Bridge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
 // Gap is a candidate bridge between two distinct weak components.
 type Gap struct {
 	ComponentA      string `json:"componentA"`
@@ -308,21 +341,24 @@ func Build(v emit.View) Document {
 		Tool:          "matlatl",
 		GeneratedNote: generatedNote,
 		// Initialize every slice to non-nil so the JSON shape is stable ([] not null).
-		Nodes:          []Node{},
-		Edges:          []Edge{},
-		Sections:       []Section{},
-		Orphans:        []string{},
-		Unreachable:    []string{},
-		UnderLinked:    []string{},
-		DeadEnd:        []string{},
-		BrokenLinks:    []BrokenLink{},
-		BrokenAnchors:  []BrokenAnchor{},
-		Ambiguous:      []Ambiguous{},
-		Components:     Components{WCC: []Component{}, SCC: []Component{}},
-		HITS:           HITS{TopHubs: []Ranked{}, TopAuthorities: []Ranked{}},
-		Gaps:           []Gap{},
-		SuggestedLinks: []SuggestedLink{},
-		RootSet:        []string{},
+		Nodes:              []Node{},
+		Edges:              []Edge{},
+		Sections:           []Section{},
+		Orphans:            []string{},
+		Unreachable:        []string{},
+		UnderLinked:        []string{},
+		DeadEnd:            []string{},
+		BrokenLinks:        []BrokenLink{},
+		BrokenAnchors:      []BrokenAnchor{},
+		Ambiguous:          []Ambiguous{},
+		Components:         Components{WCC: []Component{}, SCC: []Component{}},
+		HITS:               HITS{TopHubs: []Ranked{}, TopAuthorities: []Ranked{}},
+		Betweenness:        Betweenness{TopDocs: []Ranked{}},
+		Gaps:               []Gap{},
+		SuggestedLinks:     []SuggestedLink{},
+		ArticulationPoints: []string{},
+		Bridges:            []Bridge{},
+		RootSet:            []string{},
 	}
 
 	m := v.Metrics
@@ -364,6 +400,8 @@ func Build(v emit.View) Document {
 			UnderLinked:       isUnderLinked,
 			DeadEnd:           isDeadEnd,
 			Bowtie:            d.Bowtie,
+			Betweenness:       newFloat(d.Betweenness),
+			IsArticulation:    d.IsArticulation,
 		})
 	}
 
@@ -379,29 +417,44 @@ func Build(v emit.View) Document {
 	doc.Ambiguous = ambiguous(v.Ambiguous)
 	doc.Components = Components{WCC: components(m.WCC), SCC: components(m.SCC)}
 	doc.HITS = HITS{TopHubs: ranked(v.TopHubs), TopAuthorities: ranked(v.TopAuthorities)}
+	doc.Betweenness = Betweenness{TopDocs: ranked(v.TopBetweenness)}
 	doc.Gaps = gaps(v.Gaps)
 	doc.SuggestedLinks = suggestedLinks(v.SuggestedLinks)
+	doc.ArticulationPoints = identity.IDStrings(v.ArticulationPoints)
+	doc.Bridges = bridges(v.Bridges)
 	doc.RootSet = identity.IDStrings(m.RootSet.Roots)
 	doc.Reachability = Reachability{Indeterminate: m.Orphans.Indeterminate}
 
 	doc.Summary = Summary{
-		Documents:      v.Counts.Documents,
-		Sections:       len(doc.Sections),
-		Edges:          len(doc.Edges),
-		References:     v.Counts.References,
-		Components:     len(doc.Components.WCC),
-		Orphans:        len(doc.Orphans),
-		Unreachable:    len(doc.Unreachable),
-		UnderLinked:    len(doc.UnderLinked),
-		DeadEnd:        len(doc.DeadEnd),
-		BrokenLinks:    len(doc.BrokenLinks),
-		BrokenAnchors:  len(doc.BrokenAnchors),
-		Ambiguous:      len(doc.Ambiguous),
-		KnowledgeGaps:  v.Counts.KnowledgeGap,
-		SuggestedLinks: len(doc.SuggestedLinks),
-		Navigability:   navigability(m.Navigability),
+		Documents:          v.Counts.Documents,
+		Sections:           len(doc.Sections),
+		Edges:              len(doc.Edges),
+		References:         v.Counts.References,
+		Components:         len(doc.Components.WCC),
+		Orphans:            len(doc.Orphans),
+		Unreachable:        len(doc.Unreachable),
+		UnderLinked:        len(doc.UnderLinked),
+		DeadEnd:            len(doc.DeadEnd),
+		BrokenLinks:        len(doc.BrokenLinks),
+		BrokenAnchors:      len(doc.BrokenAnchors),
+		Ambiguous:          len(doc.Ambiguous),
+		KnowledgeGaps:      v.Counts.KnowledgeGap,
+		SuggestedLinks:     len(doc.SuggestedLinks),
+		ArticulationPoints: len(doc.ArticulationPoints),
+		Bridges:            len(doc.Bridges),
+		Navigability:       navigability(m.Navigability),
 	}
 	return doc
+}
+
+// bridges projects the domain bridges (cut edges) into the wire shape. The slice
+// is already sorted (A<B canonical, then by (A,B)) upstream.
+func bridges(bs []graphmodel.Bridge) []Bridge {
+	out := make([]Bridge, 0, len(bs))
+	for _, b := range bs { // already sorted
+		out = append(out, Bridge{From: b.A.String(), To: b.B.String()})
+	}
+	return out
 }
 
 // navigability projects the domain navigability scalars into the wire shape,

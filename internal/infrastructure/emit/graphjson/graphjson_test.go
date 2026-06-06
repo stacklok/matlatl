@@ -170,8 +170,8 @@ func TestJSON_Navigability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc := graphjson.Build(v); doc.SchemaVersion != 4 {
-		t.Errorf("schemaVersion = %d, want 4", doc.SchemaVersion)
+	if doc := graphjson.Build(v); doc.SchemaVersion != 5 {
+		t.Errorf("schemaVersion = %d, want 5", doc.SchemaVersion)
 	}
 
 	// The navigability floats must render at the fixed precision (determinism).
@@ -207,6 +207,75 @@ func TestJSON_Navigability(t *testing.T) {
 	}
 	if got := typed.Summary.Navigability.ReachablePairs; got != 12 {
 		t.Errorf("navigability.reachablePairs = %d, want 12", got)
+	}
+}
+
+// TestJSON_CriticalStructure proves the v5 critical-path fields (ADR 0015) are
+// emitted and round-trip: per-node betweenness/isArticulation, the top-level
+// betweenness.topDocs block, articulationPoints + bridges arrays, and the
+// summary counts. The directed path a->b->c->d has hand-computed betweenness
+// b=c=2/6 (a=d=0); its undirected closure makes {b,c} articulation points and
+// all three edges bridges.
+func TestJSON_CriticalStructure(t *testing.T) {
+	c := corpus.NewCorpus()
+	for _, id := range []string{"a.md", "b.md", "c.md", "d.md"} {
+		d := &corpus.Document{
+			ID:   corpusID(id),
+			Root: &corpus.Section{Level: 0, Children: []*corpus.Section{{Level: 1, Text: "T", Slug: "t", StartLine: 1, EndLine: 2}}},
+		}
+		if err := c.Add(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g := graphmodel.BuildReferenceGraph(c, []reference.Reference{
+		pathRef("a.md", "b.md"), pathRef("b.md", "c.md"), pathRef("c.md", "d.md"),
+	}, graphmodel.BuildOptions{})
+	m := graphmodel.Analyze(g, c, graphmodel.AnalyzeOptions{})
+	v := emit.BuildView(application.Result{DocumentCount: c.Len(), Metrics: m, Corpus: c})
+
+	b, err := graphjson.JSON(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var typed graphjson.Document
+	if err := json.Unmarshal(b, &typed); err != nil {
+		t.Fatal(err)
+	}
+	if typed.SchemaVersion != 5 {
+		t.Errorf("schemaVersion = %d, want 5", typed.SchemaVersion)
+	}
+
+	// Per-node betweenness + isArticulation.
+	byID := map[string]graphjson.Node{}
+	for _, n := range typed.Nodes {
+		byID[n.ID] = n
+	}
+	wantBet := newFloatForTest(2.0 / 6.0)
+	if got := byID["b.md"].Betweenness; got != wantBet {
+		t.Errorf("b.md betweenness = %v, want %v", got, wantBet)
+	}
+	if !byID["b.md"].IsArticulation || !byID["c.md"].IsArticulation {
+		t.Errorf("b.md/c.md must be marked isArticulation")
+	}
+	if byID["a.md"].IsArticulation || byID["d.md"].IsArticulation {
+		t.Errorf("a.md/d.md must NOT be articulation")
+	}
+
+	// Top-level blocks + summary counts.
+	if len(typed.Betweenness.TopDocs) == 0 || typed.Betweenness.TopDocs[0].ID == "" {
+		t.Errorf("betweenness.topDocs missing")
+	}
+	if got := typed.ArticulationPoints; len(got) != 2 || got[0] != "b.md" || got[1] != "c.md" {
+		t.Errorf("articulationPoints = %v, want [b.md c.md]", got)
+	}
+	if got := typed.Bridges; len(got) != 3 {
+		t.Errorf("bridges = %v, want 3", got)
+	} else if got[0].From != "a.md" || got[0].To != "b.md" {
+		t.Errorf("first bridge = %+v, want a.md->b.md", got[0])
+	}
+	if typed.Summary.ArticulationPoints != 2 || typed.Summary.Bridges != 3 {
+		t.Errorf("summary articulationPoints/bridges = %d/%d, want 2/3",
+			typed.Summary.ArticulationPoints, typed.Summary.Bridges)
 	}
 }
 

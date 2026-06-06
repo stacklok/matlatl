@@ -52,6 +52,35 @@ func navigabilityLines(v emit.View) []string {
 	}
 }
 
+// criticalStructureLines renders the corpus' critical-path structure (ADR 0015):
+// the articulation points (cut vertices) and bridges (cut edges) of the
+// undirected link closure — single points of failure. It is shared by the
+// terminal and markdown reports so they cannot diverge. Each list guards its
+// empty case with an explicit "none" line, so the section is always present (a
+// stable contract).
+func criticalStructureLines(v emit.View) []string {
+	out := make([]string, 0, 2+len(v.ArticulationPoints)+len(v.Bridges))
+	if len(v.ArticulationPoints) == 0 {
+		out = append(out, "Articulation points: none")
+	} else {
+		out = append(out, fmt.Sprintf("Articulation points (%d): single docs whose removal fragments the corpus",
+			len(v.ArticulationPoints)))
+		for _, id := range v.ArticulationPoints {
+			out = append(out, "  "+id.String())
+		}
+	}
+	if len(v.Bridges) == 0 {
+		out = append(out, "Bridges: none")
+	} else {
+		out = append(out, fmt.Sprintf("Bridges (%d): single links whose removal disconnects two clusters",
+			len(v.Bridges)))
+		for _, b := range v.Bridges {
+			out = append(out, fmt.Sprintf("  %s — %s", b.A, b.B))
+		}
+	}
+	return out
+}
+
 // TerminalOptions tunes the terminal report.
 type TerminalOptions struct {
 	// Color selects color behavior (auto/never/always). Auto is TTY+NO_COLOR aware.
@@ -192,6 +221,25 @@ func fullReport(w io.Writer, p palette, v emit.View) error {
 	// Navigability scalars (ADR 0014): how navigable the corpus is overall.
 	ew.line(p.bold("Navigability"))
 	for _, l := range navigabilityLines(v) {
+		ew.line("  " + p.dim(l))
+	}
+	ew.line("")
+
+	// Load-bearing docs (ADR 0015): top documents by betweenness centrality —
+	// the connectors most navigation flows through.
+	ew.line(p.bold("Load-bearing docs") + p.dim(" (on the most shortest paths between other docs)"))
+	if len(v.TopBetweenness) == 0 {
+		ew.line("  " + p.dim("none"))
+	}
+	for _, r := range v.TopBetweenness {
+		ew.line(fmt.Sprintf("  %s  %s", p.cyan(fmt.Sprintf("%.3f", r.Score)), v.TitleOf(r.ID)))
+	}
+	ew.line("")
+
+	// Critical structure (ADR 0015): articulation points + bridges (single points
+	// of failure in the link graph).
+	ew.line(p.bold("Critical structure") + p.dim(" (single points of failure)"))
+	for _, l := range criticalStructureLines(v) {
 		ew.line("  " + p.dim(l))
 	}
 	ew.line("")

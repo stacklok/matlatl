@@ -27,7 +27,9 @@ const (
 // findings "under-linked" and "dead-end" (new kind values + summary counts).
 // v4 (ADR 0013) adds the topology-based "suggested-link" finding (a new kind
 // value + a suggestedLink summary count).
-const FindingsSchemaVersion = 4
+// v5 (ADR 0015) adds the critical-path "articulation-point" and "bridge"
+// findings (two new kind values + articulationPoint/bridge summary counts).
+const FindingsSchemaVersion = 5
 
 // findingsDocument is the stable findings.json schema. Adding fields is
 // backward-compatible; renaming/removing is a breaking change and must bump
@@ -44,16 +46,18 @@ type findingsDocument struct {
 }
 
 type findingsSum struct {
-	Total         int `json:"total"`
-	BrokenLink    int `json:"brokenLink"`
-	BrokenAnchor  int `json:"brokenAnchor"`
-	Ambiguous     int `json:"ambiguous"`
-	Orphan        int `json:"orphan"`
-	Unreachable   int `json:"unreachable"`
-	KnowledgeGap  int `json:"knowledgeGap"`
-	UnderLinked   int `json:"underLinked"`
-	DeadEnd       int `json:"deadEnd"`
-	SuggestedLink int `json:"suggestedLink"`
+	Total             int `json:"total"`
+	BrokenLink        int `json:"brokenLink"`
+	BrokenAnchor      int `json:"brokenAnchor"`
+	Ambiguous         int `json:"ambiguous"`
+	Orphan            int `json:"orphan"`
+	Unreachable       int `json:"unreachable"`
+	KnowledgeGap      int `json:"knowledgeGap"`
+	UnderLinked       int `json:"underLinked"`
+	DeadEnd           int `json:"deadEnd"`
+	SuggestedLink     int `json:"suggestedLink"`
+	ArticulationPoint int `json:"articulationPoint"`
+	Bridge            int `json:"bridge"`
 }
 
 type findingJSON struct {
@@ -112,6 +116,15 @@ var remediationByKind = map[string]string{
 		"unreachable, returned an error status (`details.statusCode`), or was refused by the SSRF guard " +
 		"(`details.blocked`). Verify the URL is correct and reachable; if it moved, update it, otherwise " +
 		"remove or replace the link. Dead-link findings appear only under --check-external.",
+	analysis.ArticulationPoint.String(): "The document is an articulation point (cut vertex) of the link graph: it is the " +
+		"only connector between two parts of the corpus, so if it is removed or unlinked the corpus fragments " +
+		"(`details.betweenness` holds its betweenness centrality). This is an experimental, topology-based " +
+		"resilience hint, not an error. Add a redundant link path between the parts it joins so it is no longer " +
+		"a single point of failure, or treat it as deliberately load-bearing.",
+	analysis.Bridge.String(): "The link between `details.targetDocument` and `details.bridgeEndpoint` is a bridge (cut " +
+		"edge): it is the only connection between two parts of the corpus, so losing it disconnects them. This " +
+		"is an experimental, topology-based resilience hint, not an error. Add another navigational path between " +
+		"these two clusters so the single link is not a single point of failure.",
 }
 
 // kindPresentationOrder is the single source of truth for the order finding
@@ -123,6 +136,7 @@ var kindPresentationOrder = []analysis.FindingKind{
 	analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
 	analysis.Orphan, analysis.Unreachable, analysis.UnderLinked, analysis.DeadEnd,
 	analysis.KnowledgeGap, analysis.SuggestedLink, analysis.DeadLink,
+	analysis.ArticulationPoint, analysis.Bridge,
 }
 
 // remediationGuideFor returns the remediation entries for exactly the kinds
@@ -147,16 +161,18 @@ func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
 		Tool:             "matlatl",
 		RemediationGuide: remediationGuideFor(report),
 		Summary: findingsSum{
-			Total:         report.Len(),
-			BrokenLink:    report.CountByKind(analysis.BrokenLink),
-			BrokenAnchor:  report.CountByKind(analysis.BrokenAnchor),
-			Ambiguous:     report.CountByKind(analysis.Ambiguous),
-			Orphan:        report.CountByKind(analysis.Orphan),
-			Unreachable:   report.CountByKind(analysis.Unreachable),
-			KnowledgeGap:  report.CountByKind(analysis.KnowledgeGap),
-			UnderLinked:   report.CountByKind(analysis.UnderLinked),
-			DeadEnd:       report.CountByKind(analysis.DeadEnd),
-			SuggestedLink: report.CountByKind(analysis.SuggestedLink),
+			Total:             report.Len(),
+			BrokenLink:        report.CountByKind(analysis.BrokenLink),
+			BrokenAnchor:      report.CountByKind(analysis.BrokenAnchor),
+			Ambiguous:         report.CountByKind(analysis.Ambiguous),
+			Orphan:            report.CountByKind(analysis.Orphan),
+			Unreachable:       report.CountByKind(analysis.Unreachable),
+			KnowledgeGap:      report.CountByKind(analysis.KnowledgeGap),
+			UnderLinked:       report.CountByKind(analysis.UnderLinked),
+			DeadEnd:           report.CountByKind(analysis.DeadEnd),
+			SuggestedLink:     report.CountByKind(analysis.SuggestedLink),
+			ArticulationPoint: report.CountByKind(analysis.ArticulationPoint),
+			Bridge:            report.CountByKind(analysis.Bridge),
 		},
 		Findings: make([]findingJSON, 0, report.Len()),
 	}

@@ -7,6 +7,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
 )
 
 // fixtureRoot is the committed testdata corpus.
@@ -71,12 +73,12 @@ func structured(t *testing.T, res *mcp.CallToolResult) map[string]any {
 // TestServer_Construction asserts NewServer registers all six tools.
 func TestServer_Construction(t *testing.T) {
 	a := buildTestAnalysis(t)
-	if got := len(a.Tools()); got != 6 {
-		t.Fatalf("Tools() = %d, want 6", got)
+	if got := len(a.Tools()); got != 7 {
+		t.Fatalf("Tools() = %d, want 7", got)
 	}
 	// NewServer must not panic and must register the tools.
 	_ = NewServer(a)
-	want := []string{"what-links-to", "list-orphans", "path-between", "get-section", "corpus-summary", "suggest-links"}
+	want := []string{"what-links-to", "list-orphans", "path-between", "get-section", "corpus-summary", "suggest-links", "critical-docs"}
 	have := map[string]bool{}
 	for _, tl := range a.Tools() {
 		have[tl.Tool.Name] = true
@@ -183,6 +185,63 @@ func TestTool_CorpusSummary(t *testing.T) {
 	}
 	if len(res.Content) == 0 {
 		t.Fatal("corpus-summary returned no fallback text content")
+	}
+	// v5 (ADR 0015): the manifest must carry the betweenness block and the
+	// articulationPoints/bridges arrays so an agent reading corpus-summary sees
+	// the critical-path data, not just the file artifact.
+	doc, ok := res.StructuredContent.(graphjson.Document)
+	if !ok {
+		t.Fatalf("corpus-summary structured content is not a graphjson.Document: %T", res.StructuredContent)
+	}
+	if doc.SchemaVersion != 5 {
+		t.Errorf("corpus-summary schemaVersion = %d, want 5", doc.SchemaVersion)
+	}
+	if len(doc.Betweenness.TopDocs) == 0 {
+		t.Error("corpus-summary betweenness.topDocs is empty (the fixture has load-bearing docs)")
+	}
+	if doc.ArticulationPoints == nil || doc.Bridges == nil {
+		t.Error("corpus-summary missing articulationPoints/bridges")
+	}
+}
+
+// TestTool_CriticalDocs exercises the critical-docs tool (ADR 0015): the top
+// load-bearing documents by betweenness plus the articulation points and bridges
+// (single points of failure). The fixture corpus has a known critical structure.
+func TestTool_CriticalDocs(t *testing.T) {
+	a := buildTestAnalysis(t)
+	m := structured(t, callTool(t, a, "critical-docs", nil))
+
+	load, ok := m["loadBearing"].([]rankedDocPayload)
+	if !ok {
+		t.Fatalf("critical-docs missing typed loadBearing slice: %+v", m)
+	}
+	if len(load) == 0 {
+		t.Fatal("expected at least one load-bearing doc for the fixture corpus")
+	}
+	// Every load-bearing entry must carry a non-empty ID, and the slice must be
+	// ranked by betweenness descending.
+	for i, r := range load {
+		if r.ID == "" {
+			t.Errorf("load-bearing payload[%d] has empty ID: %+v", i, r)
+		}
+		if i > 0 && load[i-1].Score < r.Score {
+			t.Errorf("loadBearing not sorted descending at %d: %v < %v", i, load[i-1].Score, r.Score)
+		}
+	}
+
+	aps, ok := m["articulationPoints"].([]string)
+	if !ok || len(aps) == 0 {
+		t.Fatalf("critical-docs should list articulation points for the fixture: %+v", m)
+	}
+	bridges, ok := m["bridges"].([]bridgePayload)
+	if !ok || len(bridges) == 0 {
+		t.Fatalf("critical-docs should list bridges for the fixture: %+v", m)
+	}
+	// Every bridge must carry both endpoints.
+	for i, br := range bridges {
+		if br.From == "" || br.To == "" {
+			t.Errorf("bridge payload[%d] incomplete: %+v", i, br)
+		}
 	}
 }
 

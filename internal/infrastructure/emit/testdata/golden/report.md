@@ -29,6 +29,40 @@
 - Clustering coefficient: 0.648
 - Reachable pairs: 86
 
+## Load-bearing docs
+
+_Documents on the most shortest paths between other docs (betweenness centrality). These are the corpus' key connectors (ADR 0015)._
+
+| Rank | Document | Betweenness |
+| --- | --- | --- |
+| 1 | Overview | 0.037 |
+| 2 | Downstream Branch | 0.026 |
+| 3 | User Guide | 0.018 |
+| 4 | Project Home | 0.015 |
+| 5 | Changelog | 0.000 |
+
+## Critical structure
+
+_Single points of failure in the link graph: articulation points (documents) and bridges (links) whose removal fragments the corpus (ADR 0015)._
+
+**Articulation points** (removing one fragments the corpus):
+
+- `README.md` — Project Home
+- `docs/flow/branch.md` — Downstream Branch
+- `docs/guide.md` — User Guide
+- `docs/sub/overview.md` — Overview
+
+**Bridges** (the only link between two clusters):
+
+| From | To |
+| --- | --- |
+| README.md | docs/stray.md |
+| docs/README.md | docs/guide.md |
+| docs/cycle/alpha.md | docs/cycle/beta.md |
+| docs/flow/aside.md | docs/flow/branch.md |
+| docs/flow/branch.md | docs/flow/terminal.md |
+| docs/flow/branch.md | docs/sub/overview.md |
+
 ## Broken links and anchors
 
 | File | Line | Kind | Detail | Suggested fix |

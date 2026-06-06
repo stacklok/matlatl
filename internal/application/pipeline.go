@@ -103,6 +103,12 @@ type Result struct {
 	// DeadLinkCount is the number of failed external links (only non-zero when
 	// --check-external is enabled). It does not affect the default run.
 	DeadLinkCount int
+	// ArticulationPointCount / BridgeCount are the critical-path structure tallies
+	// (ADR 0015): cut vertices and cut edges of the undirected closure. Both are
+	// Info findings that NEVER affect the exit code (consulted by no exit-code
+	// path); they are carried for the human summary and machine artifacts.
+	ArticulationPointCount int
+	BridgeCount            int
 	// Report is the frozen analysis report (all finding kinds).
 	Report *analysis.AnalysisReport
 	// Metrics is the frozen P3 graph-analysis carrier (graph, components, HITS,
@@ -281,11 +287,15 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		StructureFindingsSeverity: structureSev,
 
 		DeadLinkCount: report.CountByKind(analysis.DeadLink),
-		Report:        report,
-		Metrics:       metrics,
-		Corpus:        c,
-		BrokenEdges:   brokenEdges,
-		Notices:       scan.Notices,
+
+		ArticulationPointCount: report.CountByKind(analysis.ArticulationPoint),
+		BridgeCount:            report.CountByKind(analysis.Bridge),
+
+		Report:      report,
+		Metrics:     metrics,
+		Corpus:      c,
+		BrokenEdges: brokenEdges,
+		Notices:     scan.Notices,
 	}
 	return platform.ExitOK, res, nil
 }

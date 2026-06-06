@@ -58,6 +58,48 @@ func Markdown(v emit.View) []byte {
 	}
 	b.WriteString("\n")
 
+	// Load-bearing docs (ADR 0015): top documents by betweenness centrality,
+	// mirroring the hubs/authorities table.
+	b.WriteString("## Load-bearing docs\n\n")
+	b.WriteString("_Documents on the most shortest paths between other docs (betweenness centrality). " +
+		"These are the corpus' key connectors (ADR 0015)._\n\n")
+	if len(v.TopBetweenness) == 0 {
+		b.WriteString("None.\n\n")
+	} else {
+		b.WriteString("| Rank | Document | Betweenness |\n| --- | --- | --- |\n")
+		for i, r := range v.TopBetweenness {
+			fmt.Fprintf(&b, "| %d | %s | %s |\n", i+1,
+				emit.EscapeTableCell(v.TitleOf(r.ID)),
+				emit.EscapeTableCell(fmt.Sprintf("%.3f", r.Score)))
+		}
+		b.WriteString("\n")
+	}
+
+	// Critical structure (ADR 0015): articulation points (cut vertices) + bridges
+	// (cut edges) — single points of failure in the link graph.
+	b.WriteString("## Critical structure\n\n")
+	b.WriteString("_Single points of failure in the link graph: articulation points (documents) and bridges " +
+		"(links) whose removal fragments the corpus (ADR 0015)._\n\n")
+	if len(v.ArticulationPoints) == 0 {
+		b.WriteString("Articulation points: none.\n\n")
+	} else {
+		b.WriteString("**Articulation points** (removing one fragments the corpus):\n\n")
+		writeDocList(&b, v, v.ArticulationPoints)
+		b.WriteString("\n")
+	}
+	if len(v.Bridges) == 0 {
+		b.WriteString("Bridges: none.\n\n")
+	} else {
+		b.WriteString("**Bridges** (the only link between two clusters):\n\n")
+		b.WriteString("| From | To |\n| --- | --- |\n")
+		for _, br := range v.Bridges {
+			fmt.Fprintf(&b, "| %s | %s |\n",
+				emit.EscapeTableCell(br.A.String()),
+				emit.EscapeTableCell(br.B.String()))
+		}
+		b.WriteString("\n")
+	}
+
 	// Broken links + anchors table (combined; Kind column distinguishes).
 	b.WriteString("## Broken links and anchors\n\n")
 	broken := make([]analysis.Finding, 0, len(v.BrokenLinks)+len(v.BrokenAnchors))

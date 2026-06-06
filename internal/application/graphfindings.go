@@ -47,7 +47,63 @@ func findingsFromMetrics(m *graphmodel.GraphMetrics, threshold int, structureSev
 	for _, s := range m.SuggestedLinks {
 		out = append(out, suggestedLinkFinding(s))
 	}
+	// Critical-path structure (ADR 0015): articulation points (cut vertices) and
+	// bridges (cut edges). Both are Info and NEVER gate the exit code; they are
+	// surfaced so a maintainer/agent can shore up single points of failure.
+	for _, id := range m.Critical.ArticulationPoints {
+		out = append(out, articulationFinding(id, m.Betweenness.Score(id)))
+	}
+	for _, b := range m.Critical.Bridges {
+		out = append(out, bridgeFinding(b))
+	}
 	return out
+}
+
+// articulationFinding turns a cut vertex (ADR 0015) into an Info finding: the
+// document is the only connector between two parts of the corpus, so removing or
+// unlinking it fragments the graph. Always Info; NEVER gates the exit code. Its
+// betweenness score is carried in Details (the load-bearing evidence), formatted
+// at fixed precision so the finding text is byte-stable.
+func articulationFinding(id identity.DocumentID, betweenness float64) analysis.Finding {
+	return analysis.Finding{
+		ID:       fmt.Sprintf("%s:%s", analysis.ArticulationPoint, id),
+		Kind:     analysis.ArticulationPoint,
+		Severity: analysis.Info,
+		Location: analysis.Location{Document: id},
+		Message: fmt.Sprintf(
+			"%q is an articulation point: it is the only connector between two parts of the doc graph (experimental)",
+			id),
+		SuggestedFix: fmt.Sprintf(
+			"%q is the only connector between two parts of the doc graph; if it's removed or unlinked the corpus "+
+				"fragments. Add a redundant link path, or treat it as load-bearing.", id),
+		Details: map[string]string{
+			DetailTargetDocument: id.String(),
+			DetailBetweenness:    strconv.FormatFloat(betweenness, 'f', 6, 64),
+		},
+	}
+}
+
+// bridgeFinding turns a cut edge (ADR 0015) into an Info finding: the link
+// between two documents is the only connection between two parts of the corpus.
+// It is anchored at the canonical-min endpoint (b.A); the other endpoint (b.B)
+// is carried in Details. Always Info; NEVER gates the exit code.
+func bridgeFinding(b graphmodel.Bridge) analysis.Finding {
+	return analysis.Finding{
+		ID:       fmt.Sprintf("%s:%s:%s", analysis.Bridge, b.A, b.B),
+		Kind:     analysis.Bridge,
+		Severity: analysis.Info,
+		Location: analysis.Location{Document: b.A},
+		Message: fmt.Sprintf(
+			"the link between %q and %q is a bridge: the only connection between two parts of the doc graph (experimental)",
+			b.A, b.B),
+		SuggestedFix: fmt.Sprintf(
+			"the link between %q and %q is the only connection between two parts of the doc graph; add another "+
+				"path between these clusters so it isn't a single point of failure.", b.A, b.B),
+		Details: map[string]string{
+			DetailTargetDocument: b.A.String(),
+			DetailBridgeEndpoint: b.B.String(),
+		},
+	}
 }
 
 // suggestedLinkFinding turns a topology-based link suggestion (ADR 0013) into an

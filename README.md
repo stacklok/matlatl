@@ -22,8 +22,11 @@ as `README.md`) — plus **broken links** and **broken anchors**, and maps the
 corpus's macro-shape with a **bow-tie** classification (core / in / out / tendril
 / disconnected) and a set of corpus-level **navigability metrics** (compactness,
 stratum, characteristic/median path length, clustering coefficient, diameter) —
-how connected, how hierarchical, and how many clicks apart the docs are. It then
-renders the result for three audiences:
+how connected, how hierarchical, and how many clicks apart the docs are. It also
+runs **critical-path analysis**: the **load-bearing docs** (betweenness
+centrality — the connectors most navigation flows through) and the **critical
+structure** (articulation points and bridges — the single docs and links whose
+removal fragments the corpus). It then renders the result for three audiences:
 
 - **Humans** — a colorized terminal report, a committable Markdown report, Mermaid and
   Graphviz/DOT diagrams, and a navigable `index.md`.

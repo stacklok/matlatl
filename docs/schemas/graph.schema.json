@@ -23,13 +23,16 @@
     "ambiguous",
     "components",
     "hits",
+    "betweenness",
     "gaps",
     "suggestedLinks",
+    "articulationPoints",
+    "bridges",
     "rootSet",
     "reachability"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 4 },
+    "schemaVersion": { "type": "integer", "const": 5 },
     "tool": { "type": "string" },
     "generatedNote": { "type": "string" },
     "summary": {
@@ -39,6 +42,7 @@
         "documents", "sections", "edges", "references", "components",
         "orphans", "unreachable", "underLinked", "deadEnd",
         "brokenLinks", "brokenAnchors", "ambiguous", "knowledgeGaps", "suggestedLinks",
+        "articulationPoints", "bridges",
         "navigability"
       ],
       "properties": {
@@ -56,6 +60,8 @@
         "ambiguous": { "type": "integer", "minimum": 0 },
         "knowledgeGaps": { "type": "integer", "minimum": 0 },
         "suggestedLinks": { "type": "integer", "minimum": 0 },
+        "articulationPoints": { "type": "integer", "minimum": 0 },
+        "bridges": { "type": "integer", "minimum": 0 },
         "navigability": {
           "description": "Corpus-level navigability / structural-health scalars (ADR 0014). Compactness and stratum are computed over the directed projection; characteristic/median path length, diameter and clustering over the undirected closure. Pure data; never a finding and never gates the check exit code.",
           "type": "object",
@@ -84,7 +90,8 @@
         "required": [
           "id", "kind", "title", "path", "description", "category",
           "inDegree", "outDegree", "component", "hubScore", "authorityScore",
-          "reachable", "orphan", "intentionalOrphan", "underLinked", "deadEnd", "bowtie"
+          "reachable", "orphan", "intentionalOrphan", "underLinked", "deadEnd", "bowtie",
+          "betweenness", "isArticulation"
         ],
         "properties": {
           "id": { "type": "string" },
@@ -106,7 +113,9 @@
           "bowtie": {
             "type": "string",
             "enum": ["core", "in", "out", "tendril", "disconnected"]
-          }
+          },
+          "betweenness": { "type": "number", "minimum": 0, "maximum": 1 },
+          "isArticulation": { "type": "boolean" }
         }
       }
     },
@@ -220,6 +229,15 @@
         "topAuthorities": { "$ref": "#/$defs/rankedList" }
       }
     },
+    "betweenness": {
+      "description": "Critical-path centrality (ADR 0015): the top documents by directed betweenness — those on the most shortest paths between other documents (the corpus' load-bearing connectors). Parallel to `hits`. Pure data.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topDocs"],
+      "properties": {
+        "topDocs": { "$ref": "#/$defs/rankedList" }
+      }
+    },
     "gaps": {
       "type": "array",
       "items": {
@@ -248,6 +266,24 @@
           "coupling": { "type": "integer", "minimum": 0 },
           "coCitation": { "type": "integer", "minimum": 0 },
           "adamicAdar": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "articulationPoints": {
+      "description": "Cut vertices of the undirected link closure (ADR 0015): documents whose removal fragments the corpus into more pieces. Sorted DocumentIDs. Pure data; surfaced as non-gating Info findings too.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "bridges": {
+      "description": "Cut edges of the undirected link closure (ADR 0015): links that are the only connection between two parts of the corpus. `from` < `to` canonically; sorted. Pure data; surfaced as non-gating Info findings too.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" }
         }
       }
     },

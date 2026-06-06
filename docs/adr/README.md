@@ -21,3 +21,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0012 | Graduated structure findings and bow-tie classification | Accepted |
 | 0013 | Topology-based link prediction (suggested links)        | Accepted |
 | 0014 | Corpus navigability metrics                             | Accepted |
+| 0015 | Critical-path analysis (betweenness, articulation points, bridges) | Accepted |

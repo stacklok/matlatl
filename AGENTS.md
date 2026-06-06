@@ -17,11 +17,13 @@ linked docs rather than re-deriving them.
     projection; 0008 directory-link reachability; 0012 graduated structure
     (orphan/under-linked/dead-end) + bow-tie classification; 0013 topology-based
     link prediction (the additive `suggested-link` signal); 0014 corpus
-    navigability metrics (compactness/stratum/path-length/clustering, scalars).
+    navigability metrics (compactness/stratum/path-length/clustering, scalars);
+    0015 critical-path analysis (betweenness centrality as data; articulation
+    points + bridges as non-gating `articulation-point` / `bridge` Info findings).
 - **docs/schemas/** — published JSON Schemas for the two machine artifacts:
-  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 4)
+  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 5)
   and [findings.schema.json](docs/schemas/findings.schema.json) (findings schema
-  version 4). The emitter types are kept in lockstep and validated by tests; if
+  version 5). The emitter types are kept in lockstep and validated by tests; if
   you change an artifact's shape, change the schema and bump its version.
 - **[docs/user-guide.md](docs/user-guide.md)** /
   **[docs/dev-guide.md](docs/dev-guide.md)** — commands/flags/CI, and the layout
@@ -53,10 +55,14 @@ matlatl serve .        # read-only MCP server over streamable HTTP (127.0.0.1:80
 `matlatl serve` is the **MCP entrypoint** for agents: it speaks MCP over
 streamable HTTP (at `/mcp` on `--address`, default `127.0.0.1:8080`)
 and exposes read-only tools (`what-links-to`, `list-orphans`, `path-between`,
-`get-section`, `corpus-summary`, `suggest-links`). `corpus-summary` returns the
-full `graph.json` manifest, including the `summary.navigability` scalars
-(compactness, stratum, characteristic/median path length, clustering, diameter;
-schema v4). Prefer it for live graph queries over parsing artifacts yourself.
+`get-section`, `corpus-summary`, `suggest-links`, `critical-docs`).
+`corpus-summary` returns the full `graph.json` manifest, including the
+`summary.navigability` scalars (compactness, stratum, characteristic/median path
+length, clustering, diameter), per-node `betweenness`/`isArticulation`, and the
+top-level `betweenness`/`articulationPoints`/`bridges` (schema v5);
+`critical-docs` returns just the critical-path structure (top load-bearing docs
+by betweenness + articulation points + bridges). Prefer these for live graph
+queries over parsing artifacts yourself.
 
 ## Dogfooding
 

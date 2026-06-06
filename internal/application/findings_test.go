@@ -279,6 +279,10 @@ func TestCheckExitCode(t *testing.T) {
 		// ADR 0013: suggested links are Info — they NEVER fail, even under --strict.
 		{"suggested-link non-strict", Result{SuggestedLinkCount: 9}, false, platform.ExitOK},
 		{"suggested-link strict", Result{SuggestedLinkCount: 9}, true, platform.ExitOK},
+		// ADR 0015: articulation points / bridges are Info resilience hints — they
+		// NEVER fail the build, even under --strict.
+		{"articulation-point strict", Result{ArticulationPointCount: 5}, true, platform.ExitOK},
+		{"bridge strict", Result{BridgeCount: 5}, true, platform.ExitOK},
 		// ADR 0005: opt-in external dead-link findings are non-deterministic and
 		// are deliberately kept OUT of the exit contract — they NEVER fail the
 		// build, even under --strict.

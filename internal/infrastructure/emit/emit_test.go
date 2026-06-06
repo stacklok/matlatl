@@ -45,6 +45,20 @@ func allKindsReport() *analysis.AnalysisReport {
 				"sharedNeighbours": "2", "coupling": "1", "coCitation": "1", "adamicAdar": "1.442695",
 			},
 		},
+		analysis.Finding{
+			ID: "articulation-point:g.md", Kind: analysis.ArticulationPoint, Severity: analysis.Info,
+			Location:     analysis.Location{Document: "g.md"},
+			Message:      "\"g.md\" is an articulation point: it is the only connector between two parts of the doc graph",
+			SuggestedFix: "\"g.md\" is the only connector between two parts of the doc graph; add a redundant link path.",
+			Details:      map[string]string{"targetDocument": "g.md", "betweenness": "0.250000"},
+		},
+		analysis.Finding{
+			ID: "bridge:g.md:h.md", Kind: analysis.Bridge, Severity: analysis.Info,
+			Location:     analysis.Location{Document: "g.md"},
+			Message:      "the link between \"g.md\" and \"h.md\" is a bridge: the only connection between two parts of the doc graph",
+			SuggestedFix: "the link between \"g.md\" and \"h.md\" is the only connection between two parts of the doc graph; add another path.",
+			Details:      map[string]string{"targetDocument": "g.md", "bridgeEndpoint": "h.md"},
+		},
 	)
 	return analysis.NewAnalysisReport(findings)
 }

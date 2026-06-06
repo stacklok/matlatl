@@ -50,6 +50,16 @@ type GraphMetrics struct {
 	// clustering coefficient, diameter. Pure data — never a finding, never gates
 	// the check exit code.
 	Navigability Navigability
+	// Betweenness holds per-document betweenness centrality over the DIRECTED
+	// projection (ADR 0015): how often a document lies on shortest paths between
+	// others (a load-bearing connector). Pure data, like HITS — never a finding,
+	// never gates the exit code.
+	Betweenness Betweenness
+	// Critical holds the corpus' critical-path structure (ADR 0015): articulation
+	// points (cut vertices) and bridges (cut edges) of the UNDIRECTED closure. It
+	// is surfaced BOTH as non-gating Info findings (articulation-point / bridge)
+	// AND as graph.json data.
+	Critical CriticalStructure
 
 	// componentOf maps each document to its WCC ID, for emitters.
 	componentOf map[identity.DocumentID]identity.DocumentID
@@ -100,6 +110,12 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 	// Navigability scalars (ADR 0014): compactness/stratum over the directed
 	// projection, path-length/clustering over the undirected closure. Pure data.
 	navigability := g.ComputeNavigability()
+	// Critical-path analysis (ADR 0015): betweenness centrality over the DIRECTED
+	// projection (load-bearing connectors) and articulation points / bridges over
+	// the UNDIRECTED closure (single points of failure). Betweenness is pure data;
+	// articulation/bridge are non-gating Info findings + data.
+	betweenness := g.ComputeBetweenness()
+	critical := g.ComputeCriticalStructure()
 
 	return &GraphMetrics{
 		Graph:                   g,
@@ -117,6 +133,8 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 		SuggestedLinks:          linkResult.Suggestions,
 		SuggestedLinksTruncated: linkResult.Truncated,
 		Navigability:            navigability,
+		Betweenness:             betweenness,
+		Critical:                critical,
 		componentOf:             memberComponentIndex(wcc),
 	}
 }

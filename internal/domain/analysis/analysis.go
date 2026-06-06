@@ -78,6 +78,17 @@ const (
 	// SSRF guard. It is produced only when external checking is enabled, so it is
 	// kept OUT of the default deterministic output (ADR 0003).
 	DeadLink
+	// ArticulationPoint is a document that is a cut VERTEX of the undirected link
+	// closure (ADR 0015): removing or unlinking it fragments the corpus into more
+	// pieces. It is always Info and NEVER gates the exit code (even --strict) — it
+	// is a structural-resilience hint, not a defect — mirroring SuggestedLink and
+	// KnowledgeGap.
+	ArticulationPoint
+	// Bridge is a navigational link that is a cut EDGE of the undirected closure
+	// (ADR 0015): it is the only connection between two parts of the corpus, so
+	// losing it disconnects them. Like ArticulationPoint it is always Info and
+	// never gates the exit code.
+	Bridge
 )
 
 // String returns the canonical name of the finding kind.
@@ -103,6 +114,10 @@ func (k FindingKind) String() string {
 		return "suggested-link"
 	case DeadLink:
 		return "dead-link"
+	case ArticulationPoint:
+		return "articulation-point"
+	case Bridge:
+		return "bridge"
 	default:
 		return "unknown"
 	}
@@ -110,7 +125,7 @@ func (k FindingKind) String() string {
 
 // Valid reports whether k is a defined FindingKind.
 func (k FindingKind) Valid() bool {
-	return k >= BrokenLink && k <= DeadLink
+	return k >= BrokenLink && k <= Bridge
 }
 
 // Location pins a finding to a source position.

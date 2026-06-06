@@ -6,7 +6,7 @@
 // is reachable only from `matlatl serve`).
 //
 // The server runs the matlatl pipeline ONCE over the path at construction time
-// to build the frozen analysis (corpus, graph, metrics), then serves six
+// to build the frozen analysis (corpus, graph, metrics), then serves seven
 // read-only tools that return the SAME structured data as the file artifacts by
 // reusing the emit.View + emit/graphjson layers — nothing is reinvented:
 //
@@ -18,6 +18,8 @@
 //   - corpus-summary        the graph.json manifest (nodes/edges/components/HITS/…)
 //   - suggest-links([doc])  topology-based suggested links (ADR 0013): unlinked
 //     but structurally-close pairs, doc-scoped or global top-N
+//   - critical-docs         critical-path structure (ADR 0015): top load-bearing
+//     docs by betweenness centrality + articulation points + bridges
 //
 // Inputs are DocumentIDs; every tool validates them against the corpus and never
 // reads outside the scan root (the pipeline already enforces root containment;
@@ -144,6 +146,7 @@ func (a *Analysis) Tools() []server.ServerTool {
 		{Tool: getSectionTool(), Handler: a.handleGetSection},
 		{Tool: corpusSummaryTool(), Handler: a.handleCorpusSummary},
 		{Tool: suggestLinksTool(), Handler: a.handleSuggestLinks},
+		{Tool: criticalDocsTool(), Handler: a.handleCriticalDocs},
 	}
 }
 
@@ -181,7 +184,18 @@ func getSectionTool() mcp.Tool {
 
 func corpusSummaryTool() mcp.Tool {
 	return mcp.NewTool("corpus-summary",
-		mcp.WithDescription("Return the full graph.json manifest of the corpus: nodes, edges, sections, components, HITS hub/authority rankings, orphans, unreachable, broken links, knowledge gaps, topology-based suggested links, and summary navigability scalars (compactness, stratum, characteristic/median path length, clustering coefficient, diameter)."),
+		mcp.WithDescription("Return the full graph.json manifest of the corpus: nodes, edges, sections, components, HITS hub/authority rankings, betweenness centrality, articulation points, bridges, orphans, unreachable, broken links, knowledge gaps, topology-based suggested links, and summary navigability scalars (compactness, stratum, characteristic/median path length, clustering coefficient, diameter)."),
+	)
+}
+
+// criticalDocsTopN bounds the number of load-bearing documents the critical-docs
+// tool returns, so an agent gets the highest-betweenness connectors without the
+// full ranking.
+const criticalDocsTopN = 10
+
+func criticalDocsTool() mcp.Tool {
+	return mcp.NewTool("critical-docs",
+		mcp.WithDescription("Return the corpus' critical-path structure (experimental, ADR 0015): the top load-bearing documents by betweenness centrality (most shortest paths flow through them), the articulation points (documents whose removal fragments the corpus), and the bridges (links that are the only connection between two clusters). These are the single points of failure in the link graph."),
 	)
 }
 
@@ -367,6 +381,45 @@ func (a *Analysis) handleSuggestLinks(_ context.Context, req mcp.CallToolRequest
 		"total":       len(all),
 		"truncated":   a.view.SuggestedLinksTruncated,
 	}, fmt.Sprintf("%d of %d topology-based suggested link(s)", len(out), len(all))), nil
+}
+
+// rankedDocPayload is the wire shape of one load-bearing document returned by
+// critical-docs (a document and its betweenness score).
+type rankedDocPayload struct {
+	ID    string  `json:"id"`
+	Score float64 `json:"score"`
+}
+
+// bridgePayload is the wire shape of one bridge (cut edge) returned by
+// critical-docs. from < to canonically.
+type bridgePayload struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+func (a *Analysis) handleCriticalDocs(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var loadBearing []rankedDocPayload
+	if a.metrics != nil {
+		for _, r := range a.metrics.Betweenness.TopBetweenness(criticalDocsTopN) {
+			loadBearing = append(loadBearing, rankedDocPayload{ID: r.ID.String(), Score: r.Score})
+		}
+	}
+	if loadBearing == nil {
+		loadBearing = []rankedDocPayload{}
+	}
+
+	articulation := identity.IDStrings(a.view.ArticulationPoints)
+	bridges := make([]bridgePayload, 0, len(a.view.Bridges))
+	for _, b := range a.view.Bridges {
+		bridges = append(bridges, bridgePayload{From: b.A.String(), To: b.B.String()})
+	}
+
+	return mcp.NewToolResultStructured(map[string]any{
+		"loadBearing":        loadBearing,
+		"articulationPoints": articulation,
+		"bridges":            bridges,
+	}, fmt.Sprintf("%d load-bearing doc(s), %d articulation point(s), %d bridge(s)",
+		len(loadBearing), len(articulation), len(bridges))), nil
 }
 
 func toSuggestionPayload(s graphmodel.LinkSuggestion) suggestionPayload {

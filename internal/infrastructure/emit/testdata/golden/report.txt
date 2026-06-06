@@ -57,6 +57,27 @@ Navigability
   Clustering coefficient: 0.648
   Reachable pairs: 86
 
+Load-bearing docs (on the most shortest paths between other docs)
+  0.037  Overview
+  0.026  Downstream Branch
+  0.018  User Guide
+  0.015  Project Home
+  0.000  Changelog
+
+Critical structure (single points of failure)
+  Articulation points (4): single docs whose removal fragments the corpus
+    README.md
+    docs/flow/branch.md
+    docs/guide.md
+    docs/sub/overview.md
+  Bridges (6): single links whose removal disconnects two clusters
+    README.md — docs/stray.md
+    docs/README.md — docs/guide.md
+    docs/cycle/alpha.md — docs/cycle/beta.md
+    docs/flow/aside.md — docs/flow/branch.md
+    docs/flow/branch.md — docs/flow/terminal.md
+    docs/flow/branch.md — docs/sub/overview.md
+
 Top hubs (link out to many docs)
   0.654  Link Showcase
   0.471  Project Home

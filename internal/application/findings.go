@@ -16,6 +16,13 @@ import (
 // KnowledgeGap and SuggestedLink (both Info) never affect the exit code. A clean
 // repo or an empty corpus returns ExitOK (0).
 //
+// ArticulationPoint and Bridge (ADR 0015) are likewise Info and DELIBERATELY
+// never gate the exit code, even under --strict: they are structural-resilience
+// hints (single points of failure in the link graph), not defects, so a corpus
+// with a cut vertex is not a failed build. They are reported (findings.json /
+// the human report / graph.json data) but never read here, mirroring
+// SuggestedLink and KnowledgeGap.
+//
 // DeadLinkCount is DELIBERATELY excluded from the exit contract, even under
 // --strict (ADR 0005): external link checking is opt-in (--check-external) and
 // non-deterministic (network state, transient timeouts, rate limits), so gating
@@ -83,6 +90,12 @@ const (
 	DetailCoupling         = "coupling"
 	DetailCoCitation       = "coCitation"
 	DetailAdamicAdar       = "adamicAdar"
+	// Critical-structure detail keys (ADR 0015). DetailBetweenness is the
+	// load-bearing connector's betweenness score (the data behind the
+	// articulation-point finding). DetailBridgeEndpoint is the OTHER endpoint of a
+	// bridge edge (the finding is anchored at the canonical-min endpoint).
+	DetailBetweenness    = "betweenness"
+	DetailBridgeEndpoint = "bridgeEndpoint"
 )
 
 // findingsFromReferences turns resolved references into analysis Findings. Only

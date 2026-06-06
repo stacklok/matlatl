@@ -64,3 +64,84 @@ func (g *ReferenceGraph) ForEachSourceDistances(
 		visit(src, dist)
 	}
 }
+
+// ForEachSourceBFS streams the per-source Brandes forward pass for betweenness
+// centrality over the given adjacency — the sibling primitive ForEachSourceDistances
+// promises in its reuse contract (ADR 0014/0015). For every source s (in sorted
+// g.documents order) it runs one BFS and invokes visit with, in addition to the
+// distances ForEachSourceDistances would give, the two extra quantities Brandes'
+// back-pass needs:
+//
+//   - order: the BFS discovery (push) order — Brandes' stack S. The dependency
+//     back-accumulation walks this in REVERSE.
+//   - preds: shortest-path predecessors. preds[w] lists every v with an edge
+//     v→w on a shortest path s→…→w (i.e. dist[w]==dist[v]+1). Because neighbours
+//     are expanded in sorted order, each preds[w] is appended in sorted order, so
+//     the float divisions/sums the caller performs over it run in a fixed order
+//     and are byte-stable (ADR 0007).
+//   - sigma: the number of shortest paths from s to each node (float64, as
+//     Brandes specifies, to match the dependency arithmetic).
+//
+// Reuse contract: the dist/sigma/preds maps and the order/queue slices are OWNED
+// by this helper and REUSED across sources (dist/sigma cleared, preds' slices
+// re-sliced to empty, order/queue re-sliced per source). They are valid ONLY for
+// the duration of the visit call; the callback MUST NOT retain them (copy what
+// it needs). preds may carry leftover keys with EMPTY slices from earlier
+// sources — read preds[w] only for w that appear in order (every such w had its
+// predecessor list rebuilt this source). The explicit queue head index avoids
+// the reslice-reallocation pitfall ForEachSourceDistances documents, and reusing
+// the predecessor backing arrays keeps the V·(V+E) pass at O(V+E) transient
+// memory with no per-source slice churn and no V² state.
+func (g *ReferenceGraph) ForEachSourceBFS(
+	adj map[identity.DocumentID][]identity.DocumentID,
+	visit func(
+		src identity.DocumentID,
+		order []identity.DocumentID,
+		preds map[identity.DocumentID][]identity.DocumentID,
+		sigma map[identity.DocumentID]float64,
+	),
+) {
+	dist := make(map[identity.DocumentID]int, len(g.documents))
+	sigma := make(map[identity.DocumentID]float64, len(g.documents))
+	preds := make(map[identity.DocumentID][]identity.DocumentID, len(g.documents))
+	order := make([]identity.DocumentID, 0, len(g.documents))
+	queue := make([]identity.DocumentID, 0, len(g.documents))
+
+	for _, s := range g.documents { // sorted source order ⇒ deterministic accumulation
+		clear(dist)
+		clear(sigma)
+		// Re-slice every predecessor list to zero length rather than clear(preds):
+		// this REUSES the slice backing arrays across sources, so the V·(V+E)
+		// Brandes pass does not reallocate a fresh predecessor slice per (source,
+		// node) — the dominant allocation if the map were cleared each source.
+		// Leftover keys hold empty slices, which is harmless: the back-pass reads
+		// preds[w] only for w in order, and every such w had its list freshly
+		// appended this source (preds[w] is rebuilt from empty before w is reached).
+		for k := range preds {
+			preds[k] = preds[k][:0]
+		}
+		order = order[:0]
+		queue = queue[:0]
+		head := 0
+
+		dist[s] = 0
+		sigma[s] = 1
+		queue = append(queue, s)
+		for head < len(queue) {
+			v := queue[head]
+			head++
+			order = append(order, v)
+			for _, w := range adj[v] { // sorted neighbours ⇒ sorted preds[w]
+				if _, seen := dist[w]; !seen {
+					dist[w] = dist[v] + 1
+					queue = append(queue, w)
+				}
+				if dist[w] == dist[v]+1 {
+					sigma[w] += sigma[v]
+					preds[w] = append(preds[w], v)
+				}
+			}
+		}
+		visit(s, order, preds, sigma)
+	}
+}

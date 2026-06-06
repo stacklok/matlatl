@@ -27,20 +27,27 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    (isolated orphan → dead-end → under-linked) plus orthogonal unreachable
    classification, weak + strong components, bow-tie classification relative to
    the giant SCC, HITS hub/authority, knowledge-gap detection, topology-based
-   link prediction (the additive `suggested-link` signal), and corpus-level
-   navigability metrics → a frozen
+   link prediction (the additive `suggested-link` signal), corpus-level
+   navigability metrics, and critical-path analysis (betweenness centrality +
+   articulation points / bridges) → a frozen
    `AnalysisReport` + `GraphMetrics`
    ([ADR 0007](adr/0007-graph-node-semantics.md),
    [ADR 0012](adr/0012-graduated-structure-and-bowtie.md),
    [ADR 0013](adr/0013-topology-link-prediction.md),
-   [ADR 0014](adr/0014-navigability-metrics.md)). `GraphMetrics`
+   [ADR 0014](adr/0014-navigability-metrics.md),
+   [ADR 0015](adr/0015-critical-path-analysis.md)). `GraphMetrics`
    carries `Graph`, `Hierarchy`, `RootSet`, `Reachability`, `Degrees`, `Orphans`
    (isolated / dead-end / under-linked / unreachable), `WCC`, `SCC`, `Bowtie`,
-   `HITS`, `Gaps`, `SuggestedLinks`, and `Navigability`. Navigability reuses a
-   shared streaming APSP helper (`ForEachSourceDistances` in `apsp.go`): one BFS
-   per source, reusing a single distance map and never materializing a V² matrix
-   (`O(V·(V+E))` time, `O(V)` transient memory). The same helper is the
-   foundation for P10 betweenness centrality.
+   `HITS`, `Gaps`, `SuggestedLinks`, `Navigability`, `Betweenness`, and
+   `Critical` (articulation points + bridges). Navigability and betweenness reuse
+   a shared streaming APSP family in `apsp.go`: `ForEachSourceDistances` runs one
+   BFS per source reusing a single distance map, never materializing a V² matrix
+   (`O(V·(V+E))` time, `O(V)` transient memory); the sibling `ForEachSourceBFS`
+   adds the discovery order, shortest-path predecessors and path counts that
+   Brandes' betweenness needs (`centrality.go`), keeping the same streaming
+   shape. Articulation points / bridges run an **iterative** Tarjan over the
+   undirected closure (`articulation.go`), stack-safe like the SCC pass — the
+   directed (betweenness) / undirected (cut structure) split mirrors ADR 0014.
 6. **Emit** — render the report for humans (terminal, Markdown, Mermaid, DOT,
    index.md) and LLMs (graph.json, llms.txt family, findings.json; JUnit via `check`).
 
