@@ -28,13 +28,15 @@ type Catalog interface {
 }
 
 // AssetExistence answers whether a cleaned, root-relative path points at an
-// existing NON-markdown asset (image/pdf/etc.). It is injected so the domain
-// stays free of filesystem access (ADR 0003/0004): the path is always in-root
-// and already cleaned by the resolver before this is consulted. A nil
-// AssetExistence is treated as "no assets exist".
+// existing NON-markdown asset — either a regular file (image/pdf/etc.) or a
+// directory. It is injected so the domain stays free of filesystem access
+// (ADR 0003/0004): the path is always in-root and already cleaned by the
+// resolver before this is consulted. A nil AssetExistence is treated as "no
+// assets exist".
 type AssetExistence interface {
 	// AssetExists reports whether the given root-relative slash path exists as a
-	// non-markdown asset.
+	// non-markdown asset: an existing non-markdown file or directory. Markdown
+	// is excluded (tracked via the corpus, not as an asset).
 	AssetExists(relPath string) bool
 }
 

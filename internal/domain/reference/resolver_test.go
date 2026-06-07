@@ -84,7 +84,10 @@ func TestResolve_HealthBranches(t *testing.T) {
 		withHeading("docs/guide.md", "setup").
 		withHeading("README.md", "intro").
 		withAlias("home", "README.md")
-	assets := fakeAssets{"assets/logo.png": {}}
+	// "examples" models an existing non-corpus, non-markdown DIRECTORY (the real
+	// AssetExistence returns true for an existing dir; the resolver treats it as
+	// any other asset path).
+	assets := fakeAssets{"assets/logo.png": {}, "examples": {}}
 
 	r := NewResolver(cat, assets, LongestSuffix)
 
@@ -124,6 +127,19 @@ func TestResolve_HealthBranches(t *testing.T) {
 		{
 			name:       "broken image (asset missing)",
 			raw:        RawReference{Origin: "README.md", RawTarget: "assets/ghost.png", Type: ImageEmbed},
+			wantHealth: Broken, wantKind: TargetNone,
+		},
+		{
+			// An existing non-corpus, non-markdown DIRECTORY resolves to NonNote (it
+			// exists → not rot), not Broken (ADR 0008: confers no reachability).
+			name:       "non-note existing directory",
+			raw:        RawReference{Origin: "README.md", RawTarget: "examples/", Type: RelativeLink},
+			wantHealth: NonNote, wantKind: TargetAsset, wantDoc: "examples",
+		},
+		{
+			// A missing non-markdown directory/path is Broken.
+			name:       "broken missing directory",
+			raw:        RawReference{Origin: "README.md", RawTarget: "nodir/", Type: RelativeLink},
 			wantHealth: Broken, wantKind: TargetNone,
 		},
 		{

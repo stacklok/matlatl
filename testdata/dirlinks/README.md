@@ -7,3 +7,8 @@ This corpus exercises directory links (ADR 0008). The link below points at a
 
 It should resolve Valid (to `adr/README.md`, the directory index) and make the
 ADR documents reachable, so none of them is a false orphan.
+
+The link below points at an *existing non-markdown directory* (no docs inside),
+which resolves to a NonNote asset — not a broken link (ADR 0008):
+
+- [examples](examples/)

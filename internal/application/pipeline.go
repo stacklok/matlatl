@@ -335,8 +335,12 @@ func brokenEdgesFromReferences(refs []reference.Reference) []BrokenEdge {
 // fsAssetExistence answers reference.AssetExistence by stat-ing a cleaned,
 // root-relative path under the scan root. The resolver only ever passes in-root,
 // pre-cleaned paths (it rejects root escapes before calling this), so this never
-// reads outside the root. A markdown path is reported as non-existent here since
-// markdown is tracked via the corpus, not as an asset.
+// reads outside the root. An existing non-markdown FILE OR DIRECTORY counts as
+// an asset; markdown is reported as non-existent here since markdown is tracked
+// via the corpus, not as an asset. Symlinks are deliberately excluded: this uses
+// Lstat, so a symlink is neither a regular file nor a directory and stays
+// non-asset — the load-bearing safety property that keeps scanning from
+// following links out of (or around) the root (ADR 0003).
 type fsAssetExistence struct {
 	root string // absolute scan root; empty disables asset checks
 }
@@ -364,7 +368,11 @@ func (a *fsAssetExistence) AssetExists(relPath string) bool {
 	if err != nil {
 		return false
 	}
-	return info.Mode().IsRegular()
+	// An existing non-markdown regular file or directory counts as an asset.
+	// Symlinks are excluded by construction: Lstat does not follow them, so a
+	// symlink is neither regular nor a directory and stays a non-asset (ADR 0003
+	// containment — never follow links out of/around the root).
+	return info.Mode().IsRegular() || info.IsDir()
 }
 
 // reportNotices writes scan notices to the log sink (stderr in the CLI).

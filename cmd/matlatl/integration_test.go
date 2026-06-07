@@ -836,9 +836,11 @@ func dirlinksFixture(t *testing.T) string {
 
 // TestIntegration_DirectoryLinks exercises ADR 0008 end-to-end: a directory link
 // ([the ADRs](adr/)) is NOT a broken link, and the folder's docs are reachable
-// (no orphans) under the default policy. Under --strict the directory link does
-// not vouch for the folder's non-index contents, so they surface as findings and
-// the run fails.
+// (no orphans) under the default policy. A link to an existing non-markdown
+// directory ([examples](examples/), which holds only a .txt) likewise resolves
+// to a NonNote asset and is NOT a broken link. Under --strict the directory link
+// does not vouch for the folder's non-index contents, so they surface as
+// findings and the run fails.
 func TestIntegration_DirectoryLinks(t *testing.T) {
 	// Default policy: directory link resolves, contents reachable, exit 0.
 	var out, errOut bytes.Buffer

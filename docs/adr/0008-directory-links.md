@@ -77,10 +77,13 @@ Cases:
 - **Directory containing markdown but NO index** → still `Valid` (GitHub shows a
   file listing); primary target = the directory itself (no `DocumentID`);
   children enumerated.
-- **Target that is neither a markdown file NOR a directory containing any
-  markdown in the corpus** → `Broken` (unchanged; genuinely dangling). An empty
-  directory, or a non-markdown asset directory, is not a documentation
-  destination.
+- **Target that names a non-corpus path that does not exist on disk** →
+  `Broken` (genuinely dangling).
+- **Target that is an existing non-markdown directory (no markdown directly
+  inside it, e.g. an `examples/` of code or assets)** → `NonNote` (asset), not
+  `Broken`: it exists on disk, so it is not link rot, but it is not a
+  documentation destination and confers no reachability (no child edges). This
+  mirrors how an existing non-markdown *file* asset resolves.
 
 Anchors on a directory link (`docs/adr/#x`) are not meaningful (a directory has
 no headings); the fragment is ignored and the link resolves as a plain directory
