@@ -57,7 +57,11 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 - **Broken anchors** — `other.md#heading` where that heading doesn't exist. Slugs
   are GitHub-style (lowercase, spaces→`-`); see [ADR 0006](adr/0006-slug-dialect.md).
 - **Ambiguous links** — e.g. `[[notes]]` when two `notes.md` exist. matlatl
-  refuses to guess and shows you the candidates.
+  refuses to guess and shows you the candidates. A wikilink also resolves through
+  front-matter aliases: both the `aliases:` list **and** a single-valued `name:`
+  field are treated as wikilink aliases, so `[[foo-bar]]` resolves to the doc
+  whose front matter has `name: foo-bar` (or lists `foo-bar` under `aliases:`).
+  If two docs claim the same alias/name, the link is Ambiguous.
 - **Orphans** — documents with **no** inbound or outbound links (truly isolated).
 - **Under-linked** — documents that link onward but have **fewer inbound links
   than the discoverability threshold** (default **3**; see `inboundThreshold`).

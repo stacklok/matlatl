@@ -1,11 +1,13 @@
 # matlatl
 
-> A markdown documentation corpus of 27 document(s) across 2 component(s), with 232 heading(s) and 108 resolved reference(s). Entries are ordered by importance (most-connected first). Compactness 0.21, docs ~1.7 clicks apart.
+> A markdown documentation corpus of 27 document(s) across 2 component(s), with 233 heading(s) and 111 resolved reference(s). Entries are ordered by importance (most-connected first). Compactness 0.21, docs ~1.7 clicks apart.
 
 ## Documentation
 
 - [10. How matlatl treats agent-tooling scaffolding](docs/adr/0010-agent-scaffolding-roots-and-default-ignores.md): 10. How matlatl treats agent-tooling scaffolding (linked from: CHANGELOG.md, README.md, docs/adr/0011-per-repo-config-file.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [11. Per-repo configuration file (.matlatl.yml)](docs/adr/0011-per-repo-config-file.md): 11. Per-repo configuration file (.matlatl.yml) (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/schemas/matlatl-config-v1.md, docs/user-guide.md)
+- [1. Document identity is the canonical repository-relative path](docs/adr/0001-document-identity.md): 1. Document identity is the canonical repository-relative path (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
+- [8. Directory links resolve and confer navigational reachability](docs/adr/0008-directory-links.md): 8. Directory links resolve and confer navigational reachability (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [9. fix-prompt serves acting agents with an embedded, agent-agnostic prompt](docs/adr/0009-fix-prompt-acting-agents.md): 9. fix-prompt serves acting agents with an embedded, agent-agnostic prompt (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [12. Graduated structure findings and bow-tie classification](docs/adr/0012-graduated-structure-and-bowtie.md): 12. Graduated structure findings and bow-tie classification (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [13. Topology-based link prediction (suggested links)](docs/adr/0013-topology-link-prediction.md): 13. Topology-based link prediction (suggested links) (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
@@ -17,10 +19,8 @@
 - [5. check exit-code contract](docs/adr/0005-exit-code-contract.md): 5. check exit-code contract (linked from: README.md, docs/adr/0011-per-repo-config-file.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [7. Graph node semantics and the document projection](docs/adr/0007-graph-node-semantics.md): 7. Graph node semantics and the document projection (linked from: README.md, docs/adr/0011-per-repo-config-file.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [Architecture Decision Records](docs/adr/README.md): Architecture Decision Records (linked from: AGENTS.md, CONTRIBUTING.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
-- [1. Document identity is the canonical repository-relative path](docs/adr/0001-document-identity.md): 1. Document identity is the canonical repository-relative path (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [2. Library choices](docs/adr/0002-library-choices.md): 2. Library choices (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md): 6. Canonical anchor-slug dialect (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
-- [8. Directory links resolve and confer navigational reachability](docs/adr/0008-directory-links.md): 8. Directory links resolve and confer navigational reachability (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [matlatl architecture](docs/architecture.md): matlatl architecture (linked from: AGENTS.md, README.md, docs/dev-guide.md, docs/user-guide.md)
 - [matlatl developer guide](docs/dev-guide.md): matlatl developer guide (linked from: AGENTS.md, CONTRIBUTING.md, README.md, docs/user-guide.md)
 - [.matlatl.yml — per-repo configuration (schema v1)](docs/schemas/matlatl-config-v1.md): .matlatl.yml — per-repo configuration (schema v1) (linked from: CHANGELOG.md, docs/adr/0011-per-repo-config-file.md, docs/user-guide.md)
@@ -54,16 +54,16 @@ _Associative trails (Bush 1945): a topologically-valid path through each cluster
 13. [4. DDD layering and full-fat v1 scope](docs/adr/0004-ddd-layering-and-scope.md)
 14. [5. check exit-code contract](docs/adr/0005-exit-code-contract.md)
 15. [7. Graph node semantics and the document projection](docs/adr/0007-graph-node-semantics.md)
-16. [9. fix-prompt serves acting agents with an embedded, agent-agnostic prompt](docs/adr/0009-fix-prompt-acting-agents.md)
-17. [12. Graduated structure findings and bow-tie classification](docs/adr/0012-graduated-structure-and-bowtie.md)
-18. [13. Topology-based link prediction (suggested links)](docs/adr/0013-topology-link-prediction.md)
-19. [14. Corpus navigability metrics](docs/adr/0014-navigability-metrics.md)
-20. [15. Critical-path analysis: betweenness centrality + articulation points and bridges](docs/adr/0015-critical-path-analysis.md)
-21. [16. Agent experience: PageRank, reading-order trails, backlinks, and information scent](docs/adr/0016-agent-experience.md)
-22. [1. Document identity is the canonical repository-relative path](docs/adr/0001-document-identity.md)
-23. [2. Library choices](docs/adr/0002-library-choices.md)
-24. [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md)
-25. [8. Directory links resolve and confer navigational reachability](docs/adr/0008-directory-links.md)
+16. [1. Document identity is the canonical repository-relative path](docs/adr/0001-document-identity.md)
+17. [8. Directory links resolve and confer navigational reachability](docs/adr/0008-directory-links.md)
+18. [9. fix-prompt serves acting agents with an embedded, agent-agnostic prompt](docs/adr/0009-fix-prompt-acting-agents.md)
+19. [12. Graduated structure findings and bow-tie classification](docs/adr/0012-graduated-structure-and-bowtie.md)
+20. [13. Topology-based link prediction (suggested links)](docs/adr/0013-topology-link-prediction.md)
+21. [14. Corpus navigability metrics](docs/adr/0014-navigability-metrics.md)
+22. [15. Critical-path analysis: betweenness centrality + articulation points and bridges](docs/adr/0015-critical-path-analysis.md)
+23. [16. Agent experience: PageRank, reading-order trails, backlinks, and information scent](docs/adr/0016-agent-experience.md)
+24. [2. Library choices](docs/adr/0002-library-choices.md)
+25. [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md)
 
 ### Hyperlink theory & information organization — a design-research map for matlatl
 
@@ -81,4 +81,4 @@ This corpus is INCOMPLETE for navigation; an agent should not assume full covera
 - 0 broken link(s)
 - 0 broken anchor(s)
 - 0 ambiguous link(s)
-- 187 suggested link(s) (unlinked but topologically related; experimental)
+- 189 suggested link(s) (unlinked but topologically related; experimental)

@@ -24,6 +24,10 @@ A document's identity (`DocumentID`) is its **canonical repository-relative path
 - Wikilink / relative-link resolution maps a raw target to a `DocumentID` via an
   explicit `ResolutionPolicy` (default: longest-suffix match), and surfaces
   genuine ambiguity as a first-class `Ambiguous` finding rather than guessing.
+  When no document matches by path/suffix, the resolver falls back to the
+  front-matter alias table: a document's `aliases:` list **and** its single-valued
+  `name:` field are both indexed as wikilink aliases, so `[[name]]` resolves to
+  that document (a shared alias/name across docs is `Ambiguous`, not a guess).
 - All artifacts (graph.json, reports, diagrams, llms.txt) key documents by
   `DocumentID`.
 

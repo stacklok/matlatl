@@ -28,9 +28,13 @@ type FrontMatter struct {
 	Description string
 	Tags        []string
 	Aliases     []string
-	Parent      string
-	Related     []string
-	Status      string
+	// Name is an alternate single-name alias for the document (common in note
+	// systems). It is indexed into the AliasTable alongside Aliases so a wikilink
+	// `[[name]]` resolves to this document (ADR 0001).
+	Name    string
+	Parent  string
+	Related []string
+	Status  string
 	// Date is kept as a string in the skeleton; typed-date parsing is deferred.
 	Date string
 	// Extra holds front-matter keys not modeled above, preserved verbatim.

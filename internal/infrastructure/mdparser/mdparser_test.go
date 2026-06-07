@@ -257,6 +257,20 @@ func TestFrontMatter_AliasesAndRelatedExtracted(t *testing.T) {
 	}
 }
 
+// TestFrontMatter_NameExtracted asserts the single-valued `name` field is parsed
+// into the typed FrontMatter.Name (used as a wikilink alias) and is NOT leaked
+// into Extra.
+func TestFrontMatter_NameExtracted(t *testing.T) {
+	doc := parse(t, "---\ntitle: T\nname: foo-bar\n---\n\n# Body\n")
+	fm := doc.FrontMatter
+	if fm.Name != "foo-bar" {
+		t.Errorf("Name = %q, want 'foo-bar'", fm.Name)
+	}
+	if _, leaked := fm.Extra["name"]; leaked {
+		t.Errorf("name leaked into Extra = %v; it must be a typed field", fm.Extra)
+	}
+}
+
 func TestFrontMatter_MalformedTOMLDegrades(t *testing.T) {
 	// Broken TOML must degrade to no front matter (title falls back to H1).
 	doc := parse(t, "+++\ntitle = \"unterminated\nbad ==== value\n+++\n\n# TOML Fallback\n")

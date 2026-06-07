@@ -3,6 +3,9 @@ package corpus
 import (
 	"errors"
 	"testing"
+
+	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 func TestCorpus_AddDuplicate(t *testing.T) {
@@ -154,6 +157,86 @@ func TestCorpus_AddIndexesAliases(t *testing.T) {
 	}
 	if c.LookupAlias("") != nil {
 		t.Error("empty alias should not be indexed")
+	}
+}
+
+// TestCorpus_AddIndexesNameAsAlias asserts the single-valued front-matter `name`
+// field is indexed into the alias table alongside `aliases`, so a `[[name]]`
+// wikilink resolves to the document; an empty `name` is ignored, and two docs
+// sharing a name are returned together (the resolver reports that as Ambiguous).
+func TestCorpus_AddIndexesNameAsAlias(t *testing.T) {
+	c := NewCorpus()
+	if err := c.Add(&Document{
+		ID:          "foo.md",
+		FrontMatter: FrontMatter{Name: "foo-bar"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Add(&Document{
+		ID:          "empty.md",
+		FrontMatter: FrontMatter{Name: ""},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Two docs sharing the same name → both indexed (resolver → Ambiguous).
+	if err := c.Add(&Document{
+		ID:          "a.md",
+		FrontMatter: FrontMatter{Name: "dup"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Add(&Document{
+		ID:          "b.md",
+		FrontMatter: FrontMatter{Name: "dup"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := c.LookupAlias("foo-bar"); len(got) != 1 || got[0] != "foo.md" {
+		t.Errorf("LookupAlias(foo-bar) = %v, want [foo.md]", got)
+	}
+	if c.LookupAlias("") != nil {
+		t.Error("empty name should not be indexed")
+	}
+	if got := c.LookupAlias("dup"); len(got) != 2 || got[0] != "a.md" || got[1] != "b.md" {
+		t.Errorf("LookupAlias(dup) = %v, want sorted [a.md b.md]", got)
+	}
+}
+
+// TestResolveWikilinkViaName drives the full resolution path: a Corpus built with
+// `name:` front matter feeds the reference.Resolver (via the Catalog seam), and a
+// `[[name]]` wikilink resolves to the named document; two docs sharing a name are
+// Ambiguous; an `aliases:`-only doc still resolves (regression).
+func TestResolveWikilinkViaName(t *testing.T) {
+	c := NewCorpus()
+	mustAdd := func(id string, fm FrontMatter) {
+		t.Helper()
+		if err := c.Add(&Document{ID: identity.DocumentID(id), FrontMatter: fm}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustAdd("origin.md", FrontMatter{})
+	mustAdd("target.md", FrontMatter{Name: "foo-bar"})
+	mustAdd("aliased.md", FrontMatter{Aliases: []string{"legacy"}})
+	mustAdd("dup-a.md", FrontMatter{Name: "dup"})
+	mustAdd("dup-b.md", FrontMatter{Name: "dup"})
+
+	r := reference.NewResolver(c, nil, reference.LongestSuffix)
+
+	wl := func(target string) reference.Reference {
+		return r.Resolve(reference.RawReference{
+			Origin: "origin.md", RawTarget: target, Type: reference.Wikilink,
+		})
+	}
+
+	if got := wl("foo-bar"); got.Health != reference.Valid || got.Target.DocumentID != "target.md" {
+		t.Errorf("[[foo-bar]] = %+v, want Valid → target.md", got)
+	}
+	if got := wl("legacy"); got.Health != reference.Valid || got.Target.DocumentID != "aliased.md" {
+		t.Errorf("[[legacy]] (aliases regression) = %+v, want Valid → aliased.md", got)
+	}
+	if got := wl("dup"); got.Health != reference.Ambiguous {
+		t.Errorf("[[dup]] = %+v, want Ambiguous", got)
 	}
 }
 

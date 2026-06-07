@@ -243,7 +243,7 @@ func guardFrontMatter(src []byte, maxBytes int) ([]byte, bool) {
 // asserts this set equals the struct's yaml tags so a tag typo cannot silently
 // misroute a known field.
 var knownFMKeys = map[string]struct{}{
-	"title": {}, "description": {}, "tags": {}, "aliases": {},
+	"title": {}, "description": {}, "tags": {}, "aliases": {}, "name": {},
 	"parent": {}, "related": {}, "status": {}, "date": {},
 }
 
@@ -266,6 +266,7 @@ func decodeFrontMatter(pctx parser.Context) corpus.FrontMatter {
 		Description: fmString(all, "description"),
 		Tags:        fmStringSlice(all, "tags"),
 		Aliases:     fmStringSlice(all, "aliases"),
+		Name:        fmString(all, "name"),
 		Parent:      fmString(all, "parent"),
 		Related:     fmStringSlice(all, "related"),
 		Status:      fmString(all, "status"),

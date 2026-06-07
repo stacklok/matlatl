@@ -106,12 +106,17 @@ func (c *Corpus) indexHeadings(doc *Document) {
 
 // indexAliases records each front-matter alias of doc into the alias table, so
 // the P2 resolver can map wikilink aliases to candidate documents (ADR 0001).
+// The single-valued `name` field is treated as an alias alongside `aliases`
+// (ADR 0001), so a `[[name]]` wikilink resolves to this document.
 func (c *Corpus) indexAliases(doc *Document) {
 	for _, alias := range doc.FrontMatter.Aliases {
 		if alias == "" {
 			continue
 		}
 		c.aliases.add(alias, doc.ID)
+	}
+	if name := doc.FrontMatter.Name; name != "" {
+		c.aliases.add(name, doc.ID)
 	}
 }
 

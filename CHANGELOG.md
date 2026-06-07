@@ -61,6 +61,42 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `matlatl: orphan-intentional`. The `tool` field in `graph.json`/`findings.json`
   and the MCP server name are now `matlatl`.
 
+### Fixed
+
+- **Front-matter `name:` is now treated as a wikilink alias.** Alongside the
+  `aliases:` list, a document's single-valued `name:` field is indexed into the
+  alias table, so `[[name]]` resolves to that document (a `name`/alias shared by
+  two docs is reported `Ambiguous`, never guessed). `name` is now a typed
+  `FrontMatter` field and no longer leaks into `Extra`. Note this is **not**
+  purely monotonic: turning a former broken wikilink into a valid edge **adds a
+  graph edge**, which can shift derived values (orphan / unreachable /
+  under-linked sets, PageRank, reading-order trails). It can also reclassify an
+  already-broken `[[name#anchor]]` link from broken-link to broken-anchor (the
+  name now matches a doc, but the fragment may not), but never turns a passing
+  gate into a failing one — it cannot create a finding where there was none, so
+  the `check` verdict stays monotonic (ADR 0005 unaffected). See
+  [ADR 0001](docs/adr/0001-document-identity.md).
+- **Links to an existing non-markdown directory now resolve to a NonNote asset,
+  not a broken link.** A relative link to a real directory that holds no corpus
+  markdown (e.g. `[examples](examples/)` pointing at a folder of code/assets)
+  previously reported as a broken link; it now resolves to `NonNote` (it exists
+  → not rot; confers no reachability), mirroring how an existing non-markdown
+  *file* asset resolves. Symlinks remain excluded (the asset check uses `Lstat`,
+  so a symlink is neither a regular file nor a directory — the load-bearing
+  containment property, ADR 0003). A `.md`-named directory still resolves Broken.
+  See [ADR 0008](docs/adr/0008-directory-links.md). The change softens `check`
+  monotonically; ADR 0005 is unaffected.
+- **Default-ignore the Python virtualenv + tooling caches.** `.venv`, `.tox`,
+  `__pycache__`, `.mypy_cache`, `.pytest_cache`, and `.ruff_cache` are now
+  skipped wholesale during the walk (matched by base name anywhere, like
+  `node_modules`/`vendor`), so installed-package and tool-scratch markdown no
+  longer pollutes the corpus. Build-output directories (`dist`, `build`,
+  `target`, `site`, `out`) are deliberately left in scope — they can hold
+  generated docs — and remain a per-repo `.matlatlignore` decision. The change
+  softens `check` monotonically (it can only remove findings); ADR 0005 is
+  unaffected. See
+  [ADR 0010](docs/adr/0010-agent-scaffolding-roots-and-default-ignores.md).
+
 ### Added
 
 - **Graduated structure findings + bow-tie classification** — the binary orphan

@@ -165,6 +165,13 @@ why output is byte-identical at any worker count. See [ADR 0004](adr/0004-ddd-la
   **scent-free phrase set and stopword set are in-source constants in
   `scent.go`** (`scentFreePhrases` / `scentStopwords`) — edit them there, they are
   documented inline. See [ADR 0016](adr/0016-agent-experience.md).
+- **A new typed front-matter field** — add it to `corpus.FrontMatter`, parse it
+  in `mdparser.decodeFrontMatter`, and add the lowercased field name to
+  `knownFMKeys` (else it leaks into `Extra`). `TestKnownFMKeysMatchTags` enforces
+  the field-set ↔ `knownFMKeys` correspondence. Wikilink aliases are indexed in
+  `corpus.indexAliases`: both the `aliases:` list and the single-valued `name:`
+  field are added to the `AliasTable`, so `[[name]]` resolves to the document
+  (clashes are reported Ambiguous by the resolver, unchanged).
 - **A new library** — record the decision (or the choice to hand-roll) in
   [ADR 0002](adr/0002-library-choices.md). Keep it out of `domain`.
 - **A new ADR** — copy the format of an existing one, add it to
