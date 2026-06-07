@@ -8,7 +8,9 @@ description: >-
   doc-link rot ("find orphaned/unreachable docs", "fix the doc links",
   "fix-prompt"); make a repo legible to agents by emitting graph.json / llms.txt
   / findings.json ("generate llms.txt", "emit the doc graph", "LLM doc
-  artifacts"); audit a knowledge base's health ("audit our docs", "how
+  artifacts"); get a suggested reading order to onboard to a repo's docs ("where
+  do I start", "reading order", "onboard me to these docs"); audit a knowledge
+  base's health ("audit our docs", "how
   well-connected are the docs", "documentation health", "load-bearing docs");
   or query the doc graph live over MCP ("what links to X", "path between docs",
   "matlatl serve"). NOT a prose/style markdown linter and NOT for non-markdown
@@ -38,7 +40,7 @@ for the authoritative flag list before guessing flags.
 | Goal | Command |
 | --- | --- |
 | See the full analysis (human report) | `matlatl .` (add `--quiet` for a one-line summary) |
-| **Gate CI** / pass-fail check | `matlatl check .` (see exit codes) — `--strict` to also fail on orphans/ambiguous |
+| **Gate CI** / pass-fail check | `matlatl check .` (see exit codes; `--out <dir>` also writes `findings.json` + `junit.xml` for CI) — `--strict` to also fail on orphans/ambiguous |
 | List just the lost docs | `matlatl orphans .` (`--isolated-only`, `--unreachable-only`) |
 | Committable Markdown report | `matlatl report . --out <dir>` (writes `report.md`) |
 | Diagram of the graph | `matlatl graph . --format mermaid\|dot\|json` (`--tree` for the hierarchy variant) |
@@ -49,7 +51,12 @@ for the authoritative flag list before guessing flags.
 
 For machine consumption, prefer `graph.json` (the queryable manifest) and
 `findings.json` (each finding self-contained with remediation) over scraping the
-terminal report.
+terminal report. `graph.json` carries per-document **PageRank** + HITS +
+betweenness and the top-level importance / critical-path blocks; `trails.json` is
+a **suggested reading order** (one ordered trail per cluster, surfacing
+high-authority docs early — for onboarding an agent to a repo); `llms.txt` and
+`index.md` render per-doc **backlinks** (a `linked from:` clause in `llms.txt`, a
+`Backlinks` column in `index.md`).
 
 ## Read the result correctly
 
@@ -67,10 +74,12 @@ terminal report.
 - **Gating (Error):** broken links, broken anchors. These fail `check`.
 - **Gating only under `--strict`:** orphans, ambiguous links, unreachable (plus
   under-linked/dead-end *if* the repo sets `structureFindingsSeverity: warning`).
-- **Advisory / never gates (Info, some experimental):** under-linked, dead-ends,
-  knowledge-gaps, **suggested-links**, **articulation-points**, **bridges**, and
-  all navigability/bow-tie/betweenness numbers. These are data and hints — report
-  them, act on them when asked, but never report them as build failures.
+- **Advisory / never gates (Info):** under-linked, dead-ends,
+  knowledge-gaps, **suggested-links**, **low-scent-anchors** (link text that
+  barely previews its target, with a rename suggestion), **articulation-points**,
+  **bridges**, and all navigability / bow-tie / PageRank / HITS / betweenness
+  numbers. These are data and hints — report them, act on them when asked, but
+  never report them as build failures.
 
 When summarizing to the user, separate "broken (must fix)" from "structural
 hints (optional)". Don't alarm on a healthy repo that merely has dead-end ADRs.
@@ -106,8 +115,16 @@ questions over re-parsing markdown yourself.
 
 Before reporting orphans/noise, check what the repo already declares:
 
-- **`.matlatlignore`** (gitignore syntax) — files removed from the corpus. `.git`,
-  `node_modules`, `vendor` are ignored by default.
+- **Default-ignored (before `.matlatlignore`):** `.git`, `node_modules`, `vendor`,
+  the Python venv / tool caches (`.venv`, `.tox`, `__pycache__`, `.mypy_cache`,
+  `.pytest_cache`, `.ruff_cache`), and **git submodules / nested repositories** —
+  any directory with a `.git` entry below the scan root is skipped with a
+  `skipped-nested-repo` notice (a submodule is a separate corpus; to scan one,
+  point matlatl at it directly).
+- **`.matlatlignore`** (gitignore syntax) — removes additional files from the corpus.
+- **Wikilink aliases:** front-matter `aliases:` and `name:` are resolved as
+  wikilink targets, so `[[that-name]]` links resolve (a name shared by two docs is
+  reported ambiguous).
 - **`.matlatl.yml`** (scan root only) — declares extra reachability `roots` (path
   globs). Roots are exempt from orphan/unreachable findings. `version: 1`.
 - **Per-doc opt-out:** front matter `matlatl: orphan-intentional` keeps a doc in
@@ -129,6 +146,10 @@ Before reporting orphans/noise, check what the repo already declares:
   no `README.md`/`index.md`/`SKILL.md`/`type: index` and no `--root`. Reachability
   analysis is skipped (orphan detection still runs). Fix by adding a root or
   passing `--root <glob>`.
+- **Links to existing non-markdown targets are NOT "broken".** A link to a real
+  file or directory that isn't tracked markdown (an image, a code/example dir)
+  resolves to a non-note asset, not a broken link — only a *missing* target is
+  broken. So `broken-link` means genuinely absent, worth fixing.
 - **Output is deterministic and byte-stable** — re-running produces identical
   artifacts. If you diff `graph.json`/`findings.json` and see churn, something
   changed in the corpus, not noise.
@@ -137,6 +158,6 @@ Before reporting orphans/noise, check what the repo already declares:
 
 - `docs/user-guide.md` — every command, flag, and CI usage in depth.
 - `docs/adr/0005-exit-code-contract.md` — the exact `check` contract.
-- `docs/schemas/graph.schema.json` (schema version 6),
-  `docs/schemas/findings.schema.json` (schema version 6),
-  `docs/schemas/trails.schema.json` (schema version 1) — the artifact shapes.
+- `docs/schemas/graph.schema.json`, `docs/schemas/findings.schema.json`,
+  `docs/schemas/trails.schema.json` — the artifact shapes (each carries its
+  authoritative `schemaVersion`).
