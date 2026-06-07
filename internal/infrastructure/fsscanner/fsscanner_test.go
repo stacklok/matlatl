@@ -175,6 +175,41 @@ func TestScan_DefaultIgnoresClaudePlans(t *testing.T) {
 	}
 }
 
+// TestScan_DefaultIgnoresClaudeAgentMemory asserts the scoped default skip for
+// `.claude/agent-memory` (transient agent-generated memory notes that use a
+// non-repo-relative `[[slug]]` wikilink convention which cannot resolve, ADR
+// 0018) while keeping the deliberately non-default sibling `.claude` subtrees in
+// the corpus: `.claude/rules` (real docs), `.claude/skills` (real graphs), and
+// `.claude/agents` (judgment call deferred to per-repo config, NOT
+// default-ignored). This pins both the new prune AND that the ignore stays
+// narrowly scoped — sibling `.claude` subtrees survive.
+func TestScan_DefaultIgnoresClaudeAgentMemory(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "README.md"), "# Root")
+	writeFile(t, filepath.Join(root, ".claude", "agent-memory", "reviewer", "note.md"), "# Note")
+	writeFile(t, filepath.Join(root, ".claude", "agent-memory", "deep", "more.md"), "# More")
+	writeFile(t, filepath.Join(root, ".claude", "rules", "go-style.md"), "# Rules")
+	writeFile(t, filepath.Join(root, ".claude", "skills", "x", "SKILL.md"), "# Skill")
+	writeFile(t, filepath.Join(root, ".claude", "agents", "a.md"), "# Agent")
+
+	got := ids(scan(t, root, Config{}))
+	want := []string{
+		".claude/agents/a.md",
+		".claude/rules/go-style.md",
+		".claude/skills/x/SKILL.md",
+		"README.md",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("ids = %v, want %v (agent-memory skipped; rules/skills/agents kept)", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("ids = %v, want %v", got, want)
+			break
+		}
+	}
+}
+
 // TestScan_NestedRepoGitFilePruned pins ADR 0017 for the SUBMODULE/WORKTREE
 // shape: a nested directory whose `.git` is a FILE (a gitfile, `gitdir: …`). The
 // entire nested working tree is pruned and exactly one skipped-nested-repo notice

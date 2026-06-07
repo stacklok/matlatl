@@ -1,7 +1,7 @@
 # 10. How matlatl treats agent-tooling scaffolding
 
 Date: 2026-06-06
-Status: Accepted
+Status: Accepted (superseded in part by ADR 0018)
 
 ## Context
 

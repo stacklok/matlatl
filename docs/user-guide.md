@@ -311,11 +311,15 @@ until interrupted and drains in-flight requests on shutdown.
 Create a `.matlatlignore` (gitignore syntax). `.git`, `node_modules`, and
 `vendor` are ignored by default (matched by directory name, anywhere in the
 tree). `.claude/worktrees/` (Claude Code agent worktrees — each is a full copy of
-the repo, which would otherwise multiply the corpus many times over) and
-`.claude/plans/` (transient scratch plans) are ignored too, matched only at the
-scan root — so `.claude/rules/`, `.claude/skills/`, and the rest of `.claude/`
-stay in the graph
-([ADR 0010](adr/0010-agent-scaffolding-roots-and-default-ignores.md)).
+the repo, which would otherwise multiply the corpus many times over),
+`.claude/plans/` (transient scratch plans), and `.claude/agent-memory/`
+(transient, agent-generated memory notes that use a non-repo-relative `[[slug]]`
+wikilink convention which can't resolve, so they only produce false findings, and
+are commonly gitignored) are ignored too, matched only at the scan root — so
+`.claude/rules/` and `.claude/skills/` stay in the graph, and `.claude/agents/`
+is the one remaining `.claude/` subtree left to per-repo config
+([ADR 0010](adr/0010-agent-scaffolding-roots-and-default-ignores.md),
+[ADR 0018](adr/0018-default-ignore-agent-memory.md)).
 
 **Nested git repositories** — submodules, linked worktrees, and nested clones —
 are skipped by default, wherever they live in the tree. matlatl detects them by

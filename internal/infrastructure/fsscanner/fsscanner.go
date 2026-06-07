@@ -82,12 +82,17 @@ var defaultIgnoredDirs = []string{
 // these match one specific location so the skip stays scoped. `.claude/worktrees`
 // holds Claude Code agent worktrees — each a FULL copy of the repository — which
 // would otherwise multiply the corpus many times over; `.claude/plans` holds
-// transient scratch plans (ADR 0003). The line is drawn deliberately narrow:
-// other `.claude/*` subtrees (agents, agent-memory, skills, rules) are NOT
-// default-ignored — those are judgment calls deferred to per-repo config or are
-// real docs/graphs handled by the roots mechanism. Slash-separated to match
-// relForMatch output.
-var defaultIgnoredRelPaths = []string{".claude/plans", ".claude/worktrees"}
+// transient scratch plans; `.claude/agent-memory` holds transient,
+// agent-generated memory notes that use a non-repo-relative `[[slug]]` wikilink
+// convention which structurally cannot resolve against the corpus (so they only
+// produce false broken-link/unreachable findings), and are commonly gitignored
+// (so local and CI runs would otherwise disagree) (ADR 0003, ADR 0010, ADR 0018).
+// The line is drawn deliberately narrow: `.claude/agents` is the only `.claude/*`
+// subtree still NOT default-ignored — whether it is documentation is a judgment
+// call deferred to per-repo config. `.claude/skills` and `.claude/rules` are real
+// docs/graphs handled by the roots mechanism and stay in the corpus.
+// Slash-separated to match relForMatch output.
+var defaultIgnoredRelPaths = []string{".claude/agent-memory", ".claude/plans", ".claude/worktrees"}
 
 // Config tunes a Scanner. The zero value is not valid; use New, which fills in
 // safe defaults for any unset field.
