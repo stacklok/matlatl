@@ -97,6 +97,28 @@ func TestScan_DefaultIgnoresAndIgnoreFile(t *testing.T) {
 	}
 }
 
+// TestScan_DefaultIgnoresPythonCaches asserts the Python virtualenv + tooling
+// cache directories (matched by base name anywhere, like node_modules/vendor)
+// are skipped wholesale so installed-package / tool-scratch markdown never
+// pollutes the corpus, while real docs at peer paths are kept.
+func TestScan_DefaultIgnoresPythonCaches(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "real.md"), "# Real")
+	// One markdown file under each newly-added ignore dir, so reverting ANY single
+	// name from defaultIgnoredDirs makes this test fail (each name is pinned).
+	writeFile(t, filepath.Join(root, ".venv", "pkg", "doc.md"), "# venv")
+	writeFile(t, filepath.Join(root, "__pycache__", "x.md"), "# pycache")
+	writeFile(t, filepath.Join(root, ".tox", "y.md"), "# tox")
+	writeFile(t, filepath.Join(root, "sub", ".mypy_cache", "m.md"), "# mypy")
+	writeFile(t, filepath.Join(root, ".pytest_cache", "p.md"), "# pytest")
+	writeFile(t, filepath.Join(root, ".ruff_cache", "r.md"), "# ruff")
+
+	got := ids(scan(t, root, Config{}))
+	if len(got) != 1 || got[0] != "real.md" {
+		t.Errorf("ids = %v, want only [real.md] (python caches skipped anywhere)", got)
+	}
+}
+
 // TestScan_DefaultIgnoresClaudeWorktrees asserts the scoped default skip for
 // `.claude/worktrees` (Claude Code agent worktrees, each a full repo copy) while
 // keeping the rest of `.claude` — e.g. `.claude/rules` — in the corpus, since

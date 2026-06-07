@@ -80,8 +80,11 @@ previously passed. The ADR 0005 exit-code contract is unaffected.
 
 Two scopes of built-in skip, applied before any `.matlatlignore`:
 
-- **By base name, anywhere:** `.git`, `node_modules`, `vendor` — conventional
-  non-source trees that would only add noise.
+- **By base name, anywhere:** `.git`, `node_modules`, `vendor`, plus the common
+  Python virtualenv + tooling caches `.venv`, `.tox`, `__pycache__`,
+  `.mypy_cache`, `.pytest_cache`, `.ruff_cache` — conventional non-source trees
+  (installed packages, tool scratch state) that would only add noise. Their
+  markdown is never the repo's own authored documentation.
 - **By scan-root-relative path:** `.claude/worktrees` and `.claude/plans`.
   `.claude/worktrees` is **structural corruption** of the corpus — each entry is a
   full repository copy, producing phantom duplicate nodes, false orphans, and a
@@ -98,6 +101,16 @@ The line is drawn deliberately narrow. Only **structural-corruption**
 - `.claude/rules` are real docs that authored documentation commonly links into.
 - `.claude/skills` form real graphs — and with Section A, a `SKILL.md` there is
   now a reachability root, so the cluster is reachable rather than orphaned.
+
+The same "deliberately narrow" line governs the base-name list: only
+**package/tool caches that are never authored docs** (`node_modules`, `vendor`,
+and the Python `.venv`/`.tox`/`__pycache__`/`.mypy_cache`/`.pytest_cache`/
+`.ruff_cache`) are defaults. Build-output directories — `dist`, `build`,
+`target`, `site`, `out` — and editor dirs are **deliberately NOT** defaults:
+they can legitimately hold generated markdown a repo wants scanned (e.g. a
+`site/` of rendered docs), so suppressing them is a per-repo judgment call left
+to `.matlatlignore`. Anything that might be real documentation stays in scope by
+default.
 
 The path scope (a scan-root-relative path, not a bare base name) keeps each skip
 deliberate: a stray `plans/` or `worktrees/` elsewhere in the tree is not

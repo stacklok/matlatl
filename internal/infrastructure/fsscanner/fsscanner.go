@@ -44,8 +44,29 @@ const (
 )
 
 // defaultIgnoredDirs are directory base names skipped wholesale during the walk,
-// matched anywhere in the tree.
-var defaultIgnoredDirs = []string{".git", "node_modules", "vendor"}
+// matched anywhere in the tree. Alongside the VCS/dependency caches (.git,
+// node_modules, vendor) we skip the common Python virtualenv + tooling caches
+// (.venv, .tox, __pycache__, .mypy_cache, .pytest_cache, .ruff_cache): these
+// hold installed packages and tool scratch state whose markdown is never the
+// repo's own documentation.
+//
+// Build-output directories (dist, build, target, site, out) and editor dirs are
+// DELIBERATELY NOT listed here: those can legitimately contain generated docs a
+// repo wants scanned (e.g. a site/ of rendered markdown), so suppressing them
+// belongs in a per-repo .matlatlignore, not a global default. The line is drawn
+// at "package/tool caches that are never authored docs"; anything that might be
+// real documentation stays in scope by default.
+var defaultIgnoredDirs = []string{
+	".git",
+	".mypy_cache",
+	".pytest_cache",
+	".ruff_cache",
+	".tox",
+	".venv",
+	"__pycache__",
+	"node_modules",
+	"vendor",
+}
 
 // defaultIgnoredRelPaths are scan-root-relative directory paths skipped wholesale
 // during the walk. Unlike defaultIgnoredDirs (matched by base name anywhere),
