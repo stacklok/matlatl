@@ -175,6 +175,235 @@ func TestScan_DefaultIgnoresClaudePlans(t *testing.T) {
 	}
 }
 
+// TestScan_NestedRepoGitFilePruned pins ADR 0017 for the SUBMODULE/WORKTREE
+// shape: a nested directory whose `.git` is a FILE (a gitfile, `gitdir: …`). The
+// entire nested working tree is pruned and exactly one skipped-nested-repo notice
+// fires for the dir.
+func TestScan_NestedRepoGitFilePruned(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "README.md"), "# Root")
+	// A submodule's working tree: a `.git` FILE plus docs beside it.
+	writeFile(t, filepath.Join(root, "sub", ".git"), "gitdir: ../.git/modules/sub\n")
+	writeFile(t, filepath.Join(root, "sub", "README.md"), "# Submodule")
+	writeFile(t, filepath.Join(root, "sub", "docs", "guide.md"), "# Sub guide")
+
+	res := scan(t, root, Config{})
+	got := ids(res)
+	if len(got) != 1 || got[0] != "README.md" {
+		t.Errorf("ids = %v, want only [README.md] (nested submodule working tree pruned)", got)
+	}
+	if n := countNotice(res, application.NoticeSkippedNestedRepo); n != 1 {
+		t.Errorf("skipped-nested-repo notices = %d, want exactly 1", n)
+	}
+	// The per-directory notice contract: Path is exactly the nested dir (not merely
+	// containing "sub", which would also match e.g. "submarine/").
+	if notice, ok := noticeFor(res, application.NoticeSkippedNestedRepo); ok && notice.Path != filepath.Join(root, "sub") {
+		t.Errorf("notice path = %q, want exactly %q", notice.Path, filepath.Join(root, "sub"))
+	}
+}
+
+// TestScan_NestedRepoPrunesOnlyItsSubtree pins that the nested-repo prune uses
+// fs.SkipDir (prune just that subtree), NOT fs.SkipAll (abort the whole walk): a
+// sibling directory beside the nested repo is still scanned afterward. A
+// SkipDir→SkipAll regression would silently drop `other/y.md`.
+func TestScan_NestedRepoPrunesOnlyItsSubtree(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "README.md"), "# Root")
+	writeFile(t, filepath.Join(root, "sub", ".git"), "gitdir: ../.git/modules/sub\n")
+	writeFile(t, filepath.Join(root, "sub", "x.md"), "# nested")
+	writeFile(t, filepath.Join(root, "other", "y.md"), "# sibling")
+
+	res := scan(t, root, Config{})
+	got := ids(res)
+	want := []string{"README.md", "other/y.md"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("ids = %v, want %v (sibling 'other/' still scanned after nested-repo prune)", got, want)
+	}
+	if n := countNotice(res, application.NoticeSkippedNestedRepo); n != 1 {
+		t.Errorf("skipped-nested-repo notices = %d, want exactly 1", n)
+	}
+}
+
+// TestScan_TwoNestedReposTwoNotices pins that two distinct nested repos each emit
+// their own notice (exactly two), both subtrees are pruned, and the walk
+// continues across both (a second SkipDir-not-SkipAll proof).
+func TestScan_TwoNestedReposTwoNotices(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "README.md"), "# Root")
+	writeFile(t, filepath.Join(root, "sub-a", ".git"), "gitdir: ../.git/modules/sub-a\n")
+	writeFile(t, filepath.Join(root, "sub-a", "a.md"), "# a")
+	writeFile(t, filepath.Join(root, "sub-b", ".git"), "gitdir: ../.git/modules/sub-b\n")
+	writeFile(t, filepath.Join(root, "sub-b", "b.md"), "# b")
+
+	res := scan(t, root, Config{})
+	if got := ids(res); len(got) != 1 || got[0] != "README.md" {
+		t.Errorf("ids = %v, want only [README.md] (both nested subtrees pruned)", got)
+	}
+	if n := countNotice(res, application.NoticeSkippedNestedRepo); n != 2 {
+		t.Errorf("skipped-nested-repo notices = %d, want exactly 2 (one per nested repo)", n)
+	}
+}
+
+// TestScan_UninitializedSubmoduleNoOp pins the ADR 0017 edge case: an
+// uninitialized submodule is an empty placeholder dir with no `.git`. isNestedRepo
+// must NOT match it (no over-matching on emptiness/dotfiles) — no notice fires and
+// the dir is walked normally (its markdown, if any, is scanned).
+func TestScan_UninitializedSubmoduleNoOp(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "README.md"), "# Root")
+	// A placeholder dir with a non-md file and a regular doc, but no `.git`.
+	writeFile(t, filepath.Join(root, "sub", "placeholder.txt"), "not initialized")
+	writeFile(t, filepath.Join(root, "sub", "real.md"), "# real doc in non-nested dir")
+
+	res := scan(t, root, Config{})
+	got := ids(res)
+	want := []string{"README.md", "sub/real.md"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("ids = %v, want %v (uninitialized submodule has no .git; walked normally)", got, want)
+	}
+	if hasNotice(res, application.NoticeSkippedNestedRepo) {
+		t.Error("a dir without a .git marker must not emit a skipped-nested-repo notice")
+	}
+}
+
+// TestScan_NestedRepoGitDirPruned pins ADR 0017 for the NESTED-CLONE shape: a
+// nested directory whose `.git` is a DIRECTORY. Its working-tree doc is pruned and
+// one notice fires.
+func TestScan_NestedRepoGitDirPruned(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "keep.md"), "# Keep")
+	// A nested clone: `.git` is a real directory; a sibling doc is the working tree.
+	writeFile(t, filepath.Join(root, "nested", ".git", "config.md"), "# git internals")
+	writeFile(t, filepath.Join(root, "nested", "sibling.md"), "# Working tree doc")
+
+	res := scan(t, root, Config{})
+	got := ids(res)
+	if len(got) != 1 || got[0] != "keep.md" {
+		t.Errorf("ids = %v, want only [keep.md] (nested clone working tree pruned)", got)
+	}
+	if n := countNotice(res, application.NoticeSkippedNestedRepo); n != 1 {
+		t.Errorf("skipped-nested-repo notices = %d, want exactly 1", n)
+	}
+}
+
+// TestScan_RootGitDirExemptFromNestedRepoPrune is the critical root-exemption
+// case: the scan root itself has a `.git` (here a directory) yet its own docs are
+// still discovered and NO nested-repo notice fires for the root.
+func TestScan_RootGitDirExemptFromNestedRepoPrune(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ".git", "config.md"), "# git internals")
+	writeFile(t, filepath.Join(root, "README.md"), "# Root")
+	writeFile(t, filepath.Join(root, "docs", "g.md"), "# Guide")
+
+	res := scan(t, root, Config{})
+	got := ids(res)
+	want := []string{"README.md", "docs/g.md"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("ids = %v, want %v (root's own .git is exempt; .git dir pruned by name)", got, want)
+	}
+	if hasNotice(res, application.NoticeSkippedNestedRepo) {
+		t.Error("the scan root's own .git must not emit a skipped-nested-repo notice")
+	}
+}
+
+// TestScan_RootGitFileExemptStillScans pins the escape hatch: running matlatl
+// directly ON a directory that contains a `.git` FILE (i.e. scanning a submodule
+// as the root) still scans its markdown — the root is exempt from the prune.
+func TestScan_RootGitFileExemptStillScans(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ".git"), "gitdir: /elsewhere/.git/modules/this\n")
+	writeFile(t, filepath.Join(root, "README.md"), "# Submodule scanned directly")
+
+	res := scan(t, root, Config{})
+	got := ids(res)
+	if len(got) != 1 || got[0] != "README.md" {
+		t.Errorf("ids = %v, want [README.md] (root with .git FILE is exempt, still scanned)", got)
+	}
+	if hasNotice(res, application.NoticeSkippedNestedRepo) {
+		t.Error("scanning a submodule directly must not emit a skipped-nested-repo notice")
+	}
+}
+
+// TestScan_NestedRepoOneNoticePerRepo asserts a nested repo with many markdown
+// files yields exactly ONE notice (the SkipDir prunes the subtree before any
+// content is visited).
+func TestScan_NestedRepoOneNoticePerRepo(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "README.md"), "# Root")
+	writeFile(t, filepath.Join(root, "sub", ".git"), "gitdir: ../.git/modules/sub\n")
+	for _, n := range []string{"a.md", "b.md", "c.md", "deep/d.md", "deep/e.md"} {
+		writeFile(t, filepath.Join(root, "sub", n), "# "+n)
+	}
+
+	res := scan(t, root, Config{})
+	if got := ids(res); len(got) != 1 || got[0] != "README.md" {
+		t.Errorf("ids = %v, want only [README.md]", got)
+	}
+	if n := countNotice(res, application.NoticeSkippedNestedRepo); n != 1 {
+		t.Errorf("skipped-nested-repo notices = %d, want exactly 1 per nested repo", n)
+	}
+}
+
+// TestScan_ExplicitIgnoreOnNestedRepoIsSilent pins that an explicit
+// .matlatlignore match on the nested dir wins AND stays silent: the dir is pruned
+// with NO skipped-nested-repo notice (the check runs after shouldSkipDir).
+func TestScan_ExplicitIgnoreOnNestedRepoIsSilent(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "keep.md"), "# Keep")
+	writeFile(t, filepath.Join(root, "sub", ".git"), "gitdir: ../.git/modules/sub\n")
+	writeFile(t, filepath.Join(root, "sub", "README.md"), "# Submodule")
+	writeFile(t, filepath.Join(root, ".matlatlignore"), "sub/\n")
+
+	res := scan(t, root, Config{})
+	if got := ids(res); len(got) != 1 || got[0] != "keep.md" {
+		t.Errorf("ids = %v, want only [keep.md]", got)
+	}
+	if hasNotice(res, application.NoticeSkippedNestedRepo) {
+		t.Error("an explicitly ignored nested repo must be silent (explicit ignore wins)")
+	}
+}
+
+// TestScan_NestedRepoDeterministic asserts repeated scans over a tree with a
+// nested repo produce identical ids.
+func TestScan_NestedRepoDeterministic(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "z.md"), "# z")
+	writeFile(t, filepath.Join(root, "a.md"), "# a")
+	writeFile(t, filepath.Join(root, "sub", ".git"), "gitdir: ../.git/modules/sub\n")
+	writeFile(t, filepath.Join(root, "sub", "ignored.md"), "# nested")
+
+	first := ids(scan(t, root, Config{}))
+	for i := 0; i < 5; i++ {
+		if got := ids(scan(t, root, Config{})); strings.Join(got, ",") != strings.Join(first, ",") {
+			t.Fatalf("non-deterministic order: %v vs %v", got, first)
+		}
+	}
+}
+
+// TestScan_NestedRepoGitSymlinkPruned pins that a `.git` SYMLINK is detected by
+// presence (Lstat, not followed) and the nested tree is still pruned (ADR 0003 +
+// 0017).
+func TestScan_NestedRepoGitSymlinkPruned(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on windows")
+	}
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "keep.md"), "# Keep")
+	writeFile(t, filepath.Join(root, "sub", "README.md"), "# Submodule")
+	// `.git` as a symlink (target need not exist/resolve): Lstat sees its presence.
+	if err := os.Symlink("/elsewhere/gitdir", filepath.Join(root, "sub", ".git")); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+
+	res := scan(t, root, Config{})
+	if got := ids(res); len(got) != 1 || got[0] != "keep.md" {
+		t.Errorf("ids = %v, want only [keep.md] (nested repo with symlinked .git pruned)", got)
+	}
+	if n := countNotice(res, application.NoticeSkippedNestedRepo); n != 1 {
+		t.Errorf("skipped-nested-repo notices = %d, want exactly 1", n)
+	}
+}
+
 func TestScan_OutputDirExcluded(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "keep.md"), "# Keep")

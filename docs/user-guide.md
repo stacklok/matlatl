@@ -317,6 +317,16 @@ scan root — so `.claude/rules/`, `.claude/skills/`, and the rest of `.claude/`
 stay in the graph
 ([ADR 0010](adr/0010-agent-scaffolding-roots-and-default-ignores.md)).
 
+**Nested git repositories** — submodules, linked worktrees, and nested clones —
+are skipped by default, wherever they live in the tree. matlatl detects them by
+the presence of a `.git` entry inside a directory (the marker git writes into
+every working tree; a file for submodules/worktrees, a directory for nested
+clones) and prunes the whole nested working tree, emitting one
+`skipped-nested-repo` notice for it. The scan root's own `.git` is exempt, so a
+normal repo never skips itself. To scan a submodule, point matlatl **directly at
+it** — it then becomes the (exempt) root
+([ADR 0017](adr/0017-nested-repo-scan-boundary.md)).
+
 ## Declaring extra roots (`.matlatl.yml`)
 
 For roots you want **committed and durable** — not retyped on every command line

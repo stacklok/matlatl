@@ -50,6 +50,15 @@ const (
 // hold installed packages and tool scratch state whose markdown is never the
 // repo's own documentation.
 //
+// Nested git repositories (submodules, linked worktrees, nested clones) are ALSO
+// skipped by default, but by a SEPARATE content-based mechanism (the presence of
+// a `.git` entry inside the directory — see isNestedRepo and ADR 0017), NOT by
+// name. Keeping `.git` here only prunes a directory literally NAMED `.git` (a
+// repo's git store dir); it never sees a submodule's `.git`, which is a FILE
+// (a gitfile), nor a nested clone's working tree. The content-based check is what
+// prunes a submodule's/worktree's WORKING TREE so its docs do not pollute the
+// outer corpus.
+//
 // Build-output directories (dist, build, target, site, out) and editor dirs are
 // DELIBERATELY NOT listed here: those can legitimately contain generated docs a
 // repo wants scanned (e.g. a site/ of rendered markdown), so suppressing them
@@ -179,6 +188,21 @@ func (s *Scanner) Scan(ctx context.Context, root string) (application.ScanResult
 				return nil
 			}
 			if s.shouldSkipDir(realRoot, path, d.Name(), absOut, matcher) {
+				return fs.SkipDir
+			}
+			// Nested-repo prune (ADR 0017): a directory below the root that holds a
+			// `.git` entry is a submodule / linked worktree / nested clone; prune its
+			// whole working tree and emit one notice. Checked AFTER shouldSkipDir so an
+			// explicit .matlatlignore match wins and stays silent, and AFTER the
+			// path==realRoot short-circuit above so the scan root's own `.git` never
+			// triggers a skip (running matlatl directly on a submodule still scans it).
+			// Determinism: a single Lstat per dir; the scanned set can only shrink.
+			if isNestedRepo(path) {
+				notices = append(notices, application.Notice{
+					Kind:   application.NoticeSkippedNestedRepo,
+					Path:   path,
+					Detail: "nested git repository (submodule/worktree/clone); not scanned",
+				})
 				return fs.SkipDir
 			}
 			return nil
@@ -355,6 +379,24 @@ func (s *Scanner) shouldSkipDir(realRoot, path, name, absOut string, matcher *ig
 		}
 	}
 	return false
+}
+
+// isNestedRepo reports whether dir is the working tree of a nested git
+// repository — a submodule, linked worktree, or nested clone — by the presence
+// of a `.git` entry inside it. git materializes `.git` as a FILE (a gitfile
+// `gitdir: …`) for submodules and linked worktrees, and as a DIR for a plain
+// nested clone; Lstat detects either by presence. We use Lstat (not Stat) so a
+// symlinked `.git` is detected by its presence and NOT followed — preserving the
+// no-follow containment stance (ADR 0003) while still pruning the subtree.
+//
+// Fail-open: any Lstat error (the marker is absent OR unreadable, e.g.
+// permission-denied) is treated as "not nested", so the dir is scanned normally.
+// This is the deliberate direction — it preserves monotonicity (we never prune
+// more than we can prove) and matches the pre-feature behavior of scanning the
+// dir.
+func isNestedRepo(dir string) bool {
+	_, err := os.Lstat(filepath.Join(dir, ".git"))
+	return err == nil
 }
 
 // symlinkNotice builds the appropriate notice for a skipped symlink, noting

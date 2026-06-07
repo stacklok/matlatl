@@ -31,6 +31,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Nested git repositories are skipped by default.** Submodules, linked
+  worktrees, and nested clones are pruned from the scan wherever they live,
+  detected by the presence of a `.git` entry inside a directory (a file for
+  submodules/worktrees, a directory for nested clones). Each pruned tree emits one
+  `skipped-nested-repo` notice. The scan root's own `.git` is exempt, so a normal
+  repo never skips itself, and pointing matlatl directly at a submodule still
+  scans it. The change softens the `check` gate monotonically (it can only remove
+  files, never newly fail a build). See
+  [ADR 0017](docs/adr/0017-nested-repo-scan-boundary.md).
 - **Machine-artifact schemas bumped (additively).** `graph.json` is now
   **schema version 6** (adds per-node `pageRank` and a top-level `pageRank` block,
   on top of v5's per-node `bowtie` / `underLinked` / `deadEnd` / `betweenness` /

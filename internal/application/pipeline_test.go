@@ -612,6 +612,7 @@ func TestNoticeKind_String(t *testing.T) {
 	all := []NoticeKind{
 		NoticeSkippedSymlink, NoticeEscapesRoot, NoticeOversized,
 		NoticeTruncated, NoticeWalkError, NoticeIOError, NoticeConfig,
+		NoticeSkippedNestedRepo,
 	}
 	seen := make(map[string]bool)
 	for _, k := range all {

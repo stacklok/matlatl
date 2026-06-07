@@ -53,6 +53,11 @@ const (
 	// hard config errors are surfaced as a real error mapped to ExitUsage (ADR
 	// 0011).
 	NoticeConfig
+	// NoticeSkippedNestedRepo reports a directory pruned because it is a nested
+	// git repository — a submodule, linked worktree, or nested clone (detected by
+	// the presence of a `.git` entry inside it; ADR 0017). The scan root's own
+	// `.git` is exempt, so this fires only for nested working trees below the root.
+	NoticeSkippedNestedRepo
 )
 
 // String returns a short identifier for the notice kind.
@@ -72,6 +77,8 @@ func (k NoticeKind) String() string {
 		return "io-error"
 	case NoticeConfig:
 		return "config"
+	case NoticeSkippedNestedRepo:
+		return "skipped-nested-repo"
 	default:
 		return "unknown"
 	}

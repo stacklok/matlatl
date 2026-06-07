@@ -110,7 +110,8 @@ go list -deps ./internal/application/... | grep 'infrastructure/emit'
 - **Integration** (`//go:build integration`) — run the built pipeline over a
   fixture corpus and assert exit codes + artifact contents.
 - **Adversarial** — symlink escape, `../` traversal, oversized files, YAML
-  alias bombs, hostile titles in diagram/table labels, SSRF to internal hosts.
+  alias bombs, hostile titles in diagram/table labels, SSRF to internal hosts,
+  nested-repo `.git` markers (file + dir; ADR 0017).
 - **Determinism** — concurrent vs single-threaded parse must be byte-identical
   (`TestPipeline_Determinism_AcrossWorkerCounts`).
 - **Benchmark** — `go test -bench BenchmarkPipeline_5kDocs -benchmem -run x ./...`
