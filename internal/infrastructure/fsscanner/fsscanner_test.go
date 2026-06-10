@@ -231,9 +231,16 @@ func TestScan_NestedRepoGitFilePruned(t *testing.T) {
 		t.Errorf("skipped-nested-repo notices = %d, want exactly 1", n)
 	}
 	// The per-directory notice contract: Path is exactly the nested dir (not merely
-	// containing "sub", which would also match e.g. "submarine/").
-	if notice, ok := noticeFor(res, application.NoticeSkippedNestedRepo); ok && notice.Path != filepath.Join(root, "sub") {
-		t.Errorf("notice path = %q, want exactly %q", notice.Path, filepath.Join(root, "sub"))
+	// containing "sub", which would also match e.g. "submarine/"). Scan walks from
+	// the EvalSymlinks-canonicalized root (ADR 0003), so notice paths are
+	// symlink-resolved; resolve the temp dir the same way before comparing (on
+	// macOS t.TempDir() is under /var, a symlink to /private/var).
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", root, err)
+	}
+	if notice, ok := noticeFor(res, application.NoticeSkippedNestedRepo); ok && notice.Path != filepath.Join(realRoot, "sub") {
+		t.Errorf("notice path = %q, want exactly %q", notice.Path, filepath.Join(realRoot, "sub"))
 	}
 }
 
