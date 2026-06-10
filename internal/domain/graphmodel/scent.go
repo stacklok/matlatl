@@ -13,18 +13,20 @@ import (
 
 // LowScentThreshold is the Jaccard-similarity floor below which a navigational
 // link's anchor text is flagged as low-scent (ADR 0016). A link whose label
-// shares fewer than 20% of its meaningful tokens with the target's title gives a
-// reader (or agent) almost no preview of where it leads — Pirolli & Card's
-// "information scent" (1999): a weak scent makes a corpus hard to forage. Below
-// this the anchor is reported; at or above it the link is considered to carry
-// enough scent. Not a hard cutoff for any gating — the finding is always Info.
+// shares fewer than 20% of its meaningful tokens with its destination (the
+// target's title or its best-matching section heading) gives a reader (or
+// agent) almost no preview of where it leads — Pirolli & Card's "information
+// scent" (1999): a weak scent makes a corpus hard to forage. Below this the
+// anchor is reported; at or above it the link is considered to carry enough
+// scent. Not a hard cutoff for any gating — the finding is always Info.
 const LowScentThreshold = 0.20
 
 // ScentFinding is one low-scent navigational link (ADR 0016): the source
 // document and line, the anchor text as written, the target it points at, the
-// computed Jaccard score against the target's title, and the suggested
-// replacement (the target's title). Pure data; the application layer turns it
-// into a non-gating Info finding.
+// computed Jaccard score against the destination's candidate set (title +
+// section headings), and the suggested replacement (the best-scoring
+// candidate's text — the target's title or a heading). Pure data; the
+// application layer turns it into a non-gating Info finding.
 type ScentFinding struct {
 	Source     identity.DocumentID
 	Target     identity.DocumentID
@@ -62,24 +64,37 @@ var scentStopwords = map[string]struct{}{
 }
 
 // ComputeScent scores every navigational, in-corpus REFERENCE edge's anchor text
-// against its target document's title and returns the low-scent links (ADR 0016).
-// It runs on the GRAPH (the resolved reference edges carry the anchor text and
-// source line), not on a refs parameter, so the analysis stays a method on the
-// graph. The corpus supplies target titles (corpus.Document.Title, the same
-// resolution the emit layer uses, so they cannot drift).
+// against its destination's candidate vocabulary and returns the low-scent links
+// (ADR 0016, amended 2026-06-10). It runs on the GRAPH (the resolved reference
+// edges carry the anchor text and source line), not on a refs parameter, so the
+// analysis stays a method on the graph. The corpus supplies the candidate texts
+// (corpus.Document.Title — the same resolution the emit layer uses, so they
+// cannot drift — plus the document's heading texts).
 //
-// Per navigational reference edge with an in-corpus document target:
-//   - Normalize the anchor (lowercase, collapse whitespace, trim). If it is in
-//     scentFreePhrases → score 0.0 (flagged). If the RAW anchor is wholly
-//     backtick-wrapped (a code identifier like `Foo`) → SKIP (no finding; code
-//     identifiers are legitimate labels).
-//   - Tokenize anchor and title (lowercase, split on non-letter/digit, drop
-//     stopwords and length-1 tokens, sort+dedup). An empty anchor token set
-//     (bare URL / numeric) → score 0.0. If the title yields no tokens, fall back
-//     to the union of the target's heading texts.
-//   - score = Jaccard(anchorTokens, titleTokens) = |∩| / |∪| (sorted merge-walk;
-//     the single division is the only float). A finding is emitted when
-//     score < LowScentThreshold.
+// Per navigational reference edge with an in-corpus target:
+//   - Compute the EFFECTIVE anchor (effectiveAnchor): if the raw anchor uses the
+//     "file.md § Heading" dialect and the prefix names the target file, the
+//     prefix is stripped so only the heading part is scored. The RAW anchor is
+//     what a finding reports.
+//   - Normalize the effective anchor (lowercase, collapse whitespace, trim). If
+//     it is in scentFreePhrases → score 0.0 (flagged). If the RAW anchor is
+//     wholly backtick-wrapped (a code identifier like `Foo`) → SKIP (no finding;
+//     code identifiers are legitimate labels).
+//   - Build the candidate set: for an edge targeting a SECTION vertex, the
+//     target document's title plus THAT section's heading text (an anchored link
+//     is held to its actual destination); for a document vertex, the title plus
+//     EACH heading text individually, in document order (per-heading, never the
+//     union — a union depresses Jaccard with its size).
+//   - Tokenize the effective anchor and each candidate (lowercase, split on
+//     non-letter/digit, drop stopwords and length-1 tokens, sort+dedup). An
+//     empty anchor token set (bare URL / numeric) → score 0.0.
+//   - score = max over non-empty candidates of Jaccard(anchorTokens,
+//     candidateTokens) = |∩| / |∪| (sorted merge-walk; the division is the only
+//     float — max is comparison only, no accumulation). A finding is emitted
+//     when score < LowScentThreshold; its Suggestion is the best-scoring
+//     candidate's text (ties, including all-zero, prefer the fragment's heading
+//     for section targets, and the title then earliest heading for document
+//     targets).
 //
 // Two edges are never flagged, regardless of score:
 //   - Synthetic directory-expansion edges (ADR 0008): a directory link expands
@@ -93,30 +108,23 @@ var scentStopwords = map[string]struct{}{
 //
 // Determinism (CLAUDE.md): edges are iterated in sorted order, token sets are
 // sorted, the Jaccard intersection/union are sorted merge-walks (never map
-// ranging), and findings are returned sorted by (Source, Line, Target,
-// AnchorText). There is NO count cap on scent findings (bounded by the link
-// count); like the no-silent-cap convention, this is a deliberate decision
-// stated in ADR 0016.
+// ranging), the candidate max walks a fixed-order slice (the per-document vocab
+// cache is lookup-only, never ranged), and findings are returned sorted by
+// (Source, Line, Target, AnchorText). There is NO count cap on scent findings
+// (bounded by the link count); like the no-silent-cap convention, this is a
+// deliberate decision stated in ADR 0016.
 func (g *ReferenceGraph) ComputeScent(c *corpus.Corpus) []ScentFinding {
 	if c == nil {
 		return nil
 	}
-	titleTokenCache := make(map[identity.DocumentID][]string)
-	target := func(id identity.DocumentID) []string {
-		if toks, ok := titleTokenCache[id]; ok {
-			return toks
+	vocabCache := make(map[identity.DocumentID]targetVocab)
+	vocabFor := func(id identity.DocumentID) targetVocab {
+		if v, ok := vocabCache[id]; ok {
+			return v
 		}
-		toks := targetTokens(c, id)
-		titleTokenCache[id] = toks
-		return toks
-	}
-	// targetTitle resolves the target's display title (the suggested replacement
-	// anchor), falling back to the DocumentID via corpus.Document.Title.
-	targetTitle := func(id identity.DocumentID) string {
-		if doc, ok := c.Get(id); ok {
-			return doc.Title()
-		}
-		return id.String()
+		v := buildTargetVocab(c, id)
+		vocabCache[id] = v
+		return v
 	}
 
 	var out []ScentFinding
@@ -127,11 +135,12 @@ func (g *ReferenceGraph) ComputeScent(c *corpus.Corpus) []ScentFinding {
 		if _, nav := g.navSet[e.Type]; !nav {
 			continue
 		}
+		toNode, hasTo := g.nodes[e.To]
 		from := g.docOf(e.From)
-		to := g.docOf(e.To)
-		if from == "" || to == "" {
+		if !hasTo || from == "" || toNode.Document == "" {
 			continue
 		}
+		to := toNode.Document
 		// Skip synthetic directory-expansion edges (ADR 0008): a directory link
 		// `[text](somedir/)` expands in addDirectoryEdges into one "vouch" edge per
 		// directory member, carrying NO anchor text and Line 0. A scent finding must
@@ -146,7 +155,16 @@ func (g *ReferenceGraph) ComputeScent(c *corpus.Corpus) []ScentFinding {
 			continue // a code identifier label — legitimate, not low-scent
 		}
 
-		score := scentScore(raw, target(to))
+		// Candidate set (ADR 0016 amendment): a section-targeted edge is scored
+		// against the title + the fragment's own heading; a document-targeted edge
+		// against the title + each heading individually.
+		var fragmentSlug string
+		if toNode.Kind == NodeKindSection {
+			fragmentSlug = toNode.Slug
+		}
+		cands := scentCandidates(c, to, vocabFor(to), fragmentSlug)
+
+		score, suggestion := scentScore(effectiveAnchor(raw, to), cands)
 		if score >= LowScentThreshold {
 			continue
 		}
@@ -164,7 +182,7 @@ func (g *ReferenceGraph) ComputeScent(c *corpus.Corpus) []ScentFinding {
 			Line:       e.Line,
 			AnchorText: raw,
 			Score:      score,
-			Suggestion: targetTitle(to),
+			Suggestion: suggestion,
 		})
 	}
 
@@ -231,40 +249,142 @@ func identifierSegment(target identity.DocumentID) string {
 	return seg
 }
 
-// scentScore computes the anchor's scent score in [0,1] against the target's
-// title tokens. A scent-free phrase or an empty/numeric anchor scores 0.0 (always
-// emitted, since 0 < threshold). Backtick-wrapped code identifiers are skipped by
-// the caller before this is reached.
-func scentScore(rawAnchor string, titleTokens []string) float64 {
-	norm := normalizeAnchor(rawAnchor)
-	if _, free := scentFreePhrases[norm]; free {
-		return 0.0
-	}
-	anchorTokens := tokenize(rawAnchor)
-	if len(anchorTokens) == 0 {
-		return 0.0 // bare URL / numeric / punctuation-only
-	}
-	return jaccard(anchorTokens, titleTokens)
+// scentCandidate is one destination text an anchor can be scored against: the
+// target's title or one of its heading texts, with its pre-tokenized set.
+type scentCandidate struct {
+	text   string
+	tokens []string
 }
 
-// targetTokens returns the scoreable tokens of a target document's title, or,
-// when the title yields none, the union of its heading texts (ADR 0016).
-func targetTokens(c *corpus.Corpus, id identity.DocumentID) []string {
+// targetVocab is a target document's cached scent vocabulary (ADR 0016
+// amendment): its display title and its heading texts in document order, each
+// pre-tokenized. Cached per document in ComputeScent; lookup-only, never ranged
+// for output.
+type targetVocab struct {
+	titleText     string
+	titleTokens   []string
+	headingTexts  []string
+	headingTokens [][]string
+}
+
+// buildTargetVocab assembles a target's vocab from the corpus. A target absent
+// from the corpus (defensive; graph construction only admits in-corpus targets)
+// falls back to the DocumentID string as its title, mirroring
+// corpus.Document.Title's own fallback.
+func buildTargetVocab(c *corpus.Corpus, id identity.DocumentID) targetVocab {
 	doc, ok := c.Get(id)
 	if !ok {
-		return nil
+		return targetVocab{titleText: id.String(), titleTokens: tokenize(id.String())}
 	}
-	toks := tokenize(doc.Title())
-	if len(toks) > 0 {
-		return toks
+	v := targetVocab{titleText: doc.Title(), titleTokens: tokenize(doc.Title())}
+	v.headingTexts = doc.HeadingTexts() // document order
+	v.headingTokens = make([][]string, len(v.headingTexts))
+	for i, h := range v.headingTexts {
+		v.headingTokens[i] = tokenize(h)
 	}
-	// Fallback: the union of the document's heading texts.
-	var headings strings.Builder
-	for _, h := range doc.HeadingTexts() {
-		headings.WriteByte(' ')
-		headings.WriteString(h)
+	return v
+}
+
+// scentCandidates builds the fixed-order candidate slice an anchor is scored
+// against (ADR 0016 amendment). Order encodes the tie-break preference (the max
+// in scentScore replaces only on strictly-greater):
+//   - fragmentSlug != "" (a section-targeted edge): the fragment's own heading
+//     first, then the title. The anchored link is held to its ACTUAL
+//     destination — deliberately not every heading — so a link labelled after a
+//     different section than the one it points at stays flagged.
+//   - fragmentSlug == "" (a document-targeted edge): the title first, then each
+//     heading individually in document order. Per-heading, never the union: a
+//     union's size depresses Jaccard, which is why the old heading-union
+//     fallback could not credit a heading-named anchor.
+func scentCandidates(c *corpus.Corpus, id identity.DocumentID, v targetVocab, fragmentSlug string) []scentCandidate {
+	if fragmentSlug != "" {
+		cands := make([]scentCandidate, 0, 2)
+		if doc, ok := c.Get(id); ok {
+			if h, found := doc.HeadingTextBySlug(fragmentSlug); found && h != "" {
+				cands = append(cands, scentCandidate{text: h, tokens: tokenize(h)})
+			}
+		}
+		return append(cands, scentCandidate{text: v.titleText, tokens: v.titleTokens})
 	}
-	return tokenize(headings.String())
+	cands := make([]scentCandidate, 0, 1+len(v.headingTexts))
+	cands = append(cands, scentCandidate{text: v.titleText, tokens: v.titleTokens})
+	for i, h := range v.headingTexts {
+		cands = append(cands, scentCandidate{text: h, tokens: v.headingTokens[i]})
+	}
+	return cands
+}
+
+// scentScore computes the anchor's scent score in [0,1] as the MAX Jaccard over
+// the candidate set, and the suggested replacement text (the best-scoring
+// candidate; ties — including all-zero — resolve to the earliest candidate, so
+// the slice order set by scentCandidates is the tie-break). A scent-free phrase
+// or an empty/numeric anchor scores 0.0 (always emitted, since 0 < threshold),
+// suggesting the preferred candidate. Backtick-wrapped code identifiers are
+// skipped by the caller before this is reached.
+func scentScore(anchor string, cands []scentCandidate) (float64, string) {
+	// Preferred suggestion: the first candidate with any text at all.
+	suggestion := ""
+	for _, cand := range cands {
+		if cand.text != "" {
+			suggestion = cand.text
+			break
+		}
+	}
+	norm := normalizeAnchor(anchor)
+	if _, free := scentFreePhrases[norm]; free {
+		return 0.0, suggestion
+	}
+	anchorTokens := tokenize(anchor)
+	if len(anchorTokens) == 0 {
+		return 0.0, suggestion // bare URL / numeric / punctuation-only
+	}
+	best := -1.0
+	for _, cand := range cands {
+		if len(cand.tokens) == 0 {
+			continue // an unscoreable candidate (no meaningful tokens)
+		}
+		if s := jaccard(anchorTokens, cand.tokens); s > best {
+			best = s
+			suggestion = cand.text
+		}
+	}
+	if best < 0 {
+		return 0.0, suggestion // no scoreable candidate at all
+	}
+	return best, suggestion
+}
+
+// effectiveAnchor implements the "file.md § Heading" dialect strip (ADR 0016
+// amendment): when an anchor's text names its own target file before a "§" and
+// a heading after it, only the heading part carries scent, so the file prefix
+// is stripped before tokenizing. The RAW anchor remains what a finding reports.
+//
+//   - No "§" in raw → raw unchanged.
+//   - Empty remainder after the "§" (degenerate "file.md §") → raw unchanged.
+//   - Empty prefix ("§ Composition") → the remainder.
+//   - Prefix whose basename (backticks trimmed, ".md" stripped, lowercased)
+//     equals the target's basename → the remainder.
+//   - Anything else (a prefix naming a DIFFERENT file) → raw unchanged: a
+//     misleading prefix is exactly the pollution the finding should keep.
+func effectiveAnchor(raw string, target identity.DocumentID) string {
+	idx := strings.Index(raw, "§")
+	if idx < 0 {
+		return raw
+	}
+	remainder := raw[idx+len("§"):]
+	if len(tokenize(remainder)) == 0 {
+		return raw // degenerate "file.md §" — nothing scoreable after the §
+	}
+	prefix := strings.TrimSpace(strings.Trim(strings.TrimSpace(raw[:idx]), "`"))
+	if prefix == "" {
+		return remainder // "§ Composition" style
+	}
+	baseP := strings.TrimSuffix(strings.ToLower(path.Base(prefix)), ".md")
+	baseT := strings.TrimSuffix(strings.ToLower(path.Base(target.String())), ".md")
+	if baseP == baseT {
+		return remainder // the prefix names the target file: redundant, strip it
+	}
+	return raw // mismatched prefix: keep the pollution (honesty guard)
 }
 
 // normalizeAnchor lowercases, collapses internal whitespace to single spaces and

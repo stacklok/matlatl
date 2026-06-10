@@ -129,10 +129,11 @@ var remediationByKind = map[string]string{
 		"is an experimental, topology-based resilience hint, not an error. Add another navigational path between " +
 		"these two clusters so the single link is not a single point of failure.",
 	analysis.LowScentAnchor.String(): "The link's anchor text (`details.anchorText`) shares too few meaningful words with the " +
-		"target document's title to preview where it leads (Jaccard `details.scentScore`); generic labels like " +
+		"destination's title or section headings to preview where it leads (Jaccard `details.scentScore`); generic labels like " +
 		"\"click here\" or \"read more\" give a reader or agent weak information scent (Pirolli & Card 1999). This " +
 		"is an experimental discoverability hint, not an error. Rename the anchor in `details.sourceDocument` at " +
-		"`line` to describe the destination — `details.suggestedAnchor` holds the target's title as a starting point.",
+		"`line` to describe the destination — `details.suggestedAnchor` holds the destination's title or " +
+		"best-matching heading as a starting point.",
 }
 
 // kindPresentationOrder is the single source of truth for the order finding

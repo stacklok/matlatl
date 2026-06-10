@@ -1,6 +1,6 @@
 # matlatl
 
-> A markdown documentation corpus of 31 document(s) across 1 component(s), with 273 heading(s) and 139 resolved reference(s). Entries are ordered by importance (most-connected first). Compactness 0.20, docs ~2.0 clicks apart.
+> A markdown documentation corpus of 31 document(s) across 1 component(s), with 274 heading(s) and 139 resolved reference(s). Entries are ordered by importance (most-connected first). Compactness 0.20, docs ~2.0 clicks apart.
 
 ## Documentation
 

@@ -66,11 +66,12 @@ func findingsFromMetrics(m *graphmodel.GraphMetrics, threshold int, structureSev
 }
 
 // lowScentFinding turns a low-scent link (ADR 0016) into an Info finding: the
-// anchor text shares too few tokens with the target's title to tell a reader or
-// agent where it leads. It is anchored at the SOURCE document and line, names the
-// anchor + its scent score, and suggests renaming the link to the target's
-// title. Always Info; NEVER gates the exit code. The score is formatted at fixed
-// precision so the finding text is byte-stable.
+// anchor text shares too few tokens with the destination (the target's title or
+// its section headings) to tell a reader or agent where it leads. It is anchored
+// at the SOURCE document and line, names the anchor + its scent score, and
+// suggests renaming the link to the best-matching destination text (the title or
+// a heading). Always Info; NEVER gates the exit code. The score is formatted at
+// fixed precision so the finding text is byte-stable.
 func lowScentFinding(s graphmodel.ScentFinding) analysis.Finding {
 	return analysis.Finding{
 		ID:       fmt.Sprintf("%s:%s:%d:%s", analysis.LowScentAnchor, s.Source, s.Line, s.Target),
@@ -81,8 +82,8 @@ func lowScentFinding(s graphmodel.ScentFinding) analysis.Finding {
 			"the link %q to %q has low information scent (score %.2f): the anchor text barely previews the target (experimental)",
 			s.AnchorText, s.Target, s.Score),
 		SuggestedFix: fmt.Sprintf(
-			"Rename the link anchor to describe the destination, e.g. %q (the target's title), so readers and agents "+
-				"can tell where it leads before following it.", s.Suggestion),
+			"Rename the link anchor to describe the destination, e.g. %q (the destination's title or section heading), "+
+				"so readers and agents can tell where it leads before following it.", s.Suggestion),
 		Details: map[string]string{
 			DetailSourceDocument:  s.Source.String(),
 			DetailTargetDocument:  s.Target.String(),

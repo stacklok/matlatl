@@ -155,6 +155,55 @@ space is super-linear), scent findings are bounded by the link count (one per
 navigational edge at most), so a cap is unnecessary. We state this explicitly
 here, mirroring the no-silent-cap convention: scent is never silently truncated.
 
+#### Amendment (2026-06-10): section-aware candidate set + the `§` dialect strip
+
+Dogfooding the scent finding on a real corpus (issue #9) showed it scoring
+every anchor against the target's **title only**, which mis-flags two whole
+classes of *good* anchors:
+
+- `[installation](guide.md#installation)` — an anchored link named after the
+  exact section it points at. The edge targets a SECTION vertex, but the old
+  code collapsed it to the document and compared against the title.
+- `[ui.md § BFF → Front Door](ui.md)` — the "file.md § Heading" convention. The
+  file-path prefix tokens (`docs design modules ui md …`) inflate the Jaccard
+  union, so even a perfect heading match scored ~0.17.
+
+The fix changes **what the anchor is compared against**, not the metric, the
+threshold, or any exemption:
+
+- **Candidate set, take the max.** A *section-targeted* edge is scored against
+  the target's title **plus that one fragment's heading text** (via
+  `corpus.Document.HeadingTextBySlug`) — deliberately NOT all headings: an
+  anchored link is held to its **actual destination**, so
+  `[Configuration](guide.md#installation)` stays flagged. A *document-targeted*
+  edge is scored against the title **plus each heading individually**, in
+  document order. Per-heading, never the union — a union's size depresses
+  Jaccard, which is why the old title-empty heading-union fallback (now
+  deleted, subsumed) could never credit a heading-named anchor.
+  `score = max over non-empty candidates of Jaccard(anchor, candidate)`; the
+  max is comparison only (no float accumulation) over a fixed-order slice.
+- **`§`-dialect prefix strip.** Before tokenizing, an anchor of the form
+  `prefix § remainder` drops the prefix iff the remainder is scoreable AND the
+  prefix is empty (`§ Composition`) or its basename (backticks trimmed, `.md`
+  stripped, lowercased) equals the **target's** basename. The basename guard is
+  the honesty check: `[ui.md § Foo](frontdoor.md)` keeps its misleading prefix
+  and stays flagged. The scent-free phrase set is checked on the *effective*
+  anchor (so `file.md § here` still scores 0.0); the RAW anchor is what the
+  finding reports.
+- **Suggestion = best-scoring candidate's text** (bare heading text, no
+  composition). Ties — including all-zero — prefer the fragment's heading for
+  section targets, and the title then earliest heading for document targets.
+- **Consequence, by design:** a stale `file.md § Old Heading` whose heading no
+  longer exists in the target STAYS flagged — that is doc rot, the finding's
+  true positive — with the best real candidate as the suggestion.
+
+Unchanged: Jaccard as the sole metric, the 0.20 threshold, the scent-free
+phrase set and its order, the backtick-wrapped skip, the `Line <= 0` skip, the
+stable-identifier exemption with its path-like guard, the bare-path stance,
+finding kind/severity/ID format, and the no-cap rule. No schema version bump:
+the findings shape is unchanged; only `suggestedAnchor`'s meaning widened from
+"the target's title" to "the destination's title or best-matching heading".
+
 ### Determinism and purity (ADR 0004, 0007)
 
 All four analyses iterate sorted `g.documents` / sorted neighbour lists; PageRank

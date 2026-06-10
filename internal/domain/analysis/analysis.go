@@ -90,11 +90,13 @@ const (
 	// never gates the exit code.
 	Bridge
 	// LowScentAnchor is a navigational link whose anchor text shares too few
-	// meaningful tokens with the target document's title to preview where it leads
-	// (ADR 0016): a generic "click here" / a label unrelated to the destination
-	// gives a reader or agent weak "information scent" (Pirolli & Card 1999). It is
-	// always Info and NEVER gates the exit code (even --strict) — a discoverability
-	// hint, not a defect — mirroring SuggestedLink, ArticulationPoint and Bridge.
+	// meaningful tokens with its destination — the target's title or its section
+	// headings (the fragment's own heading for an anchored link) — to preview
+	// where it leads (ADR 0016): a generic "click here" / a label unrelated to
+	// the destination gives a reader or agent weak "information scent" (Pirolli &
+	// Card 1999). It is always Info and NEVER gates the exit code (even --strict)
+	// — a discoverability hint, not a defect — mirroring SuggestedLink,
+	// ArticulationPoint and Bridge.
 	LowScentAnchor
 )
 

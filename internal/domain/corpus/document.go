@@ -134,9 +134,38 @@ func (d *Document) FirstHeadingText() string {
 	return found
 }
 
+// HeadingTextBySlug returns the heading text of the section whose canonical
+// anchor slug (ADR 0006) equals slug, walking the section tree in document
+// order. Slugs are unique per document (duplicates are suffixed per ADR 0006),
+// so the first match wins. The information-scent analysis (ADR 0016) uses it to
+// score an anchored link against the heading it actually points at.
+func (d *Document) HeadingTextBySlug(slug string) (string, bool) {
+	if d == nil || d.Root == nil || slug == "" {
+		return "", false
+	}
+	var found string
+	var ok bool
+	var walk func(s *Section) bool
+	walk = func(s *Section) bool {
+		for _, child := range s.Children {
+			if child.Slug == slug {
+				found, ok = child.Text, true
+				return true
+			}
+			if walk(child) {
+				return true
+			}
+		}
+		return false
+	}
+	walk(d.Root)
+	return found, ok
+}
+
 // HeadingTexts returns every non-empty heading text in the document, in
-// document order (ADR 0016): the information-scent analysis falls back to the
-// union of these when a target's title yields no scoreable tokens.
+// document order (ADR 0016): the information-scent analysis scores a
+// document-targeted anchor against each of these (plus the title) and takes
+// the best match.
 func (d *Document) HeadingTexts() []string {
 	if d == nil || d.Root == nil {
 		return nil

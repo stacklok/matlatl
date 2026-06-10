@@ -114,13 +114,19 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
   also ranks the reading-order trails. See
   [ADR 0016](adr/0016-agent-experience.md).
 - **Low-scent anchors** — links whose anchor text barely previews where they lead
-  (a generic "click here", or a label unrelated to the target's title). Reported
-  as the `low-scent-anchor` finding (*Info, experimental* — **never** fails
-  `check`, even `--strict`) with a suggested rename to the target's title. Two
-  cases are deliberately **not** flagged: a **stable-identifier anchor** (e.g.
-  "ADR 0010" pointing at `0010-*.md` — it names the exact doc) and a **directory
-  link** (`[text](somedir/)` — its target is a folder, not a titled doc; bare-path
-  anchors like `docs/dev-guide.md` are still flagged, though). See
+  (a generic "click here", or a label unrelated to the destination). The anchor
+  is scored against the destination's **title and section headings**: an
+  anchored link (`guide.md#installation`) against the title plus *that*
+  fragment's heading, a plain link against the title plus each heading — the
+  best match wins. An anchor written as `file.md § Heading` is scored on the
+  heading part when the prefix names the target file. Reported as the
+  `low-scent-anchor` finding (*Info, experimental* — **never** fails `check`,
+  even `--strict`) with a suggested rename to the best-matching destination
+  text (title or heading). Two cases are deliberately **not** flagged: a
+  **stable-identifier anchor** (e.g. "ADR 0010" pointing at `0010-*.md` — it
+  names the exact doc) and a **directory link** (`[text](somedir/)` — its
+  target is a folder, not a titled doc; bare-path anchors like
+  `docs/dev-guide.md` are still flagged, though). See
   [ADR 0016](adr/0016-agent-experience.md).
 
 Orphans, under-linked, dead-end and unreachable docs come with **different**

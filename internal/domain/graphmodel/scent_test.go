@@ -102,22 +102,244 @@ func TestScent_BacktickAnchorSkipped(t *testing.T) {
 	}
 }
 
-// TestScent_HeadingsFallback: when the target's title yields no scoreable tokens
-// (e.g. a one-letter title), the union of its heading texts is used. Here the
-// anchor "deployment" matches a heading, so it is NOT flagged.
-func TestScent_HeadingsFallback(t *testing.T) {
-	target := &corpus.Document{
-		ID: "B.md",
-		Root: &corpus.Section{Level: 0, StartLine: 1, EndLine: 100, Children: []*corpus.Section{
-			{Level: 1, Text: "Deployment topics", Slug: "deployment-topics", StartLine: 1, EndLine: 50},
-		}},
-		FrontMatter: corpus.FrontMatter{Title: "X"}, // single-char title → no tokens
+// sectionedDoc builds a document with a front-matter title and the given
+// (text, slug) headings as top-level sections, in order.
+func sectionedDoc(id, title string, headings ...[2]string) *corpus.Document {
+	root := &corpus.Section{Level: 0, StartLine: 1, EndLine: 100}
+	line := 1
+	for _, h := range headings {
+		root.Children = append(root.Children, &corpus.Section{
+			Level: 1, Text: h[0], Slug: h[1], StartLine: line, EndLine: line + 4, Parent: root,
+		})
+		line += 5
 	}
+	return &corpus.Document{
+		ID:          identity.DocumentID(id),
+		Root:        root,
+		FrontMatter: corpus.FrontMatter{Title: title},
+	}
+}
+
+// sectionRef is anchorRef resolved to a SECTION target (an anchored link like
+// `file.md#slug`), so the edge lands on the section vertex.
+func sectionRef(origin, targetDoc, slug, anchor string, line int) reference.Reference {
+	r := anchorRef(origin, targetDoc, anchor, line)
+	r.Target.Kind = reference.TargetSection
+	r.Target.Anchor = slug
+	return r
+}
+
+// TestScent_DocTargetPerHeadingMax: a document-targeted anchor is scored against
+// the title AND each heading individually (the max wins, ADR 0016 amendment).
+// The anchor "deployment topics" exactly matches ONE heading among several;
+// against the per-heading candidate it scores 1.0 → NOT flagged. The old
+// heading-UNION fallback would have scored 2/6 = 0.33 only because this corpus is
+// tiny — per-heading is the contract (a union's size depresses Jaccard).
+func TestScent_DocTargetPerHeadingMax(t *testing.T) {
+	target := sectionedDoc("B.md", "X", // single-char title → no title tokens
+		[2]string{"Overview material", "overview-material"},
+		[2]string{"Deployment topics", "deployment-topics"},
+		[2]string{"Troubleshooting guidance", "troubleshooting-guidance"},
+	)
 	docs := []*corpus.Document{titledDoc("A.md", "Source"), target}
-	refs := []reference.Reference{anchorRef("A.md", "B.md", "deployment", 1)}
+	refs := []reference.Reference{anchorRef("A.md", "B.md", "deployment topics", 1)}
 	findings := scentFor(t, docs, refs)
 	if _, ok := findScent(findings, "A.md", "B.md"); ok {
-		t.Errorf("anchor matching a heading (title-token fallback) must NOT be flagged: %+v", findings)
+		t.Errorf("anchor exactly matching one heading (per-heading max) must NOT be flagged: %+v", findings)
+	}
+}
+
+// TestScent_DocTargetMatchesLaterHeading: the per-heading candidates cover a
+// NON-FIRST heading even when the title is perfectly tokenizable — the heading
+// vocabulary is additive, not a title fallback.
+func TestScent_DocTargetMatchesLaterHeading(t *testing.T) {
+	target := sectionedDoc("B.md", "Operations Handbook",
+		[2]string{"Overview", "overview"},
+		[2]string{"Capacity planning checklist", "capacity-planning-checklist"},
+	)
+	docs := []*corpus.Document{titledDoc("A.md", "Source"), target}
+	refs := []reference.Reference{anchorRef("A.md", "B.md", "capacity planning checklist", 3)}
+	findings := scentFor(t, docs, refs)
+	if _, ok := findScent(findings, "A.md", "B.md"); ok {
+		t.Errorf("anchor matching a later heading must NOT be flagged: %+v", findings)
+	}
+}
+
+// TestScent_SectionTargetMatchesFragment: an anchored link `guide.md#installation`
+// labelled "installation" is scored against the FRAGMENT's heading (plus the
+// title) and scores 1.0 → NOT flagged (the pre-amendment behavior flagged it).
+func TestScent_SectionTargetMatchesFragment(t *testing.T) {
+	target := sectionedDoc("guide.md", "Atrium UI",
+		[2]string{"Installation", "installation"},
+		[2]string{"Configuration", "configuration"},
+	)
+	docs := []*corpus.Document{titledDoc("A.md", "Source"), target}
+	refs := []reference.Reference{sectionRef("A.md", "guide.md", "installation", "installation", 2)}
+	findings := scentFor(t, docs, refs)
+	if _, ok := findScent(findings, "A.md", "guide.md"); ok {
+		t.Errorf("an anchored link matching its fragment's heading must NOT be flagged: %+v", findings)
+	}
+}
+
+// TestScent_SectionTargetJunkAnchor: a junk anchor on a section-targeted edge is
+// still flagged, and the Suggestion is the FRAGMENT's heading text (the
+// preferred candidate for section targets), not the document title.
+func TestScent_SectionTargetJunkAnchor(t *testing.T) {
+	target := sectionedDoc("guide.md", "Atrium UI",
+		[2]string{"Installation", "installation"},
+	)
+	docs := []*corpus.Document{titledDoc("A.md", "Source"), target}
+	refs := []reference.Reference{sectionRef("A.md", "guide.md", "installation", "relative link", 4)}
+	findings := scentFor(t, docs, refs)
+	f, ok := findScent(findings, "A.md", "guide.md")
+	if !ok {
+		t.Fatalf("a junk anchor on a section-targeted edge must stay flagged: %+v", findings)
+	}
+	if f.Suggestion != "Installation" {
+		t.Errorf("suggestion = %q, want the fragment's heading 'Installation'", f.Suggestion)
+	}
+}
+
+// TestScent_SectionTargetWrongSection: an anchored link labelled after a
+// DIFFERENT section than the one it points at stays flagged — the anchored link
+// is held to its actual destination (only the fragment's heading + the title are
+// candidates), and the suggestion names the fragment's heading.
+func TestScent_SectionTargetWrongSection(t *testing.T) {
+	target := sectionedDoc("guide.md", "Atrium UI",
+		[2]string{"Installation", "installation"},
+		[2]string{"Configuration", "configuration"},
+	)
+	docs := []*corpus.Document{titledDoc("A.md", "Source"), target}
+	refs := []reference.Reference{sectionRef("A.md", "guide.md", "installation", "Configuration", 6)}
+	findings := scentFor(t, docs, refs)
+	f, ok := findScent(findings, "A.md", "guide.md")
+	if !ok {
+		t.Fatalf("an anchor naming a DIFFERENT section than its fragment must stay flagged: %+v", findings)
+	}
+	if f.Suggestion != "Installation" {
+		t.Errorf("suggestion = %q, want the fragment's heading 'Installation'", f.Suggestion)
+	}
+}
+
+// TestScent_SameDocSectionDialect: a same-document anchored link labelled
+// "§ Composition" (empty § prefix) pointing at #composition strips to the
+// heading text and scores 1.0 → NOT flagged.
+func TestScent_SameDocSectionDialect(t *testing.T) {
+	doc := sectionedDoc("page.md", "Front Door",
+		[2]string{"Composition", "composition"},
+		[2]string{"Routing", "routing"},
+	)
+	refs := []reference.Reference{sectionRef("page.md", "page.md", "composition", "§ Composition", 8)}
+	findings := scentFor(t, []*corpus.Document{doc}, refs)
+	if _, ok := findScent(findings, "page.md", "page.md"); ok {
+		t.Errorf("a same-doc '§ Heading' link matching its fragment must NOT be flagged: %+v", findings)
+	}
+}
+
+// TestScent_SectionDialectPrefixStrip: a "file.md § Heading" anchor whose prefix
+// names the target file is scored on the heading part only (doc-targeted, no
+// fragment) → matches a heading → NOT flagged.
+func TestScent_SectionDialectPrefixStrip(t *testing.T) {
+	target := sectionedDoc("frontdoor.md", "Front Door",
+		[2]string{"Overview", "overview"},
+		[2]string{"TxToken claim shape", "txtoken-claim-shape"},
+	)
+	docs := []*corpus.Document{titledDoc("A.md", "Source"), target}
+	refs := []reference.Reference{
+		anchorRef("A.md", "frontdoor.md", "frontdoor.md § TxToken claim shape", 2),
+	}
+	findings := scentFor(t, docs, refs)
+	if _, ok := findScent(findings, "A.md", "frontdoor.md"); ok {
+		t.Errorf("a 'file.md § Heading' anchor naming its target's heading must NOT be flagged: %+v", findings)
+	}
+}
+
+// TestScent_SectionDialectStaleHeading: a "file.md § Gone Heading" anchor whose
+// heading no longer exists in the target STAYS flagged — that is rot, the
+// finding's true positive — and the suggestion is the best real candidate.
+func TestScent_SectionDialectStaleHeading(t *testing.T) {
+	target := sectionedDoc("frontdoor.md", "Front Door",
+		[2]string{"Routing rules", "routing-rules"},
+	)
+	docs := []*corpus.Document{titledDoc("A.md", "Source"), target}
+	refs := []reference.Reference{
+		anchorRef("A.md", "frontdoor.md", "frontdoor.md § Legacy session pinning", 3),
+	}
+	findings := scentFor(t, docs, refs)
+	f, ok := findScent(findings, "A.md", "frontdoor.md")
+	if !ok {
+		t.Fatalf("a stale '§ heading' reference must STAY flagged (it is rot): %+v", findings)
+	}
+	if f.Suggestion != "Front Door" && f.Suggestion != "Routing rules" {
+		t.Errorf("suggestion = %q, want a real candidate (title or heading)", f.Suggestion)
+	}
+}
+
+// TestScent_SectionDialectMismatchedPrefix: a "otherfile.md § Heading" anchor
+// whose prefix names a DIFFERENT file than the target keeps its misleading
+// prefix (no strip) and stays flagged even though the heading part matches
+// perfectly — stripped, this anchor would score 1.0; the kept path pollution
+// (5 tokens) drags the Jaccard to 1/6 < 0.20. Mutation proof: drop the
+// basename-match guard in effectiveAnchor and this flips to unflagged.
+func TestScent_SectionDialectMismatchedPrefix(t *testing.T) {
+	target := sectionedDoc("frontdoor.md", "Front Door",
+		[2]string{"Routing", "routing"},
+	)
+	docs := []*corpus.Document{titledDoc("A.md", "Source"), target}
+	refs := []reference.Reference{
+		anchorRef("A.md", "frontdoor.md", "docs/design/modules/ui.md § Routing", 5),
+	}
+	findings := scentFor(t, docs, refs)
+	if _, ok := findScent(findings, "A.md", "frontdoor.md"); !ok {
+		t.Errorf("a '§' anchor with a MISMATCHED file prefix must keep the pollution and stay flagged: %+v", findings)
+	}
+}
+
+// TestScent_SectionDialectPhraseAfterStrip: "file.md § here" strips to "here",
+// which is a scent-free phrase → score 0.0 → flagged.
+func TestScent_SectionDialectPhraseAfterStrip(t *testing.T) {
+	target := sectionedDoc("guide.md", "Guide",
+		[2]string{"Here be dragons", "here-be-dragons"},
+	)
+	docs := []*corpus.Document{titledDoc("A.md", "Source"), target}
+	refs := []reference.Reference{anchorRef("A.md", "guide.md", "guide.md § here", 7)}
+	findings := scentFor(t, docs, refs)
+	f, ok := findScent(findings, "A.md", "guide.md")
+	if !ok {
+		t.Fatalf("'file.md § here' must strip to the scent-free phrase 'here' and stay flagged: %+v", findings)
+	}
+	if f.Score != 0.0 {
+		t.Errorf("scent-free phrase (after strip) score = %v, want 0.0", f.Score)
+	}
+}
+
+// TestEffectiveAnchor is the table test for the "file.md § Heading" dialect
+// strip (ADR 0016 amendment): the prefix is stripped only when it names the
+// TARGET file (basename match, ".md" optional, backticks trimmed) and the
+// remainder is scoreable; an empty prefix always strips; everything else (no §,
+// empty remainder, mismatched prefix) leaves the raw anchor untouched.
+func TestEffectiveAnchor(t *testing.T) {
+	cases := []struct {
+		name   string
+		raw    string
+		target identity.DocumentID
+		want   string
+	}{
+		{"no section sign", "plain anchor text", "guide.md", "plain anchor text"},
+		{"prefix matches target", "guide.md § Installation", "guide.md", " Installation"},
+		{"prefix matches deep path target", "docs/a/b/guide.md § Installation", "x/y/guide.md", " Installation"},
+		{"prefix without .md matches", "guide § Installation", "docs/guide.md", " Installation"},
+		{"backticked prefix matches", "`guide.md` § Installation", "guide.md", " Installation"},
+		{"empty prefix strips", "§ Composition", "page.md", " Composition"},
+		{"mismatched prefix kept", "ui.md § Installation", "frontdoor.md", "ui.md § Installation"},
+		{"empty remainder kept", "guide.md §", "guide.md", "guide.md §"},
+		{"punctuation-only remainder kept", "guide.md § !!", "guide.md", "guide.md § !!"},
+		{"case-insensitive basename match", "GUIDE.MD § Setup steps", "guide.md", " Setup steps"},
+	}
+	for _, tc := range cases {
+		if got := effectiveAnchor(tc.raw, tc.target); got != tc.want {
+			t.Errorf("%s: effectiveAnchor(%q, %q) = %q, want %q", tc.name, tc.raw, tc.target, got, tc.want)
+		}
 	}
 }
 
