@@ -46,6 +46,12 @@ outputs:
   findings-json:
     description: "Workspace-relative path to findings.json."
     value: ${{ steps.check.outputs.findings-json }}
+  binary-path:
+    description: >-
+      Absolute path to the matlatl binary built from the action checkout.
+      Usable by later steps in the same job, e.g. an llms.txt freshness gate:
+      "$BIN" index . --llms --title "..." | diff -u llms.txt -
+    value: ${{ steps.build.outputs.binary-path }}
 runs:
   using: "composite"
   steps:
@@ -60,8 +66,11 @@ runs:
         cache-dependency-path: ${{ github.action_path }}/go.sum
 
     - name: Build matlatl from the action checkout
+      id: build
       shell: bash
-      run: go build -C "${GITHUB_ACTION_PATH}" -o "${RUNNER_TEMP}/matlatl" ./cmd/matlatl
+      run: |
+        go build -C "${GITHUB_ACTION_PATH}" -o "${RUNNER_TEMP}/matlatl" ./cmd/matlatl
+        echo "binary-path=${RUNNER_TEMP}/matlatl" >> "$GITHUB_OUTPUT"
 
     - name: matlatl check
       id: check

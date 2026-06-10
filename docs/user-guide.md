@@ -275,8 +275,21 @@ jobs:
 | `job-summary` | `"true"` | Append a results section to the GitHub job summary. |
 | `extra-args` | *(empty)* | Extra flags appended to `matlatl check` (e.g. `--root 'docs/specs/*.md'`). |
 
-Outputs: `exit-code` (the `check` exit code, per the table above) and
-`findings-json` (the workspace-relative path to `findings.json`).
+Outputs: `exit-code` (the `check` exit code, per the table above),
+`findings-json` (the workspace-relative path to `findings.json`), and
+`binary-path` (the absolute path to the built matlatl binary, for later steps
+in the same job). `binary-path` is what makes a committed-`llms.txt` freshness
+gate one extra step:
+
+```yaml
+- uses: stacklok/matlatl@<sha> # vX.Y.Z
+  id: matlatl
+  with: { strict: "true" }
+- name: llms.txt freshness
+  run: |
+    "${{ steps.matlatl.outputs.binary-path }}" index . --llms --title "My Project" \
+      | diff -u llms.txt - || { echo "llms.txt is stale; regenerate it"; exit 1; }
+```
 
 Findings surface inline on the PR: errors (broken links/anchors) are always
 annotated, warnings (orphans/unreachable/ambiguous) only under `strict` —
