@@ -2,19 +2,18 @@
 name: matlatl
 description: >-
   Operate matlatl, the CLI that maps a repo's markdown into a link graph and
-  reports broken links, broken anchors, orphans, and unreachable/under-linked/
+  reports broken links/anchors, orphans, and unreachable, under-linked, or
   dead-end docs. Use it to: gate docs in CI / fail a PR on broken links ("check
-  the docs", "set up a docs check", "are there broken links"); find or fix
-  doc-link rot ("find orphaned/unreachable docs", "fix the doc links",
-  "fix-prompt"); make a repo legible to agents by emitting graph.json / llms.txt
-  / findings.json ("generate llms.txt", "emit the doc graph", "LLM doc
-  artifacts"); get a suggested reading order to onboard to a repo's docs ("where
-  do I start", "reading order", "onboard me to these docs"); audit a knowledge
-  base's health ("audit our docs", "how
-  well-connected are the docs", "documentation health", "load-bearing docs");
-  or query the doc graph live over MCP ("what links to X", "path between docs",
-  "matlatl serve"). NOT a prose/style markdown linter and NOT for non-markdown
-  files.
+  the docs", "are there broken links"); find or fix doc-link rot ("find
+  orphaned docs", "fix the doc links", "fix-prompt"); make a repo legible to
+  agents by emitting graph.json / llms.txt / findings.json ("generate
+  llms.txt", "emit the doc graph"); get a suggested reading order to onboard to
+  a repo's docs ("where do I start", "reading order"); audit a knowledge base's
+  health and mine the doc graph for insights ("audit our docs", "documentation
+  health", "load-bearing docs", "suggest links", "missing links between docs",
+  "stale section references", "doc graph insights"); or query the doc graph
+  live over MCP ("what links to X", "path between docs", "matlatl serve"). NOT
+  a prose/style markdown linter and NOT for non-markdown files.
 ---
 
 # Using matlatl
@@ -89,6 +88,53 @@ high-authority docs early — for onboarding an agent to a repo); `llms.txt` and
 
 When summarizing to the user, separate "broken (must fix)" from "structural
 hints (optional)". Don't alarm on a healthy repo that merely has dead-end ADRs.
+
+## Mine the artifacts for insights
+
+`graph.json` + `findings.json` answer most audit questions in one jq each —
+don't burn tool calls rediscovering field names:
+
+```console
+# Missing edges: top suggested links (fields: docA, docB, adamicAdar, sharedNeighbours, coCitation, coupling)
+jq '.suggestedLinks | sort_by(-.adamicAdar) | .[0:10]' graph.json
+# Critical path: docs/edges whose removal splits the graph (top-level, strings/objects)
+jq -r '.articulationPoints[]' graph.json
+jq -r '.bridges[] | "\(.from) -> \(.to)"' graph.json
+# Load-bearing docs (node fields: path, pageRank, betweenness, inDegree, outDegree, bowtie, underLinked, deadEnd, isArticulation)
+jq '.nodes | sort_by(-.betweenness) | .[0:10] | map({path, betweenness, pageRank})' graph.json
+# Weak docs worth fixing first: important (high PageRank) yet under-linked or dead-end
+jq '[.nodes[] | select(.underLinked or .deadEnd)] | sort_by(-.pageRank) | map({path, pageRank})' graph.json
+# Findings by kind (fields: kind, severity, document, line, message, suggestedFix, details)
+jq '.findings[] | select(.kind=="low-scent-anchor")' findings.json
+# Bow-tie split (core/in/out/tendril/disconnected; counts also under top-level .bowtie)
+jq '.nodes | group_by(.bowtie) | map({class: .[0].bowtie, count: length, docs: map(.path)})' graph.json
+```
+
+**Reading `.summary.navigability`** (scalars; advisory, never gates):
+
+- `compactness` — share of ordered doc pairs connected by a directed path;
+  one-way links and islands depress it, so tree-shaped docs score low (~0.2)
+  without being broken — read alongside `components`/`unreachable`.
+- `stratum` — 1.0 = purely hierarchical (no cycles), near 0 = heavily cyclic;
+  high stratum is normal for docs, not a defect.
+- `characteristicPathLength` / `medianPathLength` — average/median clicks
+  between connected docs; ≤3 is comfortable, past ~4–5 hubs are missing.
+- `clusteringCoefficient` — how often a doc's neighbours link each other;
+  higher = cohesive topic clusters, near 0 = hub-and-spoke star.
+- `diameter` — worst-case clicks; a big gap vs path length means a long thin tail.
+
+**emitExclude idiom:** `graph.json`/`findings.json` deliberately keep
+`emitExclude`'d docs (machine surfaces are complete). When mining for
+*human-actionable* insights, filter out paths matching the repo's
+`.matlatl.yml` `emitExclude` globs first (e.g. `.claude/`, `.agents/`), or the
+report is dominated by agent scaffolding. `llms.txt`/`index.md`/`trails.json`
+are already filtered.
+
+**Reporting:** lead with actionable clusters, not raw counts — missing edges
+(suggested links with high `sharedNeighbours`), stale section references
+(low-scent survivors quoting "§"/headings often mean a renamed/moved heading),
+disconnected islands (`jq -r '.trails[] | select(.order|length==1).root' trails.json`),
+and fragile articulation points. "251 suggested links" alone tells nobody anything.
 
 ## Fix findings with an agent
 
