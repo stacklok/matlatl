@@ -196,6 +196,10 @@ func FixPrompt(report *analysis.AnalysisReport, opts FixPromptOptions) []byte {
 	b.WriteString("## Verify\n\n")
 	b.WriteString("When done, run `matlatl check` (and `--strict` if the project uses it) and " +
 		"confirm it reports zero findings for the issues you fixed.\n")
+	b.WriteString("If the repository commits a generated `llms.txt` (often gated for freshness " +
+		"in CI), regenerate it after your edits and commit it alongside the fixes — use the " +
+		"repository's own command for that (a task runner target or the CI step's invocation; " +
+		"flags like `--title` must match), not an ad-hoc one.\n")
 
 	return []byte(b.String())
 }
