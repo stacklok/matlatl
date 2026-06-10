@@ -31,6 +31,12 @@ Try in this order; use the first that works:
 1. `matlatl` is on `PATH` → use it directly.
 2. Repo clone with a Taskfile → `task build` (produces `./bin/matlatl`), then `./bin/matlatl`.
 3. Otherwise → `go run github.com/stacklok/matlatl/cmd/matlatl@latest` (or `go run ./cmd/matlatl` inside the repo).
+4. In GitHub Actions CI → skip the binary: the repo's composite action
+   (`uses: stacklok/matlatl@<sha>`) builds matlatl from its own checkout and
+   runs the gate in one step (annotations, job summary, `findings.json` +
+   `junit.xml` in `out-dir`). Internal-org consumers need the repo's
+   org-wide Actions-access grant first. Details: `docs/user-guide.md`
+   ("GitHub Action").
 
 All commands below take a `[path]` (default `.`). Run `matlatl <command> --help`
 for the authoritative flag list before guessing flags.
@@ -40,7 +46,7 @@ for the authoritative flag list before guessing flags.
 | Goal | Command |
 | --- | --- |
 | See the full analysis (human report) | `matlatl .` (add `--quiet` for a one-line summary) |
-| **Gate CI** / pass-fail check | `matlatl check .` (see exit codes; `--out <dir>` also writes `findings.json` + `junit.xml` for CI) — `--strict` to also fail on orphans/ambiguous |
+| **Gate CI** / pass-fail check | `matlatl check .` (see exit codes; `--out <dir>` also writes `findings.json` + `junit.xml` for CI) — `--strict` to also fail on orphans/ambiguous; in GitHub Actions use the composite action (`uses: stacklok/matlatl@<sha>`) |
 | List just the lost docs | `matlatl orphans .` (`--isolated-only`, `--unreachable-only`) |
 | Committable Markdown report | `matlatl report . --out <dir>` (writes `report.md`) |
 | Diagram of the graph | `matlatl graph . --format mermaid\|dot\|json` (`--tree` for the hierarchy variant) |

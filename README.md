@@ -138,7 +138,9 @@ in false orphans.
 - **Gate doc rot in CI.** `matlatl check . --strict` fails a PR on broken links
   and anchors — the job a link checker does — but also catches orphans,
   unreachable pages, and structural weak spots a flat check can't see. (matlatl
-  gates its own CI this way.)
+  gates its own CI this way.) In GitHub Actions, the repo's
+  [composite action](docs/user-guide.md#github-action) runs the gate in one step,
+  with annotations and a job summary.
 - **Fix the docs with an agent.** `matlatl fix-prompt . | claude -p` pipes the
   findings into any coding agent as a self-contained, injection-hardened fix
   prompt.

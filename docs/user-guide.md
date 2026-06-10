@@ -238,6 +238,55 @@ It will still appear in the graph but won't be reported as an orphan/unreachable
 `check --out <dir>` always writes `findings.json` and `junit.xml` — on pass *and*
 fail — so dashboards get structured results either way.
 
+### GitHub Action
+
+The repo ships a composite action that wraps the gate into one step. It builds
+matlatl from the action's **own** checkout (a pinned `setup-go` plus
+`go build -C $GITHUB_ACTION_PATH`), so the consuming repo needs no tokens, no
+`GOPRIVATE`, and no PATs:
+
+```yaml
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: stacklok/matlatl@main   # SHA-pin in real workflows
+        with:
+          strict: "true"
+          out-dir: matlatl-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: matlatl, path: matlatl-out }
+```
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `path` | `.` | Directory to scan, relative to the workspace. |
+| `strict` | `"false"` | Run `check --strict`: also gate on orphans, unreachable docs, and ambiguous links. |
+| `out-dir` | `matlatl-out` | Where `findings.json` + `junit.xml` are written — always, pass or fail. Upload it as an artifact to retain it. |
+| `annotate` | `"true"` | Emit GitHub `::error` / `::warning` annotations for gating findings. |
+| `job-summary` | `"true"` | Append a results section to the GitHub job summary. |
+| `extra-args` | *(empty)* | Extra flags appended to `matlatl check` (e.g. `--root 'docs/specs/*.md'`). |
+
+Outputs: `exit-code` (the `check` exit code, per the table above) and
+`findings-json` (the workspace-relative path to `findings.json`).
+
+Findings surface inline on the PR: errors (broken links/anchors) are always
+annotated, warnings (orphans/unreachable/ambiguous) only under `strict` —
+since only then do they gate. The job summary gets the counts table plus the
+gating findings.
+
+matlatl is an internal repository, so other repos in the `stacklok` org can
+`uses:` this action only after the repo grants org-wide Actions access
+(Settings → Actions → General → Access, or
+`gh api -X PUT repos/stacklok/matlatl/actions/permissions/access -f access_level=organization`).
+SHA-pin the ref in real workflows (`uses: stacklok/matlatl@<full-sha> # vX.Y.Z`);
+Renovate's `helpers:pinGitHubActionDigests` preset keeps the pin current if the
+Renovate app has access to this repo. Run the action in its own job — its
+`setup-go` step adjusts `PATH` for the rest of the job, which can surprise later
+steps expecting a different Go toolchain.
+
 ## The LLM artifacts
 
 `matlatl emit --out <dir>` produces a bundle designed for agents:

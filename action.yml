@@ -1,0 +1,178 @@
+name: "matlatl docs gate"
+description: >-
+  Check a repo's markdown link health with matlatl. Broken links and broken
+  anchors fail the job; orphans, unreachable, and ambiguous links also fail
+  when strict is enabled. Always writes findings.json + junit.xml to out-dir,
+  on pass and fail. The action builds matlatl from its own checkout, so
+  consuming repos need no extra credentials — only Actions access to this
+  repository (Settings → Actions → Access, or
+  `gh api -X PUT repos/stacklok/matlatl/actions/permissions/access -f access_level=organization`).
+inputs:
+  path:
+    description: "Directory to scan, relative to the workspace."
+    required: false
+    default: "."
+  strict:
+    description: >-
+      Run matlatl check --strict: also gate on orphans, unreachable docs, and
+      ambiguous links (ADR 0005). "true" or "false".
+    required: false
+    default: "false"
+  out-dir:
+    description: >-
+      Directory (relative to the workspace) where findings.json and junit.xml
+      are written — always, pass or fail. Upload it as an artifact from the
+      calling workflow if you want it retained.
+    required: false
+    default: "matlatl-out"
+  annotate:
+    description: "Emit GitHub ::error / ::warning annotations for gating findings."
+    required: false
+    default: "true"
+  job-summary:
+    description: "Append a results section to the GitHub job summary."
+    required: false
+    default: "true"
+  extra-args:
+    description: >-
+      Extra flags appended to matlatl check, whitespace-separated
+      (e.g. --root 'docs/specs/*.md' --inbound-threshold 5).
+    required: false
+    default: ""
+outputs:
+  exit-code:
+    description: "matlatl check exit code: 0 clean, 1 findings, 2 usage error, 3 runtime error (ADR 0005)."
+    value: ${{ steps.check.outputs.exit-code }}
+  findings-json:
+    description: "Workspace-relative path to findings.json."
+    value: ${{ steps.check.outputs.findings-json }}
+runs:
+  using: "composite"
+  steps:
+    # Note: setup-go adjusts PATH for the rest of the job. Run this action in
+    # its own job (the usual shape for a docs gate) to avoid surprising later
+    # steps that expect a different Go toolchain.
+    - name: Set up Go for matlatl
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache: true
+        cache-dependency-path: ${{ github.action_path }}/go.sum
+
+    - name: Build matlatl from the action checkout
+      shell: bash
+      run: go build -C "${GITHUB_ACTION_PATH}" -o "${RUNNER_TEMP}/matlatl" ./cmd/matlatl
+
+    - name: matlatl check
+      id: check
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+        STRICT: ${{ inputs.strict }}
+        OUT_DIR: ${{ inputs.out-dir }}
+        ANNOTATE: ${{ inputs.annotate }}
+        JOB_SUMMARY: ${{ inputs.job-summary }}
+        EXTRA_ARGS: ${{ inputs.extra-args }}
+      run: |
+        set -u
+        args=(check "$SCAN_PATH" --out "$OUT_DIR")
+        if [ "$STRICT" = "true" ]; then
+          args+=(--strict)
+        fi
+        if [ -n "$EXTRA_ARGS" ]; then
+          # Intentional word-splitting: extra-args is a flat flag string.
+          # shellcheck disable=SC2206
+          args+=($EXTRA_ARGS)
+        fi
+
+        set +e
+        "${RUNNER_TEMP}/matlatl" "${args[@]}"
+        code=$?
+        set -e
+
+        findings="$OUT_DIR/findings.json"
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        echo "findings-json=$findings" >> "$GITHUB_OUTPUT"
+
+        if [ "$code" -ge 2 ]; then
+          echo "::error title=matlatl::matlatl check did not complete (exit $code; 2 = usage error, 3 = runtime error — ADR 0005)"
+          exit "$code"
+        fi
+
+        if [ ! -f "$findings" ]; then
+          echo "::error title=matlatl::expected $findings to exist (check --out always writes it)"
+          exit 3
+        fi
+
+        # Findings paths are relative to the scanned directory; annotations
+        # need workspace-relative paths. Document-level findings (orphans,
+        # unreachable) carry line 0; clamp to 1 for GitHub.
+        prefix=""
+        case "$SCAN_PATH" in
+          .|./) ;;
+          *) prefix="${SCAN_PATH%/}/" ;;
+        esac
+        strict_json=false
+        if [ "$STRICT" = "true" ]; then
+          strict_json=true
+        fi
+
+        if [ "$ANNOTATE" = "true" ]; then
+          # Errors (broken links/anchors) always gate; warnings (orphans,
+          # unreachable, ambiguous) gate only under --strict, so only then are
+          # they surfaced as annotations. GitHub renders at most 10
+          # annotations per step per type; cap the rest to keep logs sane.
+          jq -r --arg p "$prefix" '
+            .findings[]
+            | select(.severity == "error")
+            | "::error file=\($p + .document),line=\(if (.line // 0) < 1 then 1 else .line end),title=matlatl \(.kind)::\(.message)"
+          ' "$findings" | head -25
+          if [ "$STRICT" = "true" ]; then
+            jq -r --arg p "$prefix" '
+              .findings[]
+              | select(.severity == "warning")
+              | "::warning file=\($p + .document),line=\(if (.line // 0) < 1 then 1 else .line end),title=matlatl \(.kind)::\(.message)"
+            ' "$findings" | head -25
+          fi
+        fi
+
+        if [ "$JOB_SUMMARY" = "true" ]; then
+          {
+            echo "## matlatl docs gate"
+            echo ""
+            if [ "$code" -eq 0 ]; then
+              echo ":white_check_mark: clean"
+            else
+              echo ":x: findings present (exit 1)"
+            fi
+            echo ""
+            jq -r '.summary
+              | "| broken links | broken anchors | ambiguous | orphans | unreachable |",
+                "| --- | --- | --- | --- | --- |",
+                "| \(.brokenLink) | \(.brokenAnchor) | \(.ambiguous) | \(.orphan) | \(.unreachable) |"' \
+              "$findings"
+            echo ""
+            count=$(jq -r --argjson strict "$strict_json" '
+              [.findings[] | select(.severity == "error" or ($strict and .severity == "warning"))] | length
+            ' "$findings")
+            if [ "$count" -gt 0 ]; then
+              echo "### Gating findings"
+              echo ""
+              echo "| kind | document | line | message |"
+              echo "| --- | --- | --- | --- |"
+              jq -r --arg p "$prefix" --argjson strict "$strict_json" '
+                .findings[]
+                | select(.severity == "error" or ($strict and .severity == "warning"))
+                | "| \(.kind) | \($p + .document) | \(if (.line // 0) < 1 then "" else (.line | tostring) end) | \(.message | gsub("\\|"; "\\|")) |"
+              ' "$findings" | head -50
+              if [ "$count" -gt 50 ]; then
+                echo ""
+                echo "_…and $((count - 50)) more; see the findings.json artifact._"
+              fi
+            fi
+            echo ""
+            echo "_Full results in \`$OUT_DIR/\` (findings.json + junit.xml) — upload it as an artifact to retain._"
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        exit "$code"
