@@ -1508,3 +1508,122 @@ func TestIntegration_EmitExcludeWrongTypeExitsUsage(t *testing.T) {
 		t.Errorf("stderr should name the bad key, got %q", errOut.String())
 	}
 }
+
+// --- fix-prompt scope integration tests (ADR 0020) ---
+
+// TestIntegration_FixPromptKinds: `fix-prompt --kinds unreachable` keeps only
+// the selected kind (caps lifted), renders the kinds scope line, and exits 0.
+func TestIntegration_FixPromptKinds(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(),
+		[]string{"fix-prompt", corpusFixture(t), "--kinds", "unreachable"}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("fix-prompt --kinds code = %v, want ExitOK (stderr=%q)", code, errOut.String())
+	}
+	s := out.String()
+	if !strings.Contains(s, "Scope: kinds `unreachable`.") {
+		t.Errorf("missing the kinds scope line:\n%s", s)
+	}
+	if !strings.Contains(s, "**unreachable**") {
+		t.Errorf("selected kind missing from output:\n%s", s)
+	}
+	for _, other := range []string{"**broken-link**", "**orphan**", "**suggested-link**"} {
+		if strings.Contains(s, other) {
+			t.Errorf("unselected kind %s leaked into --kinds output:\n%s", other, s)
+		}
+	}
+}
+
+// TestIntegration_FixPromptKindsBogus: an unknown --kinds name fails fast with
+// ExitUsage and lists every valid kind name on stderr.
+func TestIntegration_FixPromptKindsBogus(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(),
+		[]string{"fix-prompt", corpusFixture(t), "--kinds", "bogus-kind"}, &out, &errOut)
+	if code != platform.ExitUsage {
+		t.Fatalf("fix-prompt --kinds bogus code = %v, want ExitUsage", code)
+	}
+	se := errOut.String()
+	if !strings.Contains(se, "bogus-kind") {
+		t.Errorf("stderr should name the bad value, got %q", se)
+	}
+	// The usage message lists the valid names (derived from the domain enum).
+	for _, name := range []string{"broken-link", "suggested-link", "low-scent-anchor"} {
+		if !strings.Contains(se, name) {
+			t.Errorf("stderr should list valid kind %q, got %q", name, se)
+		}
+	}
+}
+
+// TestIntegration_FixPromptModeFlagsExclusive: combining any two of
+// --errors-only / --kinds / --all is a usage error (exit 2).
+func TestIntegration_FixPromptModeFlagsExclusive(t *testing.T) {
+	for _, args := range [][]string{
+		{"--kinds", "orphan", "--all"},
+		{"--errors-only", "--all"},
+		{"--errors-only", "--kinds", "orphan"},
+	} {
+		var out, errOut bytes.Buffer
+		code := runArgs(context.Background(),
+			append([]string{"fix-prompt", corpusFixture(t)}, args...), &out, &errOut)
+		if code != platform.ExitUsage {
+			t.Errorf("fix-prompt %v code = %v, want ExitUsage", args, code)
+		}
+		if !strings.Contains(errOut.String(), "mutually exclusive") {
+			t.Errorf("fix-prompt %v stderr = %q, want the mutual-exclusion message", args, errOut.String())
+		}
+	}
+}
+
+// TestIntegration_FixPromptKindsEmptyToHonestNoOp: selecting a kind the corpus
+// does not produce (dead-link without --check-external) yields the honest
+// filtered-empty no-op — counts plus the --all pointer — and still exits 0.
+func TestIntegration_FixPromptKindsEmptyToHonestNoOp(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(),
+		[]string{"fix-prompt", corpusFixture(t), "--kinds", "dead-link"}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("fix-prompt --kinds dead-link code = %v, want ExitOK", code)
+	}
+	s := out.String()
+	if !strings.Contains(s, "No documentation findings to fix in the selected scope") {
+		t.Errorf("missing the honest filtered-empty message:\n%s", s)
+	}
+	if strings.Contains(s, "The corpus is clean") {
+		t.Errorf("filtered-empty must not claim the corpus is clean:\n%s", s)
+	}
+	if !strings.Contains(s, "--all") {
+		t.Errorf("filtered-empty must point at --all:\n%s", s)
+	}
+}
+
+// TestIntegration_FixPromptEmitExclude: with `.matlatl.yml emitExclude`, the
+// default fix-prompt drops advisory findings on excluded docs (with an honest
+// accounting line) while --all still carries them.
+func TestIntegration_FixPromptEmitExclude(t *testing.T) {
+	dir := emitExcludeFixture(t, true)
+
+	var defOut, defErr bytes.Buffer
+	if code := runArgs(context.Background(), []string{"fix-prompt", dir}, &defOut, &defErr); code != platform.ExitOK {
+		t.Fatalf("fix-prompt default code = %v, want ExitOK (stderr=%q)", code, defErr.String())
+	}
+	def := defOut.String()
+	if strings.Contains(def, "(info) `.claude/agents/helper.md`") {
+		t.Errorf("default scope must drop the advisory finding on the excluded doc:\n%s", def)
+	}
+	if !strings.Contains(def, "advisory finding(s) on emitExcluded documents omitted (.matlatl.yml emitExclude)") {
+		t.Errorf("default scope missing the emitExclude accounting line:\n%s", def)
+	}
+
+	var allOut, allErr bytes.Buffer
+	if code := runArgs(context.Background(), []string{"fix-prompt", dir, "--all"}, &allOut, &allErr); code != platform.ExitOK {
+		t.Fatalf("fix-prompt --all code = %v, want ExitOK (stderr=%q)", code, allErr.String())
+	}
+	all := allOut.String()
+	if !strings.Contains(all, "(info) `.claude/agents/helper.md`") {
+		t.Errorf("--all must keep the advisory finding on the excluded doc:\n%s", all)
+	}
+	if strings.Contains(all, "omitted") {
+		t.Errorf("--all must not render accounting lines:\n%s", all)
+	}
+}

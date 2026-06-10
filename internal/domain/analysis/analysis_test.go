@@ -123,3 +123,19 @@ func TestNewAnalysisReport_SeverityTieBreak(t *testing.T) {
 		t.Errorf("severity tie-break order = [%v %v], want [info error]", got[0].Severity, got[1].Severity)
 	}
 }
+
+// TestParseFindingKind_RoundTrip asserts ParseFindingKind is the exact inverse
+// of String over the whole enum, and rejects everything else.
+func TestParseFindingKind_RoundTrip(t *testing.T) {
+	for k := BrokenLink; k.Valid(); k++ {
+		got, ok := ParseFindingKind(k.String())
+		if !ok || got != k {
+			t.Errorf("ParseFindingKind(%q) = (%v, %v), want (%v, true)", k.String(), got, ok, k)
+		}
+	}
+	for _, s := range []string{"", "unknown", "broken_link", "Broken-Link", "suggested-link "} {
+		if _, ok := ParseFindingKind(s); ok {
+			t.Errorf("ParseFindingKind(%q) = ok, want not ok", s)
+		}
+	}
+}

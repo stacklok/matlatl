@@ -139,6 +139,19 @@ func (k FindingKind) Valid() bool {
 	return k >= BrokenLink && k <= LowScentAnchor
 }
 
+// ParseFindingKind maps a canonical kind name (the String form, e.g.
+// "broken-link") back to its FindingKind — the pure inverse of String. The
+// second result is false for any string that is not a defined kind name
+// (including "" and "unknown").
+func ParseFindingKind(s string) (FindingKind, bool) {
+	for k := BrokenLink; k.Valid(); k++ {
+		if k.String() == s {
+			return k, true
+		}
+	}
+	return 0, false
+}
+
 // Location pins a finding to a source position.
 type Location struct {
 	Document identity.DocumentID

@@ -51,7 +51,7 @@ for the authoritative flag list before guessing flags.
 | Diagram of the graph | `matlatl graph . --format mermaid\|dot\|json` (`--tree` for the hierarchy variant) |
 | Navigation surface / `llms.txt` | `matlatl index .` (`--llms`, `--full`, `--small`, `--graph`) |
 | **Full artifact bundle for agents/LLMs** | `matlatl emit . --out <dir>` → `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `trails.json`, `findings.json` |
-| **Get an agent-ready fix prompt** | `matlatl fix-prompt .` (pipe to an agent; `--errors-only` for broken links/anchors only) |
+| **Get an agent-ready fix prompt** | `matlatl fix-prompt .` (pipe to an agent; curated default — `--errors-only` for broken links/anchors only, `--kinds k1,k2` for a focused pass, `--all` for everything) |
 | **Live graph queries (MCP)** | `matlatl serve .` |
 
 For machine consumption, prefer `graph.json` (the queryable manifest) and
@@ -139,7 +139,13 @@ and fragile articulation points. "251 suggested links" alone tells nobody anythi
 ## Fix findings with an agent
 
 `matlatl fix-prompt .` emits a single self-contained, agent-agnostic prompt with
-the findings and a per-kind how-to embedded inline. The loop:
+the findings and a per-kind how-to embedded inline. The default scope is
+**curated**: all errors + warnings, advisory findings off `emitExclude` docs
+dropped, `suggested-link` capped at the top 20 (Adamic/Adar) and
+`low-scent-anchor` at the 50 weakest — the prompt's Scope block says exactly
+what was omitted. Use `--kinds k1,k2` for a focused pass on exact kinds (caps
+lifted), `--all` for the complete unfiltered report; `findings.json` always has
+everything. The loop:
 
 1. `matlatl fix-prompt . --out <dir>` (or pipe to stdout) → get the prompt.
 2. Apply the fixes it describes — **only** the listed findings; don't invent

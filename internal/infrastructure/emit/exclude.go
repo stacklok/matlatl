@@ -33,8 +33,17 @@ func (v View) WithEmitExclude(patterns []string) View {
 	if len(patterns) == 0 {
 		return v
 	}
-	v.emitExclude = ignore.CompileIgnoreLines(patterns...)
+	v.emitExclude = compileExclude(patterns)
 	return v
+}
+
+// compileExclude compiles emitExclude patterns into the shared gitignore-dialect
+// matcher (go-gitignore — the SAME engine as `.matlatlignore`, ADR 0019). It is
+// the single home for that dialect choice: both the View's consumption-surface
+// filter and the fix-prompt advisory filter (ADR 0020) compile through it, so
+// the two surfaces cannot silently diverge in semantics.
+func compileExclude(patterns []string) *ignore.GitIgnore {
+	return ignore.CompileIgnoreLines(patterns...)
 }
 
 // EmitExcluded reports whether id is excluded from the consumption surfaces.

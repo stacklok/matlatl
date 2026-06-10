@@ -181,9 +181,21 @@ func TestGolden_Artifacts(t *testing.T) {
 	})
 
 	// fix-prompt consumes the full report (not the View), so build it separately.
+	// Three goldens: the curated default (ADR 0020), --all (byte-identical to the
+	// pre-ADR-0020 default output), and the default with an emitExclude pattern
+	// (advisory findings on docs/island/ dropped, warnings on the same docs kept).
 	t.Run("fix-prompt.md", func(t *testing.T) {
 		rep := buildCorpusReport(t)
 		assertGolden(t, "fix-prompt.md", emit.FixPrompt(rep, emit.FixPromptOptions{}), nil)
+	})
+	t.Run("fix-prompt-all.md", func(t *testing.T) {
+		rep := buildCorpusReport(t)
+		assertGolden(t, "fix-prompt-all.md", emit.FixPrompt(rep, emit.FixPromptOptions{All: true}), nil)
+	})
+	t.Run("fix-prompt-excluded.md", func(t *testing.T) {
+		rep := buildCorpusReport(t)
+		assertGolden(t, "fix-prompt-excluded.md",
+			emit.FixPrompt(rep, emit.FixPromptOptions{EmitExclude: []string{"docs/island/"}}), nil)
 	})
 }
 
@@ -238,15 +250,20 @@ func TestGolden_ByteStable(t *testing.T) {
 		})
 	}
 
-	// fix-prompt is report-driven (not View-driven), so check it on its own.
+	// fix-prompt is report-driven (not View-driven), so check it on its own —
+	// in every scope mode (default, --all, --kinds, emitExclude).
 	t.Run("fix-prompt.md", func(t *testing.T) {
 		r1 := buildCorpusReport(t)
 		r2 := buildCorpusReport(t)
-		if !bytes.Equal(
-			emit.FixPrompt(r1, emit.FixPromptOptions{}),
-			emit.FixPrompt(r2, emit.FixPromptOptions{}),
-		) {
-			t.Error("fix-prompt.md is not byte-stable across two pipeline runs")
+		for _, opts := range []emit.FixPromptOptions{
+			{},
+			{All: true},
+			{Kinds: []analysis.FindingKind{analysis.SuggestedLink, analysis.UnderLinked}},
+			{EmitExclude: []string{"docs/island/"}},
+		} {
+			if !bytes.Equal(emit.FixPrompt(r1, opts), emit.FixPrompt(r2, opts)) {
+				t.Errorf("fix-prompt.md is not byte-stable across two pipeline runs (opts=%+v)", opts)
+			}
 		}
 	})
 }

@@ -26,3 +26,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0017 | Nested git repositories are out of scan scope          | Accepted |
 | 0018 | Default-ignore `.claude/agent-memory`                  | Accepted |
 | 0019 | `emitExclude`: in the corpus, off the navigation surfaces | Accepted |
+| 0020 | `fix-prompt` scope: curated default, kind selection, and emitExclude | Accepted |

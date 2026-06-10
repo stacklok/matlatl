@@ -123,4 +123,6 @@ re-sorted by root to keep the sorted-by-root invariant).
 - [ADR 0005](0005-exit-code-contract.md) — `check` is unaffected.
 - [ADR 0011](0011-per-repo-config-file.md) — the config file and its error contract.
 - [ADR 0016](0016-agent-experience.md) — backlinks and trails, the surfaces filtered here.
+- [ADR 0020](0020-fix-prompt-scope.md) — `fix-prompt`'s curated default reuses these
+  patterns to drop advisory findings on excluded docs (severity-keyed; `--all` bypasses).
 - [docs/schemas/matlatl-config-v1.md](../schemas/matlatl-config-v1.md) — the schema reference.

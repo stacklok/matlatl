@@ -35,7 +35,7 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 | `matlatl index [path]` | Emit a navigation surface: `index.md`, or an `llms.txt` family artifact (`--llms`, `--full`, `--small`, `--graph`). `--title` overrides the `llms.txt` H1. |
 | `matlatl orphans [path]` | List isolated orphans, under-linked and dead-end docs (`--isolated-only`) and unreachable docs (`--unreachable-only`). |
 | `matlatl emit [path] --out <dir>` | Write the whole bundle: `index.md`, `llms.txt`, `llms-full.txt`, `llms-small.txt`, `graph.json`, `trails.json`, `findings.json` (`--title` overrides the `llms.txt` H1). |
-| `matlatl fix-prompt [path]` | Emit an agent-agnostic prompt (findings embedded inline) that tells an LLM coding agent how to fix them. Pipe it to any agent; `--errors-only` for broken links/anchors only; `--out` to write `fix-prompt.md`. |
+| `matlatl fix-prompt [path]` | Emit an agent-agnostic prompt (findings embedded inline) that tells an LLM coding agent how to fix them. Pipe it to any agent. The default scope is curated; `--errors-only` for broken links/anchors only, `--kinds` for exact kinds, `--all` for everything; `--out` to write `fix-prompt.md`. |
 | `matlatl serve [path]` | Run the read-only MCP server (streamable HTTP) so an agent can query the graph. |
 | `matlatl version` | Print version information. |
 
@@ -334,9 +334,21 @@ agent:
 
 ```console
 $ matlatl fix-prompt . | claude -p
-$ matlatl fix-prompt . --errors-only   # only broken links/anchors (severity=error)
-$ matlatl fix-prompt . --out ai        # write ai/fix-prompt.md instead of stdout
+$ matlatl fix-prompt . --errors-only           # only broken links/anchors (severity=error)
+$ matlatl fix-prompt . --kinds suggested-link  # exactly these kinds, ALL of them (caps lifted)
+$ matlatl fix-prompt . --all                   # the complete, unfiltered report
+$ matlatl fix-prompt . --out ai                # write ai/fix-prompt.md instead of stdout
 ```
+
+The default scope is **curated**: every error and warning, plus advisory (info)
+findings that are not on `.matlatl.yml emitExclude` documents, with the two
+corpus-scaling kinds capped — `suggested-link` keeps the top 20 by Adamic/Adar
+score, `low-scent-anchor` the 50 weakest-scent. The prompt's Scope block reports
+exactly what was omitted and how to get it (`--kinds`, `--all`, or
+`findings.json`, which always carries everything). The four modes are mutually
+exclusive: `--errors-only`, `--kinds k1,k2` (exactly the named kinds, all of
+them; an unknown name exits 2 listing the valid names), `--all` (no filtering,
+no caps — the pre-curation output, byte-for-byte), or the bare default.
 
 The prompt is **agent-agnostic** — it names no harness-specific tools — and bakes
 its guardrails into the text: fix only the listed findings, don't invent files/
