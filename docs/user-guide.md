@@ -291,6 +291,37 @@ gate one extra step:
       | diff -u llms.txt - || { echo "llms.txt is stale; regenerate it"; exit 1; }
 ```
 
+### Committing llms.txt: the full pattern
+
+A committed `llms.txt` is **generated output**, and the freshness gate alone
+makes for poor contributor experience — every doc-touching PR fails until the
+author remembers a regeneration command. Three companion pieces fix that;
+adopt all of them together:
+
+1. **Wire regeneration into the gate contributors already run.** Make the
+   repo's existing "regenerate everything" target (a `gen`-style task) also
+   rewrite `llms.txt`, and its "verify generated output" twin also diff it.
+   Nobody has to remember a docs-specific command; the standard pre-PR loop
+   catches staleness and the standard fix-it command repairs it. Keep a
+   code-only variant of the gen target if a CI job without access to matlatl
+   needs it.
+2. **Mark it generated for review.** In `.gitattributes`:
+
+   ```text
+   llms.txt linguist-generated=true
+   ```
+
+   GitHub then collapses it in PR diffs and drops it from diff stats. A
+   one-doc change can legitimately renumber the whole reading-order trail —
+   that churn is correct output (the order *is* the signal), and this keeps
+   it out of reviewers' way. Don't reduce artifact fidelity to make diffs
+   smaller; the file's primary reader is an LLM, not a human reviewing a PR.
+3. **Regenerate, never merge.** On a rebase or merge conflict in `llms.txt`,
+   take either side and regenerate (`git checkout --ours llms.txt`, then the
+   repo's gen task). Hand-merging a generated file produces a stale hybrid
+   the freshness gate rejects anyway. Worth a line in the repo's
+   CLAUDE.md/CONTRIBUTING so agents resolve it correctly too.
+
 Findings surface inline on the PR: errors (broken links/anchors) are always
 annotated, warnings (orphans/unreachable/ambiguous) only under `strict` —
 since only then do they gate. The job summary gets the counts table plus the
