@@ -1,0 +1,37 @@
+version: 2
+
+project_name: matlatl
+
+builds:
+  - main: ./cmd/matlatl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/stacklok/matlatl/internal/platform.Version={{.Version}}
+      - -X github.com/stacklok/matlatl/internal/platform.Commit={{.Commit}}
+      - -X github.com/stacklok/matlatl/internal/platform.Date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github-native
+
+release:
+  prerelease: auto
