@@ -110,10 +110,13 @@ func LLMSTxt(v emit.View, opts Options) []byte {
 // trail's order (ADR 0016). Trails are the modern realization of Vannevar Bush's
 // associative trails ("As We May Think", 1945): a curated path through a connected
 // cluster, rooted at its most important doc. Only emitted when there is at least
-// one multi-document trail (a corpus of singletons has nothing to order).
+// one multi-document trail (a corpus of singletons has nothing to order). The
+// trails come from RenderedTrails, so emit-excluded docs never appear in a step
+// (ADR 0019).
 func writeReadingOrder(b *strings.Builder, v emit.View) {
+	trails := v.RenderedTrails()
 	hasOrder := false
-	for _, t := range v.Trails {
+	for _, t := range trails {
 		if len(t.Order) > 1 {
 			hasOrder = true
 			break
@@ -125,7 +128,7 @@ func writeReadingOrder(b *strings.Builder, v emit.View) {
 	b.WriteString("## Suggested reading order\n\n")
 	b.WriteString("_Associative trails (Bush 1945): a topologically-valid path through each cluster, " +
 		"most-important doc first._\n\n")
-	for _, t := range v.Trails {
+	for _, t := range trails {
 		if len(t.Order) <= 1 {
 			continue // a singleton cluster has no meaningful order
 		}
@@ -163,10 +166,12 @@ func writeLink(b *strings.Builder, v emit.View, d emit.DocView) {
 
 // backlinksClause returns a terse " (linked from: a.md, b.md)" suffix listing the
 // documents that link TO id, or "" when nothing does. The list is the document
-// projection's in-neighbours (already sorted by path, self-excluded), so it is
-// deterministic. The whole clause is single-lined so it cannot break the entry.
+// projection's in-neighbours (already sorted by path, self-excluded), filtered of
+// emit-excluded sources (ADR 0019: a rendered clause must not name a doc this
+// surface refuses to list), so it is deterministic. The whole clause is
+// single-lined so it cannot break the entry.
 func backlinksClause(v emit.View, id identity.DocumentID) string {
-	in := v.Backlinks(id)
+	in := v.RenderedBacklinks(id)
 	if len(in) == 0 {
 		return ""
 	}
@@ -201,9 +206,19 @@ func writeKnownGaps(b *strings.Builder, v emit.View) {
 }
 
 // summaryLine is the one/two-sentence blockquote summary: what the corpus is
-// plus its headline counts.
+// plus its headline counts. The document count reflects what this artifact
+// RENDERS: when emitExclude is active, the excluded docs are subtracted and the
+// line says how many were filtered, so the artifact is honest about the filter
+// (ADR 0019). Byte-identical to the pre-ADR-0019 line when no filter is active.
 func summaryLine(v emit.View) string {
 	c := v.Counts
+	rendered := c.Documents
+	var excluded string
+	if n := v.EmitExcludedCount(); n > 0 {
+		rendered -= n
+		excluded = fmt.Sprintf(" %d document(s) excluded from rendering by emitExclude "+
+			"(still in the corpus: link-checked and ranked).", n)
+	}
 	// One terse navigability clause (ADR 0014): compactness + typical click
 	// distance, so an agent gets the corpus's connectivity at a glance.
 	var nav string
@@ -215,18 +230,22 @@ func summaryLine(v emit.View) string {
 	return oneLine(fmt.Sprintf(
 		"A markdown documentation corpus of %d document(s) across %d component(s), "+
 			"with %d heading(s) and %d resolved reference(s). "+
-			"Entries are ordered by importance (most-connected first).%s",
-		c.Documents, c.Components, c.Headings, c.References, nav))
+			"Entries are ordered by importance (most-connected first).%s%s",
+		rendered, c.Components, c.Headings, c.References, excluded, nav))
 }
 
-// rankedReachable returns the reachable documents in importance order (authority
-// DESC, in-degree DESC, ID ASC). When reachability is indeterminate (no root
-// set), every document is treated as reachable so the corpus is still surfaced
-// (ADR 0007: indeterminate is not unreachable).
+// rankedReachable returns the reachable, rendered documents in importance order
+// (authority DESC, in-degree DESC, ID ASC). When reachability is indeterminate
+// (no root set), every document is treated as reachable so the corpus is still
+// surfaced (ADR 0007: indeterminate is not unreachable). Emit-excluded docs are
+// dropped (ADR 0019): the llms.txt family is a consumption surface.
 func rankedReachable(v emit.View) []rankedDoc {
 	reachable, indeterminate := emit.ReachableSet(v.Metrics)
 	out := make([]rankedDoc, 0, len(v.Docs))
 	for _, d := range v.Docs {
+		if v.EmitExcluded(d.ID) {
+			continue
+		}
 		if !indeterminate {
 			if _, ok := reachable[d.ID]; !ok {
 				continue

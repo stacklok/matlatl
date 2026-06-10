@@ -5,6 +5,8 @@ import (
 	"slices"
 	"time"
 
+	ignore "github.com/sabhiram/go-gitignore"
+
 	"github.com/stacklok/matlatl/internal/application"
 	"github.com/stacklok/matlatl/internal/domain/analysis"
 	"github.com/stacklok/matlatl/internal/domain/corpus"
@@ -97,6 +99,13 @@ type View struct {
 	// document's section tree and front matter. It is READ-ONLY: emitters must
 	// never mutate it (ADR 0004). Reached only through the Document accessor.
 	corpus *corpus.Corpus
+
+	// emitExclude is the compiled `.matlatl.yml emitExclude` matcher (ADR 0019),
+	// set by WithEmitExclude and nil otherwise. Consulted ONLY by the consumption
+	// emitters (llmstxt, index, trails) via EmitExcluded / RenderedBacklinks /
+	// RenderedTrails; the diagnostic and machine surfaces ignore it. See
+	// exclude.go.
+	emitExclude *ignore.GitIgnore
 }
 
 // Counts are the corpus-overview tallies surfaced at the top of every report.

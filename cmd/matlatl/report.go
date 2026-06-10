@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -56,6 +57,30 @@ func analyzeToView(cmd *cobra.Command, cfg application.Config) (emit.View, error
 		return emit.View{}, exitCodeError{code: code, err: err}
 	}
 	return emit.BuildView(res), nil
+}
+
+// applyEmitExclude arms the View with the `.matlatl.yml emitExclude` patterns
+// (ADR 0019). Called ONLY by the consumption-surface commands (`emit`, `index`):
+// the filter affects the llms.txt family, index.md, and trails.json — never
+// `check`, the reports, graph.json, findings.json, or junit.xml. A pattern that
+// matches a reachability root is allowed (the root simply does not render;
+// reachability is computed over the unfiltered corpus) but earns a stderr notice
+// so it is not silent.
+func applyEmitExclude(cmd *cobra.Command, cfg application.Config, view emit.View) emit.View {
+	if len(cfg.EmitExclude) == 0 {
+		return view
+	}
+	view = view.WithEmitExclude(cfg.EmitExclude)
+	if !cfg.Quiet {
+		sink := cmd.ErrOrStderr()
+		for _, id := range view.EmitExcludedRoots() {
+			_, _ = fmt.Fprintf(sink,
+				"matlatl: notice [%s] %s: emitExclude matches reachability root %q; "+
+					"it will not render on the consumption surfaces (reachability is unaffected)\n",
+				application.NoticeConfig, ".matlatl.yml", id)
+		}
+	}
+	return view
 }
 
 // writeOrStdout writes content to name under outDir (via the FSWriter zip-slip

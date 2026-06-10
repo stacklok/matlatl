@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -213,6 +214,11 @@ func configFromFlags(cmd *cobra.Command, args []string) (application.Config, err
 	if file.LinkSuggestionMinShared != nil {
 		cfg.LinkSuggestionMinShared = *file.LinkSuggestionMinShared
 	}
+
+	// emitExclude (ADR 0019): config-only knob (no flag). Carried on the Config
+	// but NEVER read by the pipeline — only the consumption-surface commands
+	// (`emit`, `index`) apply it, at the emit boundary. `check` is unaffected.
+	cfg.EmitExclude = slices.Clone(file.EmitExclude)
 	return cfg, nil
 }
 

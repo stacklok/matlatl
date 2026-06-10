@@ -361,6 +361,65 @@ func TestLoad_LinkSuggestionMinSharedNotFlaggedUnknown(t *testing.T) {
 	}
 }
 
+// --- ADR 0019: emitExclude ---
+
+func TestLoad_EmitExclude(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t,
+		[]byte("version: 1\nemitExclude:\n  - \".claude/agents/\"\n  - \".agents/\"\n")))
+	if err != nil {
+		t.Fatalf("valid emitExclude should load, got %v", err)
+	}
+	want := []string{".claude/agents/", ".agents/"}
+	if len(file.EmitExclude) != len(want) {
+		t.Fatalf("emitExclude = %v, want %v", file.EmitExclude, want)
+	}
+	for i := range want {
+		if file.EmitExclude[i] != want[i] {
+			t.Errorf("emitExclude[%d] = %q, want %q", i, file.EmitExclude[i], want[i])
+		}
+	}
+}
+
+func TestLoad_EmitExcludeAbsentIsNil(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if file.EmitExclude != nil {
+		t.Errorf("absent emitExclude should be nil, got %v", file.EmitExclude)
+	}
+}
+
+func TestLoad_EmitExcludeWrongType(t *testing.T) {
+	_, _, err := Load(rootWithBytes(t, []byte("version: 1\nemitExclude: \".claude/agents/\"\n")))
+	if err == nil {
+		t.Fatal("a bare-string emitExclude should be a HARD error")
+	}
+	if !strings.Contains(err.Error(), "must be a list of strings") {
+		t.Errorf("error = %q, want the list-type message", err)
+	}
+}
+
+func TestLoad_EmitExcludeNonStringElement(t *testing.T) {
+	_, _, err := Load(rootWithBytes(t, []byte("version: 1\nemitExclude:\n  - \"ok/\"\n  - 42\n")))
+	if err == nil {
+		t.Fatal("a non-string emitExclude element should be a HARD error")
+	}
+	if !strings.Contains(err.Error(), "must be a string") {
+		t.Errorf("error = %q, want the element-type message", err)
+	}
+}
+
+func TestLoad_EmitExcludeNotFlaggedUnknown(t *testing.T) {
+	_, notices, err := Load(rootWithBytes(t, []byte("version: 1\nemitExclude: [\".agents/\"]\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if hasNoticeContaining(notices, "emitExclude") {
+		t.Errorf("known key emitExclude must not be flagged as unknown, got %v", notices)
+	}
+}
+
 // --- Contract row: top-level scalar/sequence (shape error) → HARD error ---
 
 func TestLoad_TopLevelScalar(t *testing.T) {

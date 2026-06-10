@@ -34,6 +34,15 @@ inboundThreshold: 3
 # "info" (default) reports them but never fails `check`, even --strict; "warning"
 # promotes BOTH so they fail `check --strict` like orphans/unreachable.
 structureFindingsSeverity: info
+
+# Docs to keep IN the corpus (link-checked, ranked) but DROP from the
+# consumption surfaces (llms.txt family, index.md, trails.json), ADR 0019.
+# Gitignore syntax, same engine as .matlatlignore. Zero effect on `check`,
+# graph.json, findings.json, junit.xml, or the reports.
+emitExclude:
+  - ".claude/agents/"
+  - ".claude/skills/"
+  - ".agents/"
 ```
 
 ## Fields
@@ -111,6 +120,31 @@ dead-end), ADR 0012.
 - Any other value is a hard error. There is no CLI flag for this; it is
   config-only.
 
+### `emitExclude` (list of strings, optional)
+
+Documents to keep **in the corpus** — scanned, link-checked, ranked, present in
+`graph.json`/`findings.json` and every diagnostic surface — but **drop from the
+consumption surfaces**: `llms.txt`, `llms-full.txt`, `llms-small.txt`,
+`index.md`, and the `trails.json` reading orders (entries *and* rendered
+backlink clauses). The filtered artifacts state how many docs were excluded
+([ADR 0019](../adr/0019-emit-exclude.md)). The motivating case is agent
+scaffolding (`.claude/agents/**`, `.claude/skills/**`, `.agents/**`): it must
+stay link-checked, but no LLM navigates to it via `llms.txt`.
+
+- **Gitignore syntax, the same engine as `.matlatlignore`** (NOT the
+  `path.Match` globs `roots` uses): a trailing-slash directory pattern excludes
+  the subtree at any depth (`.claude/agents/` matches
+  `.claude/agents/sub/deep.md`), and `!` negation re-includes.
+- Must be a **list of strings**; a bare string or a non-string element is a
+  hard error. Empty or absent = no filtering.
+- **Zero effect on `matlatl check`** — output and exit codes are byte-identical
+  with and without the key. There is no CLI flag; it is config-only.
+- A pattern matching a reachability root is allowed (the root simply does not
+  render; reachability is computed over the unfiltered corpus) but emits a
+  notice.
+- Patterns are only string-matched against in-corpus document IDs — never a
+  filesystem read.
+
 ## What v1 does NOT configure
 
 - **Ignoring files** — `.matlatlignore` remains the sole ignore mechanism. The
@@ -136,6 +170,8 @@ would introduce them.
 | `roots` wrong type | hard error | 2 (usage) |
 | `inboundThreshold` negative or wrong type | hard error | 2 (usage) |
 | `structureFindingsSeverity` not `info`/`warning` or wrong type | hard error | 2 (usage) |
+| `emitExclude` wrong type (a bare string, a non-string element) | hard error | 2 (usage) |
+| `emitExclude` matches a reachability root | notice (renders nothing for it; reachability unaffected) | run continues |
 | Unknown non-version key (typo / future key) | ignored + notice | run continues |
 | Bad glob in `roots` | notice (matches nothing) | run continues |
 

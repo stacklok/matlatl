@@ -26,20 +26,38 @@ const IndexMarkdownName = "index.md"
 // shared emit escape helpers (the SAME ones the Markdown report uses) so a
 // hostile title/path/category cannot break the GFM table or inject markdown
 // (ADR 0003).
+//
+// index.md is a consumption surface (ADR 0019): emit-excluded documents are
+// dropped from the entries and from the Backlinks column, the header count
+// reflects what is rendered, and a note states how many docs were filtered so
+// the artifact is honest about it. Byte-identical to the unfiltered output when
+// no emitExclude patterns are active.
 func Markdown(v emit.View) []byte {
 	var b strings.Builder
 	b.WriteString("# Documentation index\n\n")
-	fmt.Fprintf(&b, "%d document(s).\n\n", len(v.Docs))
 
-	if len(v.Docs) == 0 {
+	docs := make([]emit.DocView, 0, len(v.Docs))
+	for _, d := range v.Docs { // sorted by DocumentID; filtering preserves order
+		if !v.EmitExcluded(d.ID) {
+			docs = append(docs, d)
+		}
+	}
+	fmt.Fprintf(&b, "%d document(s).", len(docs))
+	if n := v.EmitExcludedCount(); n > 0 {
+		fmt.Fprintf(&b, " %d document(s) excluded from this index by emitExclude "+
+			"(still in the corpus: link-checked and ranked).", n)
+	}
+	b.WriteString("\n\n")
+
+	if len(docs) == 0 {
 		b.WriteString("_No documents._\n")
 		return []byte(b.String())
 	}
 
-	// Group by category (directory). v.Docs is already sorted by DocumentID, so
+	// Group by category (directory). docs is already sorted by DocumentID, so
 	// within each category the order is stable.
 	byCat := map[string][]emit.DocView{}
-	for _, d := range v.Docs {
+	for _, d := range docs {
 		byCat[d.Category] = append(byCat[d.Category], d)
 	}
 	cats := make([]string, 0, len(byCat))
@@ -69,9 +87,10 @@ func Markdown(v emit.View) []byte {
 // backlinksCell renders the documents that link TO id as a comma-separated list
 // of their paths (ADR 0016, Nelson/Xanadu two-way links), or "-" when nothing
 // links to it. The list is the document projection's in-neighbours (already
-// sorted by path, self-excluded), so the cell is deterministic.
+// sorted by path, self-excluded), filtered of emit-excluded sources (ADR 0019),
+// so the cell is deterministic.
 func backlinksCell(v emit.View, id identity.DocumentID) string {
-	in := v.Backlinks(id)
+	in := v.RenderedBacklinks(id)
 	if len(in) == 0 {
 		return "-"
 	}

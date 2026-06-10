@@ -1342,3 +1342,169 @@ func TestIntegration_ConfigToleratedNoticeReachesStderr(t *testing.T) {
 		t.Errorf("expected the unknown-key 'rootz' notice on stderr, got %q", se)
 	}
 }
+
+// emitExcludeFixture stages a repo with real docs plus agent scaffolding: the
+// agent file is REACHABLE (README links to it) and links back into the docs, so
+// it carries ranking/backlink signal that must survive in the corpus while the
+// file itself disappears from the consumption surfaces (ADR 0019).
+func emitExcludeFixture(t *testing.T, withConfig bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile := func(name, body string) {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile("README.md", "# Repo\n\nSee the [guide](docs/guide.md) and the [helper](.claude/agents/helper.md).\n")
+	writeFile("docs/guide.md", "# Guide\n\nBack to the [readme](../README.md).\n")
+	writeFile(".claude/agents/helper.md", "# Helper Agent\n\nReads the [guide](../../docs/guide.md).\n")
+	if withConfig {
+		writeFile(".matlatl.yml", "version: 1\nemitExclude:\n  - \".claude/agents/\"\n")
+	}
+	return dir
+}
+
+// TestIntegration_EmitExcludeFiltersConsumptionSurfaces: `emit` over a repo whose
+// .matlatl.yml carries emitExclude drops the excluded doc from llms.txt /
+// llms-full.txt / llms-small.txt / index.md / trails.json — entries AND backlink
+// clauses — while graph.json keeps the complete corpus (identical node set with
+// and without the config) per ADR 0019.
+func TestIntegration_EmitExcludeFiltersConsumptionSurfaces(t *testing.T) {
+	agentID := ".claude/agents/helper.md"
+
+	run := func(dir string) string {
+		outDir := t.TempDir()
+		var out, errOut bytes.Buffer
+		if code := runArgs(context.Background(), []string{"emit", dir, "--out", outDir}, &out, &errOut); code != platform.ExitOK {
+			t.Fatalf("emit code = %v (stderr=%q)", code, errOut.String())
+		}
+		return outDir
+	}
+	nodeIDs := func(outDir string) []string {
+		b, err := os.ReadFile(filepath.Join(outDir, "graph.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			Nodes []struct {
+				ID string `json:"id"`
+			} `json:"nodes"`
+		}
+		if err := json.Unmarshal(b, &doc); err != nil {
+			t.Fatalf("graph.json parse: %v", err)
+		}
+		ids := make([]string, 0, len(doc.Nodes))
+		for _, n := range doc.Nodes {
+			ids = append(ids, n.ID)
+		}
+		return ids
+	}
+
+	plainOut := run(emitExcludeFixture(t, false))
+	filteredOut := run(emitExcludeFixture(t, true))
+
+	// Control: without the config the agent doc renders on every surface.
+	plainLLMS, _ := os.ReadFile(filepath.Join(plainOut, "llms.txt"))
+	if !strings.Contains(string(plainLLMS), agentID) {
+		t.Fatalf("control: %s should render without emitExclude:\n%s", agentID, plainLLMS)
+	}
+
+	// Filtered: the navigation surfaces drop it, entries and backlinks alike.
+	for _, name := range []string{"llms.txt", "index.md", "trails.json"} {
+		b, err := os.ReadFile(filepath.Join(filteredOut, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if strings.Contains(string(b), agentID) {
+			t.Errorf("%s must not mention the excluded doc:\n%s", name, b)
+		}
+	}
+	// The concatenated-body artifacts drop the excluded doc's SECTION (context
+	// header + body); other docs' raw bodies may still mention the path in
+	// prose — bodies are not rewritten.
+	for _, name := range []string{"llms-full.txt", "llms-small.txt"} {
+		b, err := os.ReadFile(filepath.Join(filteredOut, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if strings.Contains(string(b), "Path: `"+agentID+"`") {
+			t.Errorf("%s must not carry the excluded doc's section:\n%s", name, b)
+		}
+	}
+	// The artifacts are honest about the filter.
+	llms, _ := os.ReadFile(filepath.Join(filteredOut, "llms.txt"))
+	if !strings.Contains(string(llms), "1 document(s) excluded from rendering by emitExclude") {
+		t.Errorf("llms.txt must state the excluded count:\n%s", llms)
+	}
+	// graph.json is the machine surface: the node set is IDENTICAL.
+	plainNodes, filteredNodes := nodeIDs(plainOut), nodeIDs(filteredOut)
+	if len(plainNodes) != len(filteredNodes) {
+		t.Fatalf("graph.json node count changed: %d -> %d", len(plainNodes), len(filteredNodes))
+	}
+	if !slicesContains(filteredNodes, agentID) {
+		t.Errorf("graph.json must keep the excluded doc's node")
+	}
+}
+
+// TestIntegration_EmitExcludeCheckUnaffected: `check` output and exit code are
+// byte-identical with and without emitExclude (ADR 0019: zero effect on check).
+func TestIntegration_EmitExcludeCheckUnaffected(t *testing.T) {
+	check := func(dir string) (platform.ExitCode, string, string) {
+		var out, errOut bytes.Buffer
+		code := runArgs(context.Background(), []string{"check", dir, "--strict"}, &out, &errOut)
+		return code, out.String(), errOut.String()
+	}
+	plainCode, plainOut, _ := check(emitExcludeFixture(t, false))
+	filteredCode, filteredOut, _ := check(emitExcludeFixture(t, true))
+	if plainCode != filteredCode {
+		t.Errorf("check exit code changed: %v -> %v", plainCode, filteredCode)
+	}
+	if plainOut != filteredOut {
+		t.Errorf("check stdout changed:\n--- without ---\n%s\n--- with ---\n%s", plainOut, filteredOut)
+	}
+}
+
+// TestIntegration_EmitExcludeRootNotice: a pattern matching a reachability root
+// is allowed but earns a stderr notice (ADR 0019).
+func TestIntegration_EmitExcludeRootNotice(t *testing.T) {
+	dir := emitExcludeFixture(t, false)
+	if err := os.WriteFile(filepath.Join(dir, ".matlatl.yml"),
+		[]byte("version: 1\nemitExclude:\n  - \"README.md\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if code := runArgs(context.Background(), []string{"index", dir}, &out, &errOut); code != platform.ExitOK {
+		t.Fatalf("index code = %v (stderr=%q)", code, errOut.String())
+	}
+	se := errOut.String()
+	if !strings.Contains(se, "notice [config]") || !strings.Contains(se, "emitExclude matches reachability root") {
+		t.Errorf("expected the excluded-root notice on stderr, got %q", se)
+	}
+	if strings.Contains(out.String(), "`README.md`") {
+		t.Errorf("excluded root must not render in index.md:\n%s", out.String())
+	}
+}
+
+// TestIntegration_EmitExcludeWrongTypeExitsUsage: a non-list emitExclude is a
+// HARD error mapped to ExitUsage (ADR 0011 contract).
+func TestIntegration_EmitExcludeWrongTypeExitsUsage(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# R\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".matlatl.yml"),
+		[]byte("version: 1\nemitExclude: \".claude/agents/\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if code := runArgs(context.Background(), []string{dir}, &out, &errOut); code != platform.ExitUsage {
+		t.Fatalf("wrong-typed emitExclude code = %v, want ExitUsage (stderr=%q)", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "emitExclude") {
+		t.Errorf("stderr should name the bad key, got %q", errOut.String())
+	}
+}

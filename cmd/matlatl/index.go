@@ -65,6 +65,10 @@ func newIndexCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// emitExclude (ADR 0019) filters the consumption surfaces this command
+			// renders (index.md, llms.txt family). --graph is unaffected: the
+			// graph.json emitter never consults the matcher (machine surface).
+			view = applyEmitExclude(cmd, cfg, view)
 
 			opts := llmstxt.Options{Title: title}
 			var content []byte

@@ -133,6 +133,10 @@ Before reporting orphans/noise, check what the repo already declares:
   reported ambiguous).
 - **`.matlatl.yml`** (scan root only) — declares extra reachability `roots` (path
   globs). Roots are exempt from orphan/unreachable findings. `version: 1`.
+- **`emitExclude`** (in `.matlatl.yml`, gitignore syntax) — keeps docs IN the
+  corpus (link-checked, ranked) but hides them from llms.txt/index.md/trails.json
+  entries and backlink clauses; zero effect on `check`/graph.json. Typical use:
+  agent scaffolding (`.claude/agents/`, `.claude/skills/`, `.agents/`).
 - **Per-doc opt-out:** front matter `matlatl: orphan-intentional` keeps a doc in
   the graph but suppresses its orphan/unreachable finding. Use this (or add a
   link) rather than deleting a deliberately-standalone doc.

@@ -78,6 +78,12 @@ type Config struct {
 	// knob (no CLI flag). <=0 is normalized to the domain default (2) in
 	// PredictLinks.
 	LinkSuggestionMinShared int
+	// EmitExclude holds gitignore-syntax patterns for documents that stay in the
+	// corpus (scanned, link-checked, ranked — the pipeline NEVER reads this field)
+	// but are not rendered on the consumption surfaces (llms.txt family, index.md,
+	// trails.json). Sourced from `.matlatl.yml emitExclude` and consumed only at
+	// the emit boundary by the CLI layer (ADR 0019). Empty = no filtering.
+	EmitExclude []string
 }
 
 // DefaultConfig returns a Config with sane defaults: scan the current

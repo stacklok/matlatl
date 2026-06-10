@@ -8,6 +8,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`emitExclude` ([ADR 0019](docs/adr/0019-emit-exclude.md)).** A new
+  `.matlatl.yml` key that keeps documents **in the corpus** — link-checked,
+  ranked, present in `graph.json`/`findings.json` — while dropping them from the
+  **consumption surfaces**: `llms.txt`/`llms-full.txt`/`llms-small.txt`,
+  `index.md` (via `emit` and `index`), and the `trails.json` reading orders,
+  entries and rendered backlink clauses alike. Patterns use gitignore syntax
+  (the same engine as `.matlatlignore`), so `.claude/agents/` excludes the
+  subtree at any depth. Zero effect on `matlatl check` (byte-identical output
+  and exit codes); the filtered artifacts state how many docs were excluded.
+  The motivating case is agent scaffolding (`.claude/agents/**`,
+  `.claude/skills/**`, `.agents/**`): it must stay link-checked, but no LLM
+  navigates to it via `llms.txt`.
+
 - **Agent-experience analyses (P11, [ADR 0016](docs/adr/0016-agent-experience.md)).**
   Four new signals over the built graph, all deterministic and non-gating:
   - **PageRank** — the random-surfer global-importance scalar (Brin & Page 1998),

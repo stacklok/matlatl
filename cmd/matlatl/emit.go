@@ -55,7 +55,10 @@ func newEmitCommand() *cobra.Command {
 			if err != nil {
 				return exitCodeError{code: code, err: err}
 			}
-			view := emit.BuildView(res)
+			// emitExclude (ADR 0019) filters only the consumption surfaces in the
+			// bundle (index.md, the llms.txt family, trails.json); graph.json and
+			// findings.json render the complete corpus from the same View.
+			view := applyEmitExclude(cmd, cfg, emit.BuildView(res))
 
 			artifacts, err := bundleArtifacts(view, res, cfg.RootPath, llmstxt.Options{Title: title})
 			if err != nil {

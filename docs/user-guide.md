@@ -412,11 +412,51 @@ anchor — pin it. A missing version is assumed `1` (with a notice); a malformed
 file, a wrong-typed field, or a `version` newer than this matlatl supports is a
 usage error (exit 2); an unknown key (a typo, or a key from a newer matlatl) is
 tolerated with a notice. The file is read only at the scan root, capped at 1 MiB,
-and its globs are string-matched against in-corpus documents (never a filesystem
-read). v1 is **roots only**: `.matlatlignore` stays the sole ignore mechanism and
-run behavior (`--strict`/`--out`/…) stays flag-only. See
+and its globs/patterns are string-matched against in-corpus documents (never a
+filesystem read). `.matlatlignore` stays the sole ignore mechanism and run
+behavior (`--strict`/`--out`/…) stays flag-only. See
 [ADR 0011](adr/0011-per-repo-config-file.md) and the
 [schema reference](schemas/matlatl-config-v1.md).
+
+## Hiding docs from the navigation surfaces (`emitExclude`)
+
+Agent scaffolding — `.claude/agents/**`, `.claude/skills/**`, `.agents/**` —
+usually belongs **in the corpus**: its links should be checked (real link rot
+hides in `.claude/rules/`-style docs) and its inlinks feed PageRank and
+backlinks. But it is pure noise as *navigation entries*: skills and agent
+definitions are auto-discovered by the agent harness itself, so no LLM
+navigates to them via `llms.txt`. On repos with heavy scaffolding it can be a
+third or more of the entry list. `.matlatlignore` is the wrong tool — it
+removes the docs from the corpus entirely, forfeiting link-checking and
+ranking signal.
+
+`emitExclude` keeps such docs in the corpus but drops them from the
+**consumption surfaces** — `llms.txt`, `llms-full.txt`, `llms-small.txt`,
+`index.md` (via both `matlatl emit` and `matlatl index`), and the
+`trails.json` reading orders — entries AND rendered backlink clauses. The
+header document counts reflect what is rendered, and the artifacts state how
+many docs were excluded. Everything diagnostic or machine-facing is
+untouched: `matlatl check` (byte-identical output and exit codes),
+`graph.json`, `findings.json`, `junit.xml`, the reports, and the MCP tools all
+see the complete corpus.
+
+```yaml
+# .matlatl.yml
+version: 1
+emitExclude:
+  - ".claude/agents/"
+  - ".claude/skills/"
+  - ".agents/"
+```
+
+Unlike `roots` (which uses `path.Match` globs), `emitExclude` patterns use
+**gitignore syntax with the same engine as `.matlatlignore`**: a
+trailing-slash directory pattern excludes that subtree at any depth, and `!`
+negation re-includes. Must be a list of strings (anything else is a usage
+error, exit 2); empty or absent means no filtering. A pattern that matches a
+root/README is allowed — the root simply doesn't render and reachability is
+unaffected — but matlatl emits a notice so it isn't silent. See
+[ADR 0019](adr/0019-emit-exclude.md).
 
 ## Checking external links (opt-in)
 

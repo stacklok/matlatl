@@ -69,6 +69,13 @@ type File struct {
 	// signal (ADR 0013). nil when absent (the domain default of 2 applies); a
 	// present value must be >= 0 (negative is a hard error).
 	LinkSuggestionMinShared *int
+	// EmitExclude holds gitignore-syntax patterns (the SAME engine and semantics
+	// as `.matlatlignore`) for documents that stay in the corpus — fully scanned,
+	// link-checked, ranked — but are NOT rendered on the consumption surfaces
+	// (llms.txt family, index.md, trails.json). Zero effect on `check`, the
+	// terminal report, graph.json, findings.json, junit.xml (ADR 0019). Empty or
+	// absent = no filtering.
+	EmitExclude []string
 }
 
 // rawFile is the permissive decode target. We decode into a generic map first
@@ -194,6 +201,12 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		return File{}, nil, err
 	}
 
+	// --- emitExclude ---
+	emitExclude, err := resolveEmitExclude(raw)
+	if err != nil {
+		return File{}, nil, err
+	}
+
 	// --- unknown keys (typo / future additive key): ignore + notice ---
 	notices = append(notices, unknownKeyNotices(path, raw)...)
 
@@ -203,7 +216,35 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		InboundThreshold:          threshold,
 		StructureFindingsSeverity: severity,
 		LinkSuggestionMinShared:   linkMinShared,
+		EmitExclude:               emitExclude,
 	}, notices, nil
+}
+
+// resolveEmitExclude enforces the emitExclude row (ADR 0019): absent → none; a
+// list of strings → parsed; any other shape (a bare string, a non-string
+// element) → hard error. The patterns are gitignore-syntax strings, compiled
+// later at the emit boundary; like `roots`, they are only ever string-matched
+// against in-corpus document IDs — never a filesystem read.
+func resolveEmitExclude(raw rawFile) ([]string, error) {
+	v, present := raw["emitExclude"]
+	if !present || v == nil {
+		return nil, nil
+	}
+	seq, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%s: `emitExclude` must be a list of strings, got %T", fileName, v)
+	}
+	patterns := make([]string, 0, len(seq))
+	for i, e := range seq {
+		s, ok := e.(string)
+		if !ok {
+			return nil, fmt.Errorf(
+				"%s: `emitExclude[%d]` must be a string, got %T", fileName, i, e)
+		}
+		patterns = append(patterns, s)
+	}
+	return patterns, nil
 }
 
 // resolveLinkSuggestionMinShared enforces the linkSuggestionMinShared row
@@ -326,7 +367,7 @@ func unknownKeyNotices(path string, raw rawFile) []application.Notice {
 	known := map[string]struct{}{
 		"version": {}, "roots": {},
 		"inboundThreshold": {}, "structureFindingsSeverity": {},
-		"linkSuggestionMinShared": {},
+		"linkSuggestionMinShared": {}, "emitExclude": {},
 	}
 	var unknown []string
 	for k := range raw {

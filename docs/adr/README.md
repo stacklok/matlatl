@@ -25,3 +25,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0016 | Agent experience (PageRank, reading-order trails, backlinks, information scent) | Accepted |
 | 0017 | Nested git repositories are out of scan scope          | Accepted |
 | 0018 | Default-ignore `.claude/agent-memory`                  | Accepted |
+| 0019 | `emitExclude`: in the corpus, off the navigation surfaces | Accepted |
