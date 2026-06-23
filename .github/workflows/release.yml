@@ -60,4 +60,5 @@ jobs:
       - name: Summarize skill artifact
         env:
           SKILL_REFERENCE: ${{ steps.skill.outputs.reference }}
-        run: echo "Published ToolHive skill: ${SKILL_REFERENCE}" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Published ToolHive skill: ${SKILL_REFERENCE}" >> "$GITHUB_STEP_SUMMARY"
