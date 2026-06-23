@@ -31,7 +31,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   skill:
-    name: build & publish ToolHive skill
+    name: "build & publish ToolHive skill"
     runs-on: ubuntu-latest
     permissions:
       contents: read
