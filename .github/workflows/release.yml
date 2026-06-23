@@ -29,3 +29,35 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  skill:
+    name: build & publish ToolHive skill
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push the skill OCI artifact to GHCR
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install ToolHive
+        uses: StacklokLabs/toolhive-actions/install@87b30f145f84b3186fd20e74c133111a5da24710 # v0.0.5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push matlatl skill
+        id: skill
+        uses: StacklokLabs/toolhive-actions/skill-build@87b30f145f84b3186fd20e74c133111a5da24710 # v0.0.5
+        with:
+          path: ./.claude/skills/matlatl
+          tag: ghcr.io/stacklok/matlatl-skill:${{ github.ref_name }}
+          push: "true"
+
+      - name: Summarize skill artifact
+        env:
+          SKILL_REFERENCE: ${{ steps.skill.outputs.reference }}
+        run: echo "Published ToolHive skill: ${SKILL_REFERENCE}" >> "$GITHUB_STEP_SUMMARY"
