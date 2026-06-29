@@ -423,3 +423,9 @@ I, H, J, K** round out scent, trails, districts, importance, and backlinks; **L*
   the web.*
 - Burt, R. (1992). *Structural Holes: The Social Structure of Competition.*
 - Luhmann, N. — *Zettelkasten*; and the Obsidian/Roam/Foam/Dendron lineage.
+
+## See also
+
+- [matlatl-and-the-llm-wiki-pattern.md](matlatl-and-the-llm-wiki-pattern.md) —
+  a related note: where matlatl fits when an LLM agent *writes and maintains* the
+  wiki (the ingest/query/lint loop), rather than only reading it.
