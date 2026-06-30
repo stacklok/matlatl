@@ -54,7 +54,10 @@ jobs:
         uses: StacklokLabs/toolhive-actions/skill-build@9dc5ad7e2616ac91a041b2ac175a304722ac456d # includes skill-build serve flag fix
         with:
           path: ./.claude/skills/matlatl
-          tag: ghcr.io/stacklok/matlatl-skill:${{ github.ref_name }}
+          # OCI repo's last path component must equal the skill's `name:` field
+          # (supply-chain check in `thv skill install`). Namespaced under skills/
+          # to avoid colliding with a future matlatl binary container image.
+          tag: ghcr.io/stacklok/skills/matlatl:${{ github.ref_name }}
           push: "true"
 
       - name: Summarize skill artifact
