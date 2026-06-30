@@ -23,20 +23,41 @@ typed graph, and reports what's **broken**, **lost** (orphans/unreachable), and
 **weakly connected**. It renders the same analysis for humans, for LLMs reading,
 and for agents acting.
 
-## Get the binary
+## Get matlatl running
 
-Try in this order; use the first that works:
+**GitHub Actions CI — bootstrap a docs gate with the composite action, do not
+hand-roll a `matlatl check` step.** Use the repo's composite action
+(`uses: stacklok/matlatl@<sha> # vX.Y.Z`); SHA-pin the ref. It builds matlatl
+from its own checkout and runs the gate in one step — annotations, job summary,
+`findings.json` + `junit.xml` in `out-dir` — none of which a bare `check` gives
+you. This is the default for any repo setting up a docs gate; reaching for
+`go run`/`go install` instead leaves the gate without annotations or artifacts.
+Details and the input table: `docs/user-guide.md` ("GitHub Action").
+
+```yaml
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: stacklok/matlatl@<sha> # vX.Y.Z
+        with:
+          strict: "true"
+          out-dir: matlatl-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: matlatl, path: matlatl-out }
+```
+
+Run the action in its own job — its `setup-go` step adjusts `PATH` for the rest
+of the job.
+
+**Local / non-GitHub-Actions CI — acquire a binary:** try in this order; use the
+first that works:
 
 1. `matlatl` is on `PATH` → use it directly.
 2. Repo clone with a Taskfile → `task build` (produces `./bin/matlatl`), then `./bin/matlatl`.
 3. Otherwise → `go run github.com/stacklok/matlatl/cmd/matlatl@latest` (or `go run ./cmd/matlatl` inside the repo).
-4. In GitHub Actions CI → don't acquire a binary at all; **prefer** the repo's
-   composite action (`uses: stacklok/matlatl@<sha>`) over a hand-rolled
-   `matlatl check .` step. It builds matlatl from its own checkout and runs the
-   gate in one step (annotations, job summary, `findings.json` + `junit.xml` in
-   `out-dir`) — a bare `check` gives you none of that. Internal-org consumers
-   need the repo's org-wide Actions-access grant first. Details:
-   `docs/user-guide.md` ("GitHub Action").
 
 All commands below take a `[path]` (default `.`). Run `matlatl <command> --help`
 for the authoritative flag list before guessing flags.
@@ -46,7 +67,7 @@ for the authoritative flag list before guessing flags.
 | Goal | Command |
 | --- | --- |
 | See the full analysis (human report) | `matlatl .` (add `--quiet` for a one-line summary) |
-| **Gate CI** / pass-fail check | **GitHub Actions → the composite action** (`uses: stacklok/matlatl@<sha>`): annotations + job summary + `findings.json`/`junit.xml`, no binary step. **Other CI / local →** `matlatl check .` (see exit codes; `--out <dir>` writes `findings.json` + `junit.xml`). Either way, `--strict`/`with: strict` also fails on orphans/ambiguous. |
+| **Gate CI** / pass-fail check | **GitHub Actions → use the composite action** (`uses: stacklok/matlatl@<sha>`): annotations + job summary + `findings.json`/`junit.xml`, no binary step (see "Get matlatl running" above for the bootstrap snippet). **Other CI / local →** `matlatl check .` (see exit codes; `--out <dir>` writes `findings.json` + `junit.xml`). Either way, `--strict`/`with: strict` also fails on orphans/ambiguous. |
 | List just the lost docs | `matlatl orphans .` (`--isolated-only`, `--unreachable-only`) |
 | Committable Markdown report | `matlatl report . --out <dir>` (writes `report.md`) |
 | Diagram of the graph | `matlatl graph . --format mermaid\|dot\|json` (`--tree` for the hierarchy variant) |
