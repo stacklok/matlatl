@@ -98,7 +98,9 @@ A document whose front matter sets **`matlatl: orphan-intentional`** (in
 `FrontMatter.Extra` under key `matlatl`, value `orphan-intentional`) is excluded
 from **Orphan and Unreachable** findings but still appears as a vertex and in all
 other metrics. The exact key/value is fixed here so authors can opt out of noise
-(e.g. changelogs, license files).
+(e.g. changelogs, license files). ADR 0012 broadened this exemption to the whole
+structure ladder: an `orphan-intentional` doc is also exempt from **dead-end** and
+**under-linked** findings, not only orphan/unreachable.
 
 ### Root set
 

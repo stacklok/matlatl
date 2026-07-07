@@ -114,8 +114,9 @@ func isIndexType(doc *corpus.Document) bool {
 	return ok && strings.EqualFold(s, FMTypeIndex)
 }
 
-// isIntentionalOrphan reports whether a document opts out of orphan/unreachable
-// findings via `matlatl: orphan-intentional` (ADR 0007).
+// isIntentionalOrphan reports whether a document opts out of the structure
+// findings (orphan/unreachable/dead-end/under-linked; ADR 0007 broadened by
+// ADR 0012) via `matlatl: orphan-intentional`.
 func isIntentionalOrphan(doc *corpus.Document) bool {
 	if doc.FrontMatter.Extra == nil {
 		return false
