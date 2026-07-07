@@ -220,7 +220,11 @@ matlatl: orphan-intentional
 ---
 ```
 
-It will still appear in the graph but won't be reported as an orphan/unreachable.
+It will still appear in the graph but won't be reported as an orphan,
+unreachable, dead-end, or under-linked doc — the opt-out covers the whole
+structure ladder ([ADR 0012](adr/0012-graduated-structure-and-bowtie.md)). Use
+it for docs that are terminal by design (appendices, templates, changelogs)
+where adding an onward link would be pure gate-spam.
 
 ## Using it in CI
 

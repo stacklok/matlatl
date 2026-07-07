@@ -35,8 +35,7 @@ Try in this order; use the first that works:
    `matlatl check .` step. It builds matlatl from its own checkout and runs the
    gate in one step (annotations, job summary, `findings.json` + `junit.xml` in
    `out-dir`) — a bare `check` gives you none of that. Internal-org consumers
-   need the repo's org-wide Actions-access grant first. Details:
-   `docs/user-guide.md` ("GitHub Action").
+   need the repo's org-wide Actions-access grant first.
 
 All commands below take a `[path]` (default `.`). Run `matlatl <command> --help`
 for the authoritative flag list before guessing flags.
@@ -65,8 +64,7 @@ high-authority docs early — for onboarding an agent to a repo); `llms.txt` and
 `Backlinks` column in `index.md`).
 
 **Committing llms.txt (the devex pattern):** when a repo commits `llms.txt` and
-gates its freshness in CI, set up (and recommend) all three companion pieces —
-see `docs/user-guide.md` § "Committing llms.txt":
+gates its freshness in CI, set up (and recommend) all three companion pieces:
 
 1. wire regeneration into the repo's existing gen-style task and its
    verify-generated twin (so the standard pre-PR loop catches staleness — no
@@ -80,7 +78,7 @@ see `docs/user-guide.md` § "Committing llms.txt":
 
 ## Read the result correctly
 
-**Exit codes** (`check`; ADR 0005):
+**Exit codes** (`check`):
 
 | Code | Meaning |
 | --- | --- |
@@ -102,7 +100,8 @@ see `docs/user-guide.md` § "Committing llms.txt":
   never report them as build failures.
 
 When summarizing to the user, separate "broken (must fix)" from "structural
-hints (optional)". Don't alarm on a healthy repo that merely has dead-end ADRs.
+hints (optional)". Don't alarm on a healthy repo that merely has dead-end
+appendices or reference pages.
 
 ## Mine the artifacts for insights
 
@@ -208,8 +207,9 @@ Before reporting orphans/noise, check what the repo already declares:
   entries and backlink clauses; zero effect on `check`/graph.json. Typical use:
   agent scaffolding (`.claude/agents/`, `.claude/skills/`, `.agents/`).
 - **Per-doc opt-out:** front matter `matlatl: orphan-intentional` keeps a doc in
-  the graph but suppresses its orphan/unreachable finding. Use this (or add a
-  link) rather than deleting a deliberately-standalone doc.
+  the graph but suppresses its orphan/unreachable/dead-end/under-linked findings
+  (the whole structure ladder). Use it for docs that are terminal by design
+  (appendices, templates, changelogs) rather than adding gate-spam links.
 - **Roots are auto-detected** by filename `README.md`/`index.md`/`SKILL.md` (any
   depth) and front matter `type: index`. A declared entry point with no inbound
   links is not a defect.
@@ -219,7 +219,7 @@ Before reporting orphans/noise, check what the repo already declares:
 - **External links are NOT checked by default.** `--check-external` opts in (adds
   HTTP liveness checks with a mandatory SSRF guard); off by default for speed and
   determinism, and its `DeadLink` results stay out of the deterministic output.
-- **Directory links under `--strict`:** `[the ADRs](adr/)` always resolves, and by
+- **Directory links under `--strict`:** `[examples](examples/)` always resolves, and by
   default confers reachability on the folder's direct children. Under `--strict`
   it does **not** vouch for non-index siblings — link those docs explicitly.
 - **"reachability indeterminate (no root found)"** is a notice, not a failure:
@@ -233,11 +233,3 @@ Before reporting orphans/noise, check what the repo already declares:
 - **Output is deterministic and byte-stable** — re-running produces identical
   artifacts. If you diff `graph.json`/`findings.json` and see churn, something
   changed in the corpus, not noise.
-
-## See also (this repo)
-
-- `docs/user-guide.md` — every command, flag, and CI usage in depth.
-- `docs/adr/0005-exit-code-contract.md` — the exact `check` contract.
-- `docs/schemas/graph.schema.json`, `docs/schemas/findings.schema.json`,
-  `docs/schemas/trails.schema.json` — the artifact shapes (each carries its
-  authoritative `schemaVersion`).
