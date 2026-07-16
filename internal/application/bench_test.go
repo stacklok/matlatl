@@ -47,8 +47,8 @@ func BenchmarkPipeline_5kDocs(b *testing.B) {
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				if got := runFullPipeline(b, root, w.workers); got != n+1 {
-					b.Fatalf("doc count = %d, want %d", got, n+1)
+				if got := runFullPipeline(b, root, w.workers); got != n+1+genCorpusChainLen {
+					b.Fatalf("doc count = %d, want %d", got, n+1+genCorpusChainLen)
 				}
 			}
 		})
