@@ -98,6 +98,14 @@ const (
 	// — a discoverability hint, not a defect — mirroring SuggestedLink,
 	// ArticulationPoint and Bridge.
 	LowScentAnchor
+	// FarFromRoot is a document reachable from the root set but at or beyond the
+	// configured hop-distance threshold from the NEAREST root (ADR 0021): it is
+	// "reachable but effectively undiscoverable" by link traversal, since an agent
+	// or reader following links from an entry point is unlikely to reach it that
+	// deep. It is always Info and NEVER gates the exit code (even --strict) — a
+	// discoverability hint, not a defect — mirroring UnderLinked's intent but
+	// keyed on distance-from-entry-point rather than raw in-degree.
+	FarFromRoot
 )
 
 // String returns the canonical name of the finding kind.
@@ -129,6 +137,8 @@ func (k FindingKind) String() string {
 		return "bridge"
 	case LowScentAnchor:
 		return "low-scent-anchor"
+	case FarFromRoot:
+		return "far-from-root"
 	default:
 		return "unknown"
 	}
@@ -136,7 +146,7 @@ func (k FindingKind) String() string {
 
 // Valid reports whether k is a defined FindingKind.
 func (k FindingKind) Valid() bool {
-	return k >= BrokenLink && k <= LowScentAnchor
+	return k >= BrokenLink && k <= FarFromRoot
 }
 
 // ParseFindingKind maps a canonical kind name (the String form, e.g.

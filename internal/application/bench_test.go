@@ -66,14 +66,17 @@ func TestPipeline_5kDocs_MemoryCeiling(t *testing.T) {
 		t.Skip("skipping 5k-doc memory test in -short")
 	}
 	const n = 5000
+	// genCorpus writes n docs + the README + a fixed 7-doc deep chain (ADR 0021),
+	// so the corpus has n+8 documents.
+	const wantDocs = n + 1 + genCorpusChainLen
 	root := genCorpus(t, n)
 
 	runtime.GC()
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
 
-	if got := runFullPipeline(t, root, 0); got != n+1 {
-		t.Fatalf("doc count = %d, want %d", got, n+1)
+	if got := runFullPipeline(t, root, 0); got != wantDocs {
+		t.Fatalf("doc count = %d, want %d", got, wantDocs)
 	}
 
 	var after runtime.MemStats

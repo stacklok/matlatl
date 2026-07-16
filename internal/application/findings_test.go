@@ -254,6 +254,39 @@ func TestSuggestedLinkFinding(t *testing.T) {
 	}
 }
 
+// TestFarFromRootFinding covers the hops-from-root → Finding mapping (ADR 0021):
+// a far-from-root document becomes a single Info finding anchored at the doc,
+// carrying its hop distance in Details, and never gating the build. It exercises
+// the builder directly (the HopsResult distance map is unexported, and the
+// findingsFromMetrics wiring is covered end-to-end by the CLI integration test).
+func TestFarFromRootFinding(t *testing.T) {
+	f := farFromRootFinding("deep.md", 7, 6)
+	if f.Kind != analysis.FarFromRoot {
+		t.Errorf("kind = %v, want FarFromRoot", f.Kind)
+	}
+	if f.Severity != analysis.Info {
+		t.Errorf("severity = %v, want Info (never gates the build)", f.Severity)
+	}
+	if f.Location.Document != "deep.md" {
+		t.Errorf("location = %q, want deep.md", f.Location.Document)
+	}
+	if f.ID != "far-from-root:deep.md" {
+		t.Errorf("ID = %q, want far-from-root:deep.md", f.ID)
+	}
+	if !strings.Contains(f.Message, "7 hops") || !strings.Contains(f.Message, "threshold 6") {
+		t.Errorf("message should name the distance and threshold: %q", f.Message)
+	}
+	wantDetails := map[string]string{
+		DetailTargetDocument: "deep.md",
+		DetailHopsFromRoot:   "7",
+	}
+	for k, want := range wantDetails {
+		if f.Details[k] != want {
+			t.Errorf("details[%q] = %q, want %q", k, f.Details[k], want)
+		}
+	}
+}
+
 func TestCheckExitCode(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -299,6 +332,10 @@ func TestCheckExitCode(t *testing.T) {
 		{"under-linked warning non-strict", Result{UnderLinkedCount: 3, StructureFindingsSeverity: StructureFindingsWarning}, false, platform.ExitOK},
 		{"under-linked warning strict", Result{UnderLinkedCount: 3, StructureFindingsSeverity: StructureFindingsWarning}, true, platform.ExitFindings},
 		{"dead-end warning strict", Result{DeadEndCount: 2, StructureFindingsSeverity: StructureFindingsWarning}, true, platform.ExitFindings},
+		// ADR 0021: far-from-root is an Info discoverability hint — it NEVER fails
+		// the build, even under --strict.
+		{"far-from-root non-strict", Result{FarFromRootCount: 4}, false, platform.ExitOK},
+		{"far-from-root strict", Result{FarFromRootCount: 4}, true, platform.ExitOK},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

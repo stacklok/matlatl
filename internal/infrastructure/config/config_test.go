@@ -285,6 +285,62 @@ func TestLoad_InboundThresholdWrongType(t *testing.T) {
 	}
 }
 
+// --- ADR 0021: farFromRootThreshold ---
+
+func TestLoad_FarFromRootThreshold(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\nfarFromRootThreshold: 8\n")))
+	if err != nil {
+		t.Fatalf("valid farFromRootThreshold should load, got %v", err)
+	}
+	if file.FarFromRootThreshold == nil || *file.FarFromRootThreshold != 8 {
+		t.Errorf("farFromRootThreshold = %v, want pointer to 8", file.FarFromRootThreshold)
+	}
+}
+
+func TestLoad_FarFromRootThresholdZeroAllowed(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("farFromRootThreshold: 0\n")))
+	if err != nil {
+		t.Fatalf("farFromRootThreshold 0 should load (normalized to default in domain), got %v", err)
+	}
+	if file.FarFromRootThreshold == nil || *file.FarFromRootThreshold != 0 {
+		t.Errorf("farFromRootThreshold = %v, want pointer to 0", file.FarFromRootThreshold)
+	}
+}
+
+func TestLoad_FarFromRootThresholdNegative(t *testing.T) {
+	if _, _, err := Load(rootWithBytes(t, []byte("farFromRootThreshold: -1\n"))); err == nil {
+		t.Fatal("negative farFromRootThreshold should be a HARD error")
+	}
+}
+
+func TestLoad_FarFromRootThresholdWrongType(t *testing.T) {
+	if _, _, err := Load(rootWithBytes(t, []byte("farFromRootThreshold: \"six\"\n"))); err == nil {
+		t.Fatal("non-integer farFromRootThreshold should be a HARD error")
+	}
+}
+
+func TestLoad_FarFromRootThresholdAbsentIsNil(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if file.FarFromRootThreshold != nil {
+		t.Errorf("absent farFromRootThreshold should be nil, got %v", *file.FarFromRootThreshold)
+	}
+}
+
+func TestLoad_FarFromRootThresholdNotFlaggedUnknown(t *testing.T) {
+	_, notices, err := Load(rootWithBytes(t, []byte("farFromRootThreshold: 8\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for _, n := range notices {
+		if strings.Contains(n.Detail, "farFromRootThreshold") {
+			t.Errorf("farFromRootThreshold flagged as unknown key: %q", n.Detail)
+		}
+	}
+}
+
 func TestLoad_StructureFindingsSeverity(t *testing.T) {
 	for _, v := range []string{"info", "warning"} {
 		file, _, err := Load(rootWithBytes(t, []byte("structureFindingsSeverity: "+v+"\n")))

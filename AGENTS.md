@@ -24,11 +24,16 @@ linked docs rather than re-deriving them.
     PageRank; backlinks in index.md + llms.txt, NO array in graph.json;
     information scent as the non-gating `low-scent-anchor` Info finding — the
     scent-free phrase + stopword sets live in
-    `internal/domain/graphmodel/scent.go`).
+    `internal/domain/graphmodel/scent.go`); 0021 hops-from-root (per-node
+    `hopsFromRoot` distance from the nearest root, `-1` = unreachable or
+    reachability-indeterminate, via one
+    multi-source BFS in `hops.go`; the non-gating `far-from-root` Info finding for
+    docs at/beyond the config-only `farFromRootThreshold`, default 6; shares
+    `structureExemptSet` with the orphan ladder).
 - **docs/schemas/** — published JSON Schemas for the three machine artifacts:
-  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 6),
+  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 7),
   [findings.schema.json](docs/schemas/findings.schema.json) (findings schema
-  version 6), and [trails.schema.json](docs/schemas/trails.schema.json) (trails
+  version 7), and [trails.schema.json](docs/schemas/trails.schema.json) (trails
   schema version 1). The emitter types are kept in lockstep and validated by
   tests; if you change an artifact's shape, change the schema and bump its
   version.
@@ -65,9 +70,11 @@ and exposes read-only tools (`what-links-to`, `list-orphans`, `path-between`,
 `get-section`, `corpus-summary`, `suggest-links`, `critical-docs`).
 `corpus-summary` returns the full `graph.json` manifest, including the
 `summary.navigability` scalars (compactness, stratum, characteristic/median path
-length, clustering, diameter), per-node `betweenness`/`isArticulation`, and the
-top-level `betweenness`/`articulationPoints`/`bridges`, and per-node/top-level
-`pageRank` (schema v6);
+length, clustering, diameter), per-node `betweenness`/`isArticulation`, the
+top-level `betweenness`/`articulationPoints`/`bridges`, per-node/top-level
+`pageRank`, and per-node `hopsFromRoot` (distance from the nearest root, `-1` =
+unreachable or when `reachability.indeterminate`) + top-level `farFromRoot` (schema v7);
+`list-orphans` also returns the `farFromRoot` docs (ADR 0021);
 `critical-docs` returns just the critical-path structure (top load-bearing docs
 by betweenness + articulation points + bridges). Prefer these for live graph
 queries over parsing artifacts yourself.

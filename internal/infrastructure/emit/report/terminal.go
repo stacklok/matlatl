@@ -193,6 +193,22 @@ func fullReport(w io.Writer, p palette, v emit.View) error {
 	}
 	ew.line("")
 
+	// Far from root (ADR 0021): reachable but many hops from any entry point.
+	if v.ReachabilityIndeterminate {
+		section(ew, p, "Far from root", 0)
+		ew.line("  " + p.dim("indeterminate: no root set found (no README.md/index.md, no type:index, no --root)"))
+	} else {
+		section(ew, p, "Far from root", len(v.FarFromRoot))
+		ew.line("  " + p.dim("reachable but many hops from any root — link them closer to an entry point"))
+		if len(v.FarFromRoot) == 0 {
+			ew.line("  " + p.green("none"))
+		}
+		for _, id := range v.FarFromRoot {
+			ew.line("  " + p.yellow(fmt.Sprintf("%s (%d hops)", id.String(), hopsOf(v, id))))
+		}
+	}
+	ew.line("")
+
 	// Under-linked + dead-end — the graduated structure tiers (ADR 0012).
 	section(ew, p, "Under-linked", len(v.UnderLinked))
 	ew.line("  " + p.dim("fewer inbound links than the discoverability threshold — link them in from related pages"))

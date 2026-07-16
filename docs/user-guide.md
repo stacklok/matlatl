@@ -128,6 +128,16 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
   target is a folder, not a titled doc; bare-path anchors like
   `docs/dev-guide.md` are still flagged, though). See
   [ADR 0016](adr/0016-agent-experience.md).
+- **Far from root** — a doc that *is* reachable from a root but sits many links
+  away from the nearest entry point, so a reader or agent traversing from a
+  README/index is unlikely to discover it. Each doc's shortest distance from the
+  nearest root is surfaced as a per-node `hopsFromRoot` in `graph.json` (`-1` =
+  unreachable), and docs at or beyond the threshold (default `6`) are reported as
+  the `far-from-root` finding (*Info, experimental* — **never** fails `check`,
+  even `--strict`). This is a distance-based discoverability signal, additive to
+  the in-degree-based `under-linked`. Root members and intentional orphans are
+  exempt; unreachable docs are reported as `unreachable`, not far-from-root. See
+  [ADR 0021](adr/0021-hops-from-root.md).
 
 Orphans, under-linked, dead-end and unreachable docs come with **different**
 remediation hints, because the fix differs: link an orphan in (or delete it); add
@@ -137,14 +147,21 @@ unreachable doc an inbound link from somewhere reachable.
 ### Tuning the structure findings
 
 - `--inbound-threshold N` (or `inboundThreshold: N` in `.matlatl.yml`) sets the
-  under-linked discoverability threshold. Default `3`; `<=0` normalizes to `3`.
+  under-linked discoverability threshold. Default `3`; `0` is treated as unset
+  (the default applies), a negative value or non-integer is a hard error.
 - `structureFindingsSeverity: warning` in `.matlatl.yml` promotes **both**
   under-linked and dead-end from Info to Warning, so they fail `check --strict`
   like orphans/unreachable. Default `info` (never fails the build).
 - `linkSuggestionMinShared: N` in `.matlatl.yml` sets the minimum shared-neighbour
   count an unlinked pair must have to be surfaced as a **suggested link**
-  (ADR 0013). Config-only (no CLI flag); default `2`, `<=0` normalizes to `2`.
+  (ADR 0013). Config-only (no CLI flag); default `2`, `0` is treated as unset
+  (the default applies), a negative value is a hard error.
   Lower it to `1` for more (noisier) suggestions; raise it to tighten the signal.
+- `farFromRootThreshold: N` in `.matlatl.yml` sets the hop-distance threshold for
+  the **far-from-root** finding (ADR 0021). Config-only (no CLI flag); default
+  `6`, `0` is treated as unset (the default applies), a negative value is a hard
+  error. Lower it to flag docs closer to the entry points; raise it to only
+  surface the deepest.
 
 #### Reading the bow-tie summary
 
@@ -346,9 +363,11 @@ steps expecting a different Go toolchain.
 `matlatl emit --out <dir>` produces a bundle designed for agents:
 
 - **`graph.json`** — the machine-queryable corpus manifest (schema **version
-  6**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`,
-  `betweenness`, `isArticulation` and `pageRank`), edges, orphans,
-  under-linked/dead-end, a `bowtie` structure summary, broken links, components,
+  7**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`,
+  `betweenness`, `isArticulation`, `pageRank` and `hopsFromRoot` — the distance
+  from the nearest root, `-1` if unreachable), edges, orphans,
+  under-linked/dead-end, `farFromRoot` (docs beyond the hop-distance threshold),
+  a `bowtie` structure summary, broken links, components,
   gaps, `suggestedLinks` (topology-based suggestions, each with
   `sharedNeighbours`/`coupling`/`coCitation`/`adamicAdar`), a `betweenness` block
   (top load-bearing docs), a `pageRank` block (top docs by global importance),
@@ -371,7 +390,7 @@ steps expecting a different Go toolchain.
 - **`findings.json`** — every finding is self-contained and actionable, plus a
   `remediationGuide` so an agent can fix issues without extra context. Validated
   against [`docs/schemas/findings.schema.json`](schemas/findings.schema.json)
-  (schema version 6) and byte-stable run to run.
+  (schema version 7) and byte-stable run to run.
 
 ### Fixing findings with an agent
 
@@ -414,8 +433,9 @@ $ matlatl serve . --address 0.0.0.0:9000   # bind elsewhere (e.g. for containers
 
 Speaks MCP over **streamable HTTP** at `/mcp` on `--address` (default
 `127.0.0.1:8080`) and exposes read-only tools: `what-links-to`,
-`list-orphans`, `path-between`, `get-section`, `corpus-summary`,
-`suggest-links` (topology-based suggested links — pass a `doc` to scope it to one
+`list-orphans` (isolated, unreachable, under-linked, dead-end, and far-from-root
+docs), `path-between`, `get-section`, `corpus-summary` (also carries per-node
+`hopsFromRoot`), `suggest-links` (topology-based suggested links — pass a `doc` to scope it to one
 document's partners, or omit it for the global top suggestions), and
 `critical-docs` (the critical-path structure — top load-bearing docs by
 betweenness plus the articulation points and bridges). The server runs

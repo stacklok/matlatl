@@ -68,7 +68,11 @@ const GraphJSONName = "graph.json"
 // summary.articulationPoints / summary.bridges counts — all pure data.
 // v6 (ADR 0016) adds PageRank: a per-node pageRank (number) and a top-level
 // pageRank object {topDocs:[{id,score}]} parallel to betweenness — pure data.
-const SchemaVersion = 6
+// v7 (ADR 0021) adds hops-from-root: a per-node hopsFromRoot (integer, -1 for
+// unreachable docs and for every node when the root set is indeterminate), a
+// top-level farFromRoot ([]string) of docs at/beyond the hop-distance threshold,
+// and a summary.farFromRoot count — all pure data.
+const SchemaVersion = 7
 
 // HITSFloatPrecision is the FIXED number of decimal places HITS hub/authority
 // scores are rounded to in graph.json. HITS scores are L2-normalized into [0,1]
@@ -109,17 +113,21 @@ func (f *Float) UnmarshalJSON(b []byte) error {
 // Document is the top-level graph.json shape. Field order is the wire order
 // (encoding/json preserves struct field order); every slice field is sorted.
 type Document struct {
-	SchemaVersion  int             `json:"schemaVersion"`
-	Tool           string          `json:"tool"`
-	GeneratedNote  string          `json:"generatedNote"`
-	Summary        Summary         `json:"summary"`
-	Nodes          []Node          `json:"nodes"`
-	Edges          []Edge          `json:"edges"`
-	Sections       []Section       `json:"sections"`
-	Orphans        []string        `json:"orphans"`
-	Unreachable    []string        `json:"unreachable"`
-	UnderLinked    []string        `json:"underLinked"`
-	DeadEnd        []string        `json:"deadEnd"`
+	SchemaVersion int       `json:"schemaVersion"`
+	Tool          string    `json:"tool"`
+	GeneratedNote string    `json:"generatedNote"`
+	Summary       Summary   `json:"summary"`
+	Nodes         []Node    `json:"nodes"`
+	Edges         []Edge    `json:"edges"`
+	Sections      []Section `json:"sections"`
+	Orphans       []string  `json:"orphans"`
+	Unreachable   []string  `json:"unreachable"`
+	UnderLinked   []string  `json:"underLinked"`
+	DeadEnd       []string  `json:"deadEnd"`
+	// FarFromRoot are documents reachable but at/beyond the hop-distance threshold
+	// from every root (ADR 0021): reachable but hard to discover by link
+	// traversal. Sorted DocumentIDs; empty when reachability is indeterminate.
+	FarFromRoot    []string        `json:"farFromRoot"`
 	Bowtie         BowtieSummary   `json:"bowtie"`
 	BrokenLinks    []BrokenLink    `json:"brokenLinks"`
 	BrokenAnchors  []BrokenAnchor  `json:"brokenAnchors"`
@@ -140,15 +148,18 @@ type Document struct {
 
 // Summary holds the corpus-overview counts.
 type Summary struct {
-	Documents      int `json:"documents"`
-	Sections       int `json:"sections"`
-	Edges          int `json:"edges"`
-	References     int `json:"references"`
-	Components     int `json:"components"`
-	Orphans        int `json:"orphans"`
-	Unreachable    int `json:"unreachable"`
-	UnderLinked    int `json:"underLinked"`
-	DeadEnd        int `json:"deadEnd"`
+	Documents   int `json:"documents"`
+	Sections    int `json:"sections"`
+	Edges       int `json:"edges"`
+	References  int `json:"references"`
+	Components  int `json:"components"`
+	Orphans     int `json:"orphans"`
+	Unreachable int `json:"unreachable"`
+	UnderLinked int `json:"underLinked"`
+	DeadEnd     int `json:"deadEnd"`
+	// FarFromRoot counts documents at/beyond the hop-distance threshold from every
+	// root (ADR 0021). Pure data; never gates the exit code.
+	FarFromRoot    int `json:"farFromRoot"`
 	BrokenLinks    int `json:"brokenLinks"`
 	BrokenAnchors  int `json:"brokenAnchors"`
 	Ambiguous      int `json:"ambiguous"`
@@ -222,6 +233,10 @@ type Node struct {
 	// random-surfer stationary distribution. Fixed precision (Float) so graph.json
 	// is byte-stable.
 	PageRank Float `json:"pageRank"`
+	// HopsFromRoot is the node's shortest hop distance from the nearest root
+	// (ADR 0021), or -1 when it is unreachable OR the root set is indeterminate
+	// (an agent-discoverability signal: lower is easier to reach by link traversal).
+	HopsFromRoot int `json:"hopsFromRoot"`
 }
 
 // Edge is a directed document-projection navigational edge. Health is always
@@ -362,6 +377,7 @@ func Build(v emit.View) Document {
 		Unreachable:        []string{},
 		UnderLinked:        []string{},
 		DeadEnd:            []string{},
+		FarFromRoot:        []string{},
 		BrokenLinks:        []BrokenLink{},
 		BrokenAnchors:      []BrokenAnchor{},
 		Ambiguous:          []Ambiguous{},
@@ -418,6 +434,7 @@ func Build(v emit.View) Document {
 			Betweenness:       newFloat(d.Betweenness),
 			IsArticulation:    d.IsArticulation,
 			PageRank:          newFloat(d.PageRank),
+			HopsFromRoot:      d.Hops,
 		})
 	}
 
@@ -427,6 +444,7 @@ func Build(v emit.View) Document {
 	doc.Unreachable = identity.IDStrings(v.Unreachable)
 	doc.UnderLinked = identity.IDStrings(v.UnderLinked)
 	doc.DeadEnd = identity.IDStrings(v.DeadEnd)
+	doc.FarFromRoot = identity.IDStrings(v.FarFromRoot)
 	doc.Bowtie = bowtieSummary(m.Bowtie)
 	doc.BrokenLinks = brokenLinks(v.BrokenLinks)
 	doc.BrokenAnchors = brokenAnchors(v.BrokenAnchors)
@@ -452,6 +470,7 @@ func Build(v emit.View) Document {
 		Unreachable:        len(doc.Unreachable),
 		UnderLinked:        len(doc.UnderLinked),
 		DeadEnd:            len(doc.DeadEnd),
+		FarFromRoot:        len(doc.FarFromRoot),
 		BrokenLinks:        len(doc.BrokenLinks),
 		BrokenAnchors:      len(doc.BrokenAnchors),
 		Ambiguous:          len(doc.Ambiguous),

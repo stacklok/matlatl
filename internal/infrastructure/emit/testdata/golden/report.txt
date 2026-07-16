@@ -31,6 +31,10 @@ Unreachable (9)
   docs/links.md
   docs/stray.md
 
+Far from root (0)
+  reachable but many hops from any root — link them closer to an entry point
+  none
+
 Under-linked (8)
   fewer inbound links than the discoverability threshold — link them in from related pages
   docs/cycle/alpha.md

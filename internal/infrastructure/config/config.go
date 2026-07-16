@@ -69,6 +69,10 @@ type File struct {
 	// signal (ADR 0013). nil when absent (the domain default of 2 applies); a
 	// present value must be >= 0 (negative is a hard error).
 	LinkSuggestionMinShared *int
+	// FarFromRootThreshold is the hop-distance floor for the far-from-root finding
+	// (ADR 0021). nil when absent (the domain default of 6 applies); a present
+	// value must be >= 0 (negative is a hard error).
+	FarFromRootThreshold *int
 	// EmitExclude holds gitignore-syntax patterns (the SAME engine and semantics
 	// as `.matlatlignore`) for documents that stay in the corpus — fully scanned,
 	// link-checked, ranked — but are NOT rendered on the consumption surfaces
@@ -184,7 +188,7 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 	}
 
 	// --- inboundThreshold ---
-	threshold, err := resolveInboundThreshold(raw)
+	threshold, err := resolveOptionalNonNegInt(raw, "inboundThreshold")
 	if err != nil {
 		return File{}, nil, err
 	}
@@ -196,7 +200,13 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 	}
 
 	// --- linkSuggestionMinShared ---
-	linkMinShared, err := resolveLinkSuggestionMinShared(raw)
+	linkMinShared, err := resolveOptionalNonNegInt(raw, "linkSuggestionMinShared")
+	if err != nil {
+		return File{}, nil, err
+	}
+
+	// --- farFromRootThreshold ---
+	farFromRoot, err := resolveOptionalNonNegInt(raw, "farFromRootThreshold")
 	if err != nil {
 		return File{}, nil, err
 	}
@@ -216,8 +226,32 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		InboundThreshold:          threshold,
 		StructureFindingsSeverity: severity,
 		LinkSuggestionMinShared:   linkMinShared,
+		FarFromRootThreshold:      farFromRoot,
 		EmitExclude:               emitExclude,
 	}, notices, nil
+}
+
+// resolveOptionalNonNegInt enforces the shared shape of the optional
+// non-negative-integer config keys (inboundThreshold, ADR 0012;
+// linkSuggestionMinShared, ADR 0013; farFromRootThreshold, ADR 0021): absent →
+// nil; a non-negative integer → parsed; any other shape (non-int, negative) →
+// hard error (a thing matlatl understands but that is wrong is loud, ADR 0011).
+// The key name is interpolated so every caller reports an identical error shape.
+func resolveOptionalNonNegInt(raw rawFile, key string) (*int, error) {
+	v, present := raw[key]
+	if !present || v == nil {
+		return nil, nil
+	}
+	n, ok := v.(int)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%s: `%s` must be an integer, got %T", fileName, key, v)
+	}
+	if n < 0 {
+		return nil, fmt.Errorf(
+			"%s: `%s` must be >= 0, got %d", fileName, key, n)
+	}
+	return &n, nil
 }
 
 // resolveEmitExclude enforces the emitExclude row (ADR 0019): absent → none; a
@@ -245,46 +279,6 @@ func resolveEmitExclude(raw rawFile) ([]string, error) {
 		patterns = append(patterns, s)
 	}
 	return patterns, nil
-}
-
-// resolveLinkSuggestionMinShared enforces the linkSuggestionMinShared row
-// (ADR 0013): absent → nil; a non-negative integer → parsed; any other shape
-// (non-int, negative) → hard error.
-func resolveLinkSuggestionMinShared(raw rawFile) (*int, error) {
-	v, present := raw["linkSuggestionMinShared"]
-	if !present || v == nil {
-		return nil, nil
-	}
-	n, ok := v.(int)
-	if !ok {
-		return nil, fmt.Errorf(
-			"%s: `linkSuggestionMinShared` must be an integer, got %T", fileName, v)
-	}
-	if n < 0 {
-		return nil, fmt.Errorf(
-			"%s: `linkSuggestionMinShared` must be >= 0, got %d", fileName, n)
-	}
-	return &n, nil
-}
-
-// resolveInboundThreshold enforces the inboundThreshold row: absent → nil; a
-// non-negative integer → parsed; any other shape (non-int, negative) → hard
-// error (a thing matlatl understands but that is wrong is loud, ADR 0011).
-func resolveInboundThreshold(raw rawFile) (*int, error) {
-	v, present := raw["inboundThreshold"]
-	if !present || v == nil {
-		return nil, nil
-	}
-	n, ok := v.(int)
-	if !ok {
-		return nil, fmt.Errorf(
-			"%s: `inboundThreshold` must be an integer, got %T", fileName, v)
-	}
-	if n < 0 {
-		return nil, fmt.Errorf(
-			"%s: `inboundThreshold` must be >= 0, got %d", fileName, n)
-	}
-	return &n, nil
 }
 
 // resolveStructureFindingsSeverity enforces the structureFindingsSeverity row:
@@ -367,7 +361,7 @@ func unknownKeyNotices(path string, raw rawFile) []application.Notice {
 	known := map[string]struct{}{
 		"version": {}, "roots": {},
 		"inboundThreshold": {}, "structureFindingsSeverity": {},
-		"linkSuggestionMinShared": {}, "emitExclude": {},
+		"linkSuggestionMinShared": {}, "farFromRootThreshold": {}, "emitExclude": {},
 	}
 	var unknown []string
 	for k := range raw {

@@ -62,7 +62,42 @@ func findingsFromMetrics(m *graphmodel.GraphMetrics, threshold int, structureSev
 	for _, s := range m.Scent {
 		out = append(out, lowScentFinding(s))
 	}
+	// Hops-from-root (ADR 0021): documents reachable but at or beyond the
+	// hop-distance threshold from every root — reachable but effectively
+	// undiscoverable by link traversal. Info; NEVER gates the exit code (even
+	// --strict). Root members and intentional orphans are already excluded upstream
+	// (structureExemptSet), and unreachable docs are absent from the distance map.
+	for _, id := range m.Hops.FarFromRoot {
+		dist, _ := m.Hops.Distance(id)
+		out = append(out, farFromRootFinding(id, dist, m.Hops.Threshold))
+	}
 	return out
+}
+
+// farFromRootFinding turns a far-from-root document (ADR 0021) into an Info
+// finding: it is reachable from the root set but dist hops from the nearest
+// entry point (>= threshold), so an agent or reader following links is unlikely
+// to discover it. Always Info; NEVER gates the exit code. The distance is
+// carried in Details (the data behind the threshold comparison).
+func farFromRootFinding(id identity.DocumentID, dist, threshold int) analysis.Finding {
+	return analysis.Finding{
+		ID:       fmt.Sprintf("%s:%s", analysis.FarFromRoot, id),
+		Kind:     analysis.FarFromRoot,
+		Severity: analysis.Info,
+		Location: analysis.Location{Document: id},
+		Message: fmt.Sprintf(
+			"%q is %d hops from the nearest root (threshold %d): reachable but far from any entry point, "+
+				"so it is hard to discover by link traversal (experimental)",
+			id, dist, threshold),
+		SuggestedFix: fmt.Sprintf(
+			"Add an inbound link to %q from a document closer to a root (README.md/index.md), or link it "+
+				"directly from an index, so it is fewer hops from an entry point. To keep it intentionally "+
+				"deep, add front matter `matlatl: orphan-intentional`.", id),
+		Details: map[string]string{
+			DetailTargetDocument: id.String(),
+			DetailHopsFromRoot:   strconv.Itoa(dist),
+		},
+	}
 }
 
 // lowScentFinding turns a low-scent link (ADR 0016) into an Info finding: the

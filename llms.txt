@@ -1,6 +1,6 @@
 # matlatl
 
-> A markdown documentation corpus of 33 document(s) across 1 component(s), with 297 heading(s) and 160 resolved reference(s). Entries are ordered by importance (most-connected first). Compactness 0.28, docs ~1.9 clicks apart.
+> A markdown documentation corpus of 34 document(s) across 1 component(s), with 309 heading(s) and 162 resolved reference(s). Entries are ordered by importance (most-connected first). Compactness 0.27, docs ~1.9 clicks apart.
 
 ## Documentation
 
@@ -28,6 +28,7 @@
 ## Optional
 
 - [18. Default-ignore .claude/agent-memory](docs/adr/0018-default-ignore-agent-memory.md): 18. Default-ignore .claude/agent-memory (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
+- [21. Hops-from-root: distance from the entry points as the discoverability metric](docs/adr/0021-hops-from-root.md): 21. Hops-from-root: distance from the entry points as the discoverability metric (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [matlatl architecture](docs/architecture.md): matlatl architecture (linked from: AGENTS.md, README.md, docs/dev-guide.md, docs/research/matlatl-and-the-llm-wiki-pattern.md, docs/user-guide.md)
 - [matlatl developer guide](docs/dev-guide.md): matlatl developer guide (linked from: AGENTS.md, CONTRIBUTING.md, README.md, docs/user-guide.md)
 - [.matlatl.yml — per-repo configuration (schema v1)](docs/schemas/matlatl-config-v1.md): .matlatl.yml — per-repo configuration (schema v1) (linked from: CHANGELOG.md, docs/adr/0011-per-repo-config-file.md, docs/adr/0019-emit-exclude.md, docs/user-guide.md)
@@ -76,6 +77,7 @@ _Associative trails (Bush 1945): a topologically-valid path through each cluster
 31. [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md)
 32. [18. Default-ignore .claude/agent-memory](docs/adr/0018-default-ignore-agent-memory.md)
 33. [10. How matlatl treats agent-tooling scaffolding](docs/adr/0010-agent-scaffolding-roots-and-default-ignores.md)
+34. [21. Hops-from-root: distance from the entry points as the discoverability metric](docs/adr/0021-hops-from-root.md)
 
 ## Known gaps
 
@@ -84,8 +86,8 @@ This corpus is INCOMPLETE for navigation; an agent should not assume full covera
 - 0 orphan document(s) (nothing links to them)
 - 0 unreachable document(s) (not reachable from a root)
 - 4 under-linked document(s) (few inbound links; hard to discover)
-- 16 dead-end document(s) (no onward links)
+- 17 dead-end document(s) (no onward links)
 - 0 broken link(s)
 - 0 broken anchor(s)
 - 0 ambiguous link(s)
-- 284 suggested link(s) (unlinked but topologically related; experimental)
+- 307 suggested link(s) (unlinked but topologically related; experimental)

@@ -2,7 +2,9 @@ package mcpserver
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -124,6 +126,57 @@ func TestTool_ListOrphans(t *testing.T) {
 	}
 }
 
+// TestTool_ListOrphansFarFromRoot: list-orphans surfaces the far-from-root docs
+// (ADR 0021). A README→d1→…→d6 chain over the DEFAULT config (threshold 6) makes
+// d6.md exactly 6 hops from the root, so it is the single far-from-root doc — it
+// must appear in the farFromRoot list and the summary text must say "1
+// far-from-root".
+func TestTool_ListOrphansFarFromRoot(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// README(0) -> d1(1) -> d2(2) -> d3(3) -> d4(4) -> d5(5) -> d6(6).
+	write("README.md", "# R\n\nSee [d1](d1.md).\n")
+	for i := 1; i <= 5; i++ {
+		write(fmtName(i), fmtBody(i, fmtName(i+1)))
+	}
+	write("d6.md", "# D6\n\nThe deep one.\n")
+
+	a, err := BuildAnalysis(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("BuildAnalysis: %v", err)
+	}
+	res := callTool(t, a, "list-orphans", nil)
+	m := structured(t, res)
+	far := toStrings(t, m["farFromRoot"])
+	if len(far) != 1 || far[0] != "d6.md" {
+		t.Errorf("farFromRoot = %v, want [d6.md]", far)
+	}
+	if txt := resultText(res); !strings.Contains(txt, "1 far-from-root") {
+		t.Errorf("summary text %q missing \"1 far-from-root\"", txt)
+	}
+}
+
+// fmtName / fmtBody build the chain doc names/bodies for the far-from-root test.
+func fmtName(i int) string { return "d" + string(rune('0'+i)) + ".md" }
+func fmtBody(i int, next string) string {
+	return "# D" + string(rune('0'+i)) + "\n\nSee [next](" + next + ").\n"
+}
+
+// resultText returns the first text content of a tool result (the human-facing
+// summary line NewToolResultStructured attaches).
+func resultText(res *mcp.CallToolResult) string {
+	for _, c := range res.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			return tc.Text
+		}
+	}
+	return ""
+}
+
 // TestTool_PathBetween: a path from the root README to a reachable doc exists; a
 // path to a nonexistent doc is refused; identical endpoints yield a 1-node path.
 func TestTool_PathBetween(t *testing.T) {
@@ -193,8 +246,8 @@ func TestTool_CorpusSummary(t *testing.T) {
 	if !ok {
 		t.Fatalf("corpus-summary structured content is not a graphjson.Document: %T", res.StructuredContent)
 	}
-	if doc.SchemaVersion != 6 {
-		t.Errorf("corpus-summary schemaVersion = %d, want 6", doc.SchemaVersion)
+	if doc.SchemaVersion != 7 {
+		t.Errorf("corpus-summary schemaVersion = %d, want 7", doc.SchemaVersion)
 	}
 	if len(doc.Betweenness.TopDocs) == 0 {
 		t.Error("corpus-summary betweenness.topDocs is empty (the fixture has load-bearing docs)")

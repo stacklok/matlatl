@@ -48,41 +48,26 @@ type Reachability struct {
 	Unreachable []identity.DocumentID
 }
 
-// ComputeReachability runs BFS from the root set over projection out-edges. When
-// the root set is indeterminate, it returns Indeterminate=true and computes
-// nothing (callers must not mark everything unreachable, ADR 0005/0007).
-// Iteration is sorted for determinism.
+// ComputeReachability partitions documents into reached / unreachable over the
+// root-seeded BFS. When the root set is indeterminate, it returns
+// Indeterminate=true and computes nothing (callers must not mark everything
+// unreachable, ADR 0005/0007). Iteration is sorted for determinism.
+//
+// It derives the partition from the SHARED rootDistances BFS (hops.go) rather
+// than running its own traversal: the reached set is exactly the key set of the
+// distance map, so reachability and hops-from-root (ADR 0021) are computed from
+// one source and can never disagree (a doc is never simultaneously unreachable
+// and at a finite hop distance).
 func (g *ReferenceGraph) ComputeReachability(rs RootSet) Reachability {
 	if rs.Indeterminate {
 		return Reachability{Indeterminate: true}
 	}
-	reached := make(map[identity.DocumentID]struct{})
-	queue := make([]identity.DocumentID, 0, len(rs.Roots))
-	for _, r := range rs.Roots {
-		if !g.HasDocument(r) {
-			continue
-		}
-		if _, seen := reached[r]; !seen {
-			reached[r] = struct{}{}
-			queue = append(queue, r)
-		}
-	}
-	// BFS; neighbors are already sorted in projAdj, so expansion is deterministic.
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		for _, nb := range g.projAdj[cur] {
-			if _, seen := reached[nb]; !seen {
-				reached[nb] = struct{}{}
-				queue = append(queue, nb)
-			}
-		}
-	}
+	dist := g.rootDistances(rs)
 
-	reachedList := make([]identity.DocumentID, 0, len(reached))
+	reachedList := make([]identity.DocumentID, 0, len(dist))
 	var unreachable []identity.DocumentID
-	for _, id := range g.documents {
-		if _, ok := reached[id]; ok {
+	for _, id := range g.documents { // sorted ⇒ both slices sorted
+		if _, ok := dist[id]; ok {
 			reachedList = append(reachedList, id)
 		} else {
 			unreachable = append(unreachable, id)
@@ -156,14 +141,13 @@ func (g *ReferenceGraph) DetectOrphans(c *corpus.Corpus, rootSet RootSet, deg De
 
 	intentional := identity.IDSet(IntentionalOrphans(c))
 
-	// One exemption set for the structure ladder: intentional orphans + roots.
-	// A root with out-degree > 0 is already non-isolated, so in practice the root
+	// One exemption set for the structure ladder: intentional orphans + roots
+	// (the shared structureExemptSet, also used by ComputeHopsFromRoot). A root
+	// with out-degree > 0 is already non-isolated, so in practice the root
 	// exemption only matters for edgeless roots; but it also (intentionally)
-	// suppresses under-linked/dead-end for any declared root.
-	exempt := identity.IDSet(rootSet.Roots)
-	for id := range intentional {
-		exempt[id] = struct{}{}
-	}
+	// suppresses under-linked/dead-end for any declared root. `intentional` is
+	// retained separately below for the unreachable-suppression check.
+	exempt := structureExemptSet(c, rootSet)
 
 	var isolated, deadEnd, underLinked []identity.DocumentID
 	isolatedSet := make(map[identity.DocumentID]struct{})

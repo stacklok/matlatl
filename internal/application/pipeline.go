@@ -113,6 +113,11 @@ type Result struct {
 	// links whose anchor text barely previews the target. Info; NEVER affects the
 	// exit code; carried for the human summary and machine artifacts.
 	LowScentAnchorCount int
+	// FarFromRootCount is the number of far-from-root findings (ADR 0021):
+	// documents reachable but at or beyond the hop-distance threshold from every
+	// root. Info; NEVER affects the exit code; carried for the human summary and
+	// machine artifacts.
+	FarFromRootCount int
 	// Report is the frozen analysis report (all finding kinds).
 	Report *analysis.AnalysisReport
 	// Metrics is the frozen P3 graph-analysis carrier (graph, components, HITS,
@@ -215,6 +220,8 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		// normalized to the domain default (2) inside PredictLinks.
 		LinkPrediction:   graphmodel.LinkPredictionOptions{MinSharedNeighbours: p.cfg.LinkSuggestionMinShared},
 		InboundThreshold: p.cfg.InboundThreshold, // <=0 normalized to default in Analyze
+		// Far-from-root hop threshold (ADR 0021); <=0 normalized to default in Analyze.
+		FarFromRootThreshold: p.cfg.FarFromRootThreshold,
 	})
 	if metrics.RootSet.Indeterminate && c.Len() > 0 {
 		_, _ = fmt.Fprintln(p.log,
@@ -296,6 +303,8 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		BridgeCount:            report.CountByKind(analysis.Bridge),
 
 		LowScentAnchorCount: report.CountByKind(analysis.LowScentAnchor),
+
+		FarFromRootCount: report.CountByKind(analysis.FarFromRoot),
 
 		Report:      report,
 		Metrics:     metrics,

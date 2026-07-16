@@ -29,20 +29,23 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    the giant SCC, HITS hub/authority, knowledge-gap detection, topology-based
    link prediction (the additive `suggested-link` signal), corpus-level
    navigability metrics, critical-path analysis (betweenness centrality +
-   articulation points / bridges), and the agent-experience analyses (PageRank
-   global importance, reading-order trails, information scent) → a frozen
-   `AnalysisReport` + `GraphMetrics`
+   articulation points / bridges), the agent-experience analyses (PageRank
+   global importance, reading-order trails, information scent), and
+   hops-from-root (distance from the nearest entry point + the `far-from-root`
+   signal) → a frozen `AnalysisReport` + `GraphMetrics`
    ([ADR 0007](adr/0007-graph-node-semantics.md),
    [ADR 0012](adr/0012-graduated-structure-and-bowtie.md),
    [ADR 0013](adr/0013-topology-link-prediction.md),
    [ADR 0014](adr/0014-navigability-metrics.md),
    [ADR 0015](adr/0015-critical-path-analysis.md),
-   [ADR 0016](adr/0016-agent-experience.md)). `GraphMetrics`
+   [ADR 0016](adr/0016-agent-experience.md),
+   [ADR 0021](adr/0021-hops-from-root.md)). `GraphMetrics`
    carries `Graph`, `Hierarchy`, `RootSet`, `Reachability`, `Degrees`, `Orphans`
    (isolated / dead-end / under-linked / unreachable), `WCC`, `SCC`, `Bowtie`,
    `HITS`, `Gaps`, `SuggestedLinks`, `Navigability`, `Betweenness`,
-   `Critical` (articulation points + bridges), and `PageRank` / `Trails` / `Scent`
-   (ADR 0016). Navigability and betweenness reuse
+   `Critical` (articulation points + bridges), `PageRank` / `Trails` / `Scent`
+   (ADR 0016), and `Hops` (per-doc hops-from-root + far-from-root outliers,
+   ADR 0021). Navigability and betweenness reuse
    a shared streaming APSP family in `apsp.go`: `ForEachSourceDistances` runs one
    BFS per source reusing a single distance map, never materializing a V² matrix
    (`O(V·(V+E))` time, `O(V)` transient memory); the sibling `ForEachSourceBFS`
@@ -55,7 +58,11 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    dangling-mass redistribution; trails (`trails.go`) priority-Kahn over the SCC
    condensation (`Condensation()` in `components.go`) ranked by PageRank; scent
    (`scent.go`) scores each reference edge's anchor text — threaded from the
-   parser onto `graphmodel.Edge` — against its target's title.
+   parser onto `graphmodel.Edge` — against its target's title. Hops-from-root
+   (`hops.go`) is one multi-source BFS seeded from the whole root set (distance =
+   the minimum over all roots), mirroring `ComputeReachability` with the
+   explicit-head-index queue idiom; absence = unreachable, and it shares the
+   `structureExemptSet` helper with the orphan ladder for exemptions (ADR 0021).
 6. **Emit** — render the report for humans (terminal, Markdown, Mermaid, DOT,
    index.md with a Backlinks column) and LLMs (graph.json, trails.json, the
    llms.txt family with a reading-order block + backlinks, findings.json; JUnit

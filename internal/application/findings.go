@@ -23,6 +23,11 @@ import (
 // the human report / graph.json data) but never read here, mirroring
 // SuggestedLink and KnowledgeGap.
 //
+// FarFromRoot (ADR 0021) is likewise Info and DELIBERATELY never gates the exit
+// code, even under --strict: a document reachable but many hops from any entry
+// point is a discoverability hint, not a defect, so r.FarFromRootCount is
+// intentionally not read here (mirroring the other advisory kinds).
+//
 // DeadLinkCount is DELIBERATELY excluded from the exit contract, even under
 // --strict (ADR 0005): external link checking is opt-in (--check-external) and
 // non-deterministic (network state, transient timeouts, rate limits), so gating
@@ -104,6 +109,10 @@ const (
 	DetailScentScore      = "scentScore"
 	DetailSuggestedAnchor = "suggestedAnchor"
 	DetailSourceDocument  = "sourceDocument"
+	// DetailHopsFromRoot is the shortest hop distance from the nearest root of a
+	// far-from-root document (ADR 0021): the data behind the distance-threshold
+	// comparison, so an agent can act without re-deriving it.
+	DetailHopsFromRoot = "hopsFromRoot"
 )
 
 // findingsFromReferences turns resolved references into analysis Findings. Only

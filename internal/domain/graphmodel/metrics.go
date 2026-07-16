@@ -74,6 +74,12 @@ type GraphMetrics struct {
 	// text shares too few tokens with the target's title to preview where they
 	// lead. Surfaced as non-gating Info low-scent-anchor findings.
 	Scent []ScentFinding
+	// Hops holds the per-document hops-from-root distances and the far-from-root
+	// outliers (ADR 0021): the shortest directed distance from the nearest root to
+	// each reachable document (unreachable = absent). Surfaced as per-node
+	// graph.json data AND as non-gating Info far-from-root findings for docs at or
+	// beyond the configured hop-distance threshold.
+	Hops HopsResult
 
 	// componentOf maps each document to its WCC ID, for emitters.
 	componentOf map[identity.DocumentID]identity.DocumentID
@@ -98,6 +104,9 @@ type AnalyzeOptions struct {
 	// InboundThreshold is the under-linked discoverability floor (ADR 0012).
 	// Analyze normalizes a <=0 value up to DefaultInboundThreshold.
 	InboundThreshold int
+	// FarFromRootThreshold is the hop-distance floor for the far-from-root finding
+	// (ADR 0021). Analyze normalizes a <=0 value up to DefaultFarFromRootThreshold.
+	FarFromRootThreshold int
 }
 
 // Analyze runs the full P3 analysis over a pre-built graph and the corpus,
@@ -142,6 +151,12 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 		return g.Condensation(scc)
 	})
 	scent := g.ComputeScent(c)
+	// Hops-from-root (ADR 0021): shortest directed distance from the nearest root
+	// to each reachable document via one multi-source BFS. Per-node data plus the
+	// far-from-root Info findings; skipped (Indeterminate) when the root set is
+	// empty, mirroring reachability. The raw option is passed through:
+	// ComputeHopsFromRoot is the single normalization point (<=0 → default).
+	hops := g.ComputeHopsFromRoot(c, rootSet, opts.FarFromRootThreshold)
 
 	return &GraphMetrics{
 		Graph:                   g,
@@ -164,6 +179,7 @@ func Analyze(g *ReferenceGraph, c *corpus.Corpus, opts AnalyzeOptions) *GraphMet
 		PageRank:                pageRank,
 		Trails:                  trails,
 		Scent:                   scent,
+		Hops:                    hops,
 		componentOf:             memberComponentIndex(wcc),
 	}
 }

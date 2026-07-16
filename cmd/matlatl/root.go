@@ -215,6 +215,12 @@ func configFromFlags(cmd *cobra.Command, args []string) (application.Config, err
 		cfg.LinkSuggestionMinShared = *file.LinkSuggestionMinShared
 	}
 
+	// Far-from-root hop threshold (ADR 0021): config-only knob (no flag). The
+	// loader validated the value is >= 0.
+	if file.FarFromRootThreshold != nil {
+		cfg.FarFromRootThreshold = *file.FarFromRootThreshold
+	}
+
 	// emitExclude (ADR 0019): config-only knob (no flag). Carried on the Config
 	// but NEVER read by the pipeline — only the consumption-surface commands
 	// (`emit`, `index`) apply it, at the emit boundary. `check` is unaffected.
