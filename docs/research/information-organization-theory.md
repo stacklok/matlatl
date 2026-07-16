@@ -321,8 +321,12 @@ pages (OUT)" map. Almost free: matlatl already has SCC + reachability.
 overlap between anchor text and target title/headings; flag scent-free anchors like
 "click here", "here", "this", "link", bare URLs). Low-scent links are a measurable
 foraging defect and a concrete `findings.json` fix ("rename this link to name its
-target"). Especially valuable for *agents*, which rely entirely on link text as scent
-(no hover, no visual context). Deterministic — pure lexical, no model.
+target"). Primarily valuable for *human* readers of rendered markdown, who see only
+the anchor text. (An earlier revision claimed agents rely entirely on link text as
+scent; that is wrong — file-reading agents see the raw source, where the href itself
+is scent. The agent-relevant payoffs are stale `file.md § heading` rot detection and
+title quality in the emitted catalogs — see ADR 0016's 2026-07-16 amendment.)
+Deterministic — pure lexical, no model.
 **Effort:** Medium. New analyzer over resolved references + heading inventory.
 
 ### H. Soft communities (modularity) → "districts" **[det with pinned order]**

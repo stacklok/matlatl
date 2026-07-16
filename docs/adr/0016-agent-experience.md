@@ -204,6 +204,30 @@ finding kind/severity/ID format, and the no-cap rule. No schema version bump:
 the findings shape is unchanged; only `suggestedAnchor`'s meaning widened from
 "the target's title" to "the destination's title or best-matching heading".
 
+#### Amendment (2026-07-16): corrected agent rationale
+
+This ADR (and the research notes behind it) originally justified scent as an
+agent-critical signal — the claim that link text is all an agent has to decide
+whether to follow a link. That is wrong for the file-reading agents matlatl
+targets: an agent reads the **raw markdown source**, where `[here](setup.md)`
+exposes the href — the target's identity (ADR 0001) — which is itself strong
+scent, often stronger than any anchor text. Only rendered-HTML browsing agents
+lose the href, and they are not this tool's audience.
+
+The finding stands, re-grounded on what is actually true:
+
+- **Humans reading rendered markdown** see only the anchor text — the original
+  Pirolli & Card case, unchanged and sufficient on its own.
+- **Doc-rot detection** is the genuinely agent-relevant half: the stale
+  `file.md § Old Heading` true positive (2026-06-10 amendment) misleads agents
+  that act on it.
+- Where scent DOES apply to agents is the **title** shown in emitted catalogs
+  (index.md, llms.txt, trails) — the only cue a consumer has before opening a
+  doc. That is a title-quality concern (issue #22), not an anchor-text one.
+
+No behavior, threshold, exemption, or schema change — this corrects the record,
+not the analyzer.
+
 ### Determinism and purity (ADR 0004, 0007)
 
 All four analyses iterate sorted `g.documents` / sorted neighbour lists; PageRank

@@ -109,9 +109,11 @@ Check whether a link's *text* hints at what's on the other side.
 
 - **Example:** `See [here](setup.md)` tells you nothing; `See the [setup
   guide](setup.md)` does. Same for bare URLs and "click this."
-- **Benefit:** especially important for **AI agents** — an agent has no mouse-hover,
-  no visual cues. The link text is *all* it has to decide whether to follow a link.
-  matlatl can flag every low-information link and say "rename this to name its
+- **Benefit:** mainly for **human readers** of rendered docs, who see only the link
+  text. (AI agents reading the raw markdown see the target path itself, so vague
+  link text costs them little — for agents the real win is that this same check
+  catches stale "file.md § Old Heading" references, i.e. doc rot they would act
+  on.) matlatl flags every low-information link and says "rename this to name its
   target."
 
 ## A guided reading order for agents ("trails") — the exciting one
