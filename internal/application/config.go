@@ -78,6 +78,12 @@ type Config struct {
 	// knob (no CLI flag). <=0 is normalized to the domain default (2) in
 	// PredictLinks.
 	LinkSuggestionMinShared int
+	// FarFromRootThreshold is the hop-distance floor for the far-from-root finding
+	// (ADR 0021): a document reachable from the root set but at or beyond this many
+	// hops from the nearest root is reported as far-from-root. Config-only knob (no
+	// CLI flag). <=0 is normalized to graphmodel.DefaultFarFromRootThreshold (6) in
+	// the domain.
+	FarFromRootThreshold int
 	// EmitExclude holds gitignore-syntax patterns for documents that stay in the
 	// corpus (scanned, link-checked, ranked — the pipeline NEVER reads this field)
 	// but are not rendered on the consumption surfaces (llms.txt family, index.md,
@@ -105,5 +111,6 @@ func DefaultConfig() Config {
 
 		InboundThreshold:          graphmodel.DefaultInboundThreshold,
 		StructureFindingsSeverity: StructureFindingsInfo,
+		FarFromRootThreshold:      graphmodel.DefaultFarFromRootThreshold,
 	}
 }

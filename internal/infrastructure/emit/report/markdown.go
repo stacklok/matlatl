@@ -41,6 +41,7 @@ func Markdown(v emit.View) []byte {
 	writeRow(&b, "Ambiguous links", c.Ambiguous)
 	writeRow(&b, "Orphans", c.Orphan)
 	writeRow(&b, "Unreachable", c.Unreachable)
+	writeRow(&b, "Far from root", c.FarFromRoot)
 	writeRow(&b, "Under-linked", c.UnderLinked)
 	writeRow(&b, "Dead-ends", c.DeadEnd)
 	writeRow(&b, "Knowledge gaps", c.KnowledgeGap)
@@ -168,6 +169,26 @@ func Markdown(v emit.View) []byte {
 		b.WriteString("\n")
 	}
 
+	// Far from root (ADR 0021): reachable, but many hops from any entry point.
+	b.WriteString("## Far from root\n\n")
+	b.WriteString("_Reachable from a root but at or beyond the hop-distance threshold, so hard to discover by " +
+		"link traversal. Link them closer to an entry point (an index or a root). To keep one intentionally " +
+		"deep, add front matter `matlatl: orphan-intentional`._\n\n")
+	switch {
+	case v.ReachabilityIndeterminate:
+		b.WriteString("_Indeterminate: no root set found (no README.md/index.md, no `type: index`, no `--root`)._\n\n")
+	case len(v.FarFromRoot) == 0:
+		b.WriteString("None.\n\n")
+	default:
+		b.WriteString("| Document | Hops from root |\n| --- | --- |\n")
+		for _, id := range v.FarFromRoot {
+			fmt.Fprintf(&b, "| %s | %s |\n",
+				emit.EscapeTableCell(id.String()),
+				emit.EscapeTableCell(strconv.Itoa(hopsOf(v, id))))
+		}
+		b.WriteString("\n")
+	}
+
 	// Hubs / authorities table.
 	b.WriteString("## Hubs and authorities\n\n")
 	if len(v.TopHubs) == 0 && len(v.TopAuthorities) == 0 {
@@ -273,6 +294,15 @@ func lineCell(line int) string {
 		return "-"
 	}
 	return fmt.Sprintf("%d", line)
+}
+
+// hopsOf returns a document's hops-from-root distance from the View (ADR 0021),
+// or -1 when it is unknown (unreachable / indeterminate / absent DocView).
+func hopsOf(v emit.View, id identity.DocumentID) int {
+	if d, ok := v.Doc(id); ok {
+		return d.Hops
+	}
+	return -1
 }
 
 // writeDocList writes a bullet list of documents with their display title, or

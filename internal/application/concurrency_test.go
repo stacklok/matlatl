@@ -42,6 +42,14 @@ func TestPipeline_Determinism_AcrossWorkerCounts(t *testing.T) {
 	root := genCorpus(t, 300)
 
 	baseline := runPipelineGraphJSON(t, root, 1)
+	// The hops-from-root surfaces (ADR 0021) are part of graph.json, so the
+	// byte-equality below covers their determinism — but assert they are actually
+	// present so the coverage cannot silently regress if the fields disappear.
+	for _, needle := range []string{`"hopsFromRoot"`, `"farFromRoot"`} {
+		if !bytes.Contains(baseline, []byte(needle)) {
+			t.Fatalf("graph.json missing %s (hops-from-root not surfaced)", needle)
+		}
+	}
 	for _, w := range []int{1, 2, 8} {
 		got := runPipelineGraphJSON(t, root, w)
 		if !bytes.Equal(baseline, got) {

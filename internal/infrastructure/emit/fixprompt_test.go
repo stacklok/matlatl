@@ -273,6 +273,54 @@ func lowScentFinding(doc string, line int, target string, score float64) analysi
 	}
 }
 
+// farFromRootFinding builds a synthetic far-from-root finding at doc (ADR 0021)
+// with the given hop distance (Details formatted as the application builder does).
+func farFromRootFinding(doc string, hops int) analysis.Finding {
+	return analysis.Finding{
+		ID: "far-from-root:" + doc, Kind: analysis.FarFromRoot,
+		Severity: analysis.Info,
+		Location: analysis.Location{Document: identity.DocumentID(doc)},
+		Message:  "far from root: " + doc,
+		Details: map[string]string{
+			"targetDocument": doc,
+			"hopsFromRoot":   strconv.Itoa(hops),
+		},
+	}
+}
+
+// TestFixPrompt_FarFromRootCuratedAndExcluded asserts a far-from-root finding
+// (an Info discoverability hint, ADR 0021) flows through the CURATED default
+// scope, and is dropped by the emitExclude rule when its source Location is an
+// excluded document (it is Location-keyed, like scent's source filter).
+func TestFixPrompt_FarFromRootCuratedAndExcluded(t *testing.T) {
+	rep := analysis.NewAnalysisReport([]analysis.Finding{
+		farFromRootFinding("docs/kept.md", 7),
+		farFromRootFinding(".claude/agents/deep.md", 9),
+	})
+
+	// Curated default: both far-from-root findings are present (no cap on the kind).
+	def := string(FixPrompt(rep, FixPromptOptions{}))
+	if !strings.Contains(def, "far from root: docs/kept.md") ||
+		!strings.Contains(def, "far from root: .claude/agents/deep.md") {
+		t.Errorf("far-from-root findings must flow through the curated default:\n%s", def)
+	}
+	if !strings.Contains(def, "### far-from-root") {
+		t.Errorf("curated default must include the far-from-root how-to section:\n%s", def)
+	}
+
+	// emitExclude: the finding sourced on an excluded doc is dropped; the other stays.
+	out := string(FixPrompt(rep, FixPromptOptions{EmitExclude: []string{".claude/agents/"}}))
+	if !strings.Contains(out, "far from root: docs/kept.md") {
+		t.Errorf("far-from-root on a kept doc must render:\n%s", out)
+	}
+	if strings.Contains(out, "far from root: .claude/agents/deep.md") {
+		t.Errorf("far-from-root sourced on an excluded doc must be dropped:\n%s", out)
+	}
+	if !strings.Contains(out, "- 1 advisory finding(s) on emitExcluded documents omitted (.matlatl.yml emitExclude).") {
+		t.Errorf("missing the emitExclude accounting line:\n%s", out)
+	}
+}
+
 // findingMarkers extracts the rendered `- **kind** (severity) `doc[:line]“
 // lines from a prompt, in order.
 func findingMarkers(out string) []string {

@@ -13,7 +13,7 @@
     "findings"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 6 },
+    "schemaVersion": { "type": "integer", "const": 7 },
     "tool": { "type": "string" },
     "summary": {
       "type": "object",
@@ -21,7 +21,7 @@
       "required": [
         "total", "brokenLink", "brokenAnchor", "ambiguous",
         "orphan", "unreachable", "knowledgeGap", "underLinked", "deadEnd", "suggestedLink",
-        "articulationPoint", "bridge", "lowScentAnchor"
+        "articulationPoint", "bridge", "lowScentAnchor", "farFromRoot"
       ],
       "properties": {
         "total": { "type": "integer", "minimum": 0 },
@@ -36,7 +36,8 @@
         "suggestedLink": { "type": "integer", "minimum": 0 },
         "articulationPoint": { "type": "integer", "minimum": 0 },
         "bridge": { "type": "integer", "minimum": 0 },
-        "lowScentAnchor": { "type": "integer", "minimum": 0 }
+        "lowScentAnchor": { "type": "integer", "minimum": 0 },
+        "farFromRoot": { "type": "integer", "minimum": 0 }
       }
     },
     "remediationGuide": {
@@ -58,7 +59,7 @@
               "broken-link", "broken-anchor", "ambiguous",
               "orphan", "unreachable", "under-linked", "dead-end",
               "knowledge-gap", "suggested-link", "dead-link",
-              "articulation-point", "bridge", "low-scent-anchor"
+              "articulation-point", "bridge", "low-scent-anchor", "far-from-root"
             ]
           },
           "severity": { "type": "string", "enum": ["info", "warning", "error"] },

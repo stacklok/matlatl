@@ -141,3 +141,18 @@ func IntentionalOrphans(c *corpus.Corpus) []identity.DocumentID {
 	slices.Sort(out)
 	return out
 }
+
+// structureExemptSet returns the documents exempt from the structure findings:
+// root-set members (configured OR convention) ∪ intentional orphans. A declared
+// entry point is its purpose, not a defect, and an opt-out is deliberate
+// (ADR 0007, ADR 0012). It is the single shared exemption builder used by both
+// DetectOrphans (the structure ladder) and ComputeHopsFromRoot (the
+// far-from-root outliers, ADR 0021), so the two cannot drift on what counts as
+// exempt.
+func structureExemptSet(c *corpus.Corpus, rs RootSet) map[identity.DocumentID]struct{} {
+	exempt := identity.IDSet(rs.Roots)
+	for _, id := range IntentionalOrphans(c) {
+		exempt[id] = struct{}{}
+	}
+	return exempt
+}

@@ -116,6 +116,119 @@ func TestMarkdown_OrphanListEscapesHostileTitle(t *testing.T) {
 	}
 }
 
+// TestMarkdown_FarFromRootTableEscapesHostileID pins the populated far-from-root
+// section (ADR 0021): a doc whose ID carries a pipe + newline must render as a
+// table row whose cell is EscapeTableCell-neutralized, so it cannot break the GFM
+// table or forge a new row. FarFromRootThreshold 1 makes the distance-1 doc far.
+func TestMarkdown_FarFromRootTableEscapesHostileID(t *testing.T) {
+	const hostile = "weird|pipe\nrow.md"
+	c := corpus.NewCorpus()
+	readme := &corpus.Document{
+		ID:   "README.md",
+		Root: &corpus.Section{Level: 0, Children: []*corpus.Section{{Level: 1, Text: "Home", Slug: "home", StartLine: 1, EndLine: 2}}},
+	}
+	far := &corpus.Document{ID: hostile, FrontMatter: corpus.FrontMatter{Title: "Deep"}}
+	if err := c.Add(readme); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Add(far); err != nil {
+		t.Fatal(err)
+	}
+	// README -> hostile (distance 1). Resolved edge wired directly (bypasses parsing).
+	refs := []reference.Reference{{
+		RawReference: reference.RawReference{Origin: "README.md", RawTarget: hostile, Type: reference.RelativeLink, Line: 2},
+		Target:       reference.ResolvedTarget{Kind: reference.TargetDocument, DocumentID: hostile},
+		Health:       reference.Valid,
+	}}
+	g := graphmodel.BuildReferenceGraph(c, refs, graphmodel.BuildOptions{})
+	m := graphmodel.Analyze(g, c, graphmodel.AnalyzeOptions{FarFromRootThreshold: 1})
+	v := emit.BuildView(application.Result{DocumentCount: 2, Metrics: m, Corpus: c})
+
+	if len(v.FarFromRoot) == 0 {
+		t.Fatal("setup: expected the distance-1 doc to be far-from-root at threshold 1")
+	}
+	out := string(Markdown(v))
+	idx := strings.Index(out, "## Far from root")
+	if idx < 0 {
+		t.Fatalf("Far from root section missing:\n%s", out)
+	}
+	section := out[idx:]
+	// The hostile newline must not survive as a raw row break, and the pipe must be
+	// escaped so it cannot forge an extra column.
+	for _, line := range strings.Split(section, "\n") {
+		if line == "row.md |" || strings.HasPrefix(line, "row.md") {
+			t.Errorf("hostile newline forged a new table row:\n%s", section)
+		}
+	}
+	if !strings.Contains(section, "\\|") {
+		t.Errorf("pipe in the far-from-root doc ID was not escaped:\n%s", section)
+	}
+}
+
+// TestMarkdown_FarFromRootIndeterminate pins the indeterminate branch: with no
+// root set, the Far from root section states it is indeterminate rather than
+// listing docs or "None." (ADR 0021).
+func TestMarkdown_FarFromRootIndeterminate(t *testing.T) {
+	c := corpus.NewCorpus()
+	// No README/index/type:index → indeterminate root set.
+	if err := c.Add(&corpus.Document{ID: "a.md"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Add(&corpus.Document{ID: "b.md"}); err != nil {
+		t.Fatal(err)
+	}
+	g := graphmodel.BuildReferenceGraph(c, nil, graphmodel.BuildOptions{})
+	m := graphmodel.Analyze(g, c, graphmodel.AnalyzeOptions{})
+	v := emit.BuildView(application.Result{DocumentCount: 2, Metrics: m, Corpus: c})
+
+	if !v.ReachabilityIndeterminate {
+		t.Fatal("setup: expected indeterminate reachability")
+	}
+	out := string(Markdown(v))
+	idx := strings.Index(out, "## Far from root")
+	if idx < 0 {
+		t.Fatalf("Far from root section missing:\n%s", out)
+	}
+	if !strings.Contains(out[idx:], "Indeterminate: no root set found") {
+		t.Errorf("indeterminate far-from-root section missing the indeterminate note:\n%s", out[idx:])
+	}
+}
+
+// TestTerminal_FarFromRootSections renders the populated and indeterminate
+// terminal branches of the Far from root section (ADR 0021).
+func TestTerminal_FarFromRootSections(t *testing.T) {
+	// Populated: README -> deep (distance 1), threshold 1 ⇒ deep is far.
+	c := corpus.NewCorpus()
+	readme := &corpus.Document{
+		ID:   "README.md",
+		Root: &corpus.Section{Level: 0, Children: []*corpus.Section{{Level: 1, Text: "H", Slug: "h", StartLine: 1, EndLine: 2}}},
+	}
+	deep := &corpus.Document{ID: "deep.md"}
+	if err := c.Add(readme); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Add(deep); err != nil {
+		t.Fatal(err)
+	}
+	refs := []reference.Reference{{
+		RawReference: reference.RawReference{Origin: "README.md", RawTarget: "deep.md", Type: reference.RelativeLink, Line: 2},
+		Target:       reference.ResolvedTarget{Kind: reference.TargetDocument, DocumentID: "deep.md"},
+		Health:       reference.Valid,
+	}}
+	g := graphmodel.BuildReferenceGraph(c, refs, graphmodel.BuildOptions{})
+	m := graphmodel.Analyze(g, c, graphmodel.AnalyzeOptions{FarFromRootThreshold: 1})
+	v := emit.BuildView(application.Result{DocumentCount: 2, Metrics: m, Corpus: c})
+
+	var buf bytes.Buffer
+	if err := Terminal(&buf, v, TerminalOptions{Color: ColorNever}); err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "Far from root") || !strings.Contains(got, "deep.md (1 hops)") {
+		t.Errorf("terminal far-from-root section missing the populated entry:\n%s", got)
+	}
+}
+
 // TestMarkdown_EmptyDocListRendersNone pins writeDocList's empty branch: when
 // there are no orphans, the section renders the literal "None." sentinel rather
 // than an empty (confusing) list. A fully-linked two-document corpus with a

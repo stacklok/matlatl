@@ -170,8 +170,8 @@ func TestJSON_Navigability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc := graphjson.Build(v); doc.SchemaVersion != 6 {
-		t.Errorf("schemaVersion = %d, want 6", doc.SchemaVersion)
+	if doc := graphjson.Build(v); doc.SchemaVersion != 7 {
+		t.Errorf("schemaVersion = %d, want 7", doc.SchemaVersion)
 	}
 
 	// The navigability floats must render at the fixed precision (determinism).
@@ -241,8 +241,8 @@ func TestJSON_CriticalStructure(t *testing.T) {
 	if err := json.Unmarshal(b, &typed); err != nil {
 		t.Fatal(err)
 	}
-	if typed.SchemaVersion != 6 {
-		t.Errorf("schemaVersion = %d, want 6", typed.SchemaVersion)
+	if typed.SchemaVersion != 7 {
+		t.Errorf("schemaVersion = %d, want 7", typed.SchemaVersion)
 	}
 
 	// Per-node betweenness + isArticulation.
@@ -403,6 +403,60 @@ func TestJSON_IndeterminateReachability(t *testing.T) {
 	}
 	if len(doc.Unreachable) != 0 {
 		t.Errorf("unreachable list must be empty under indeterminate reachability, got %v", doc.Unreachable)
+	}
+	// Hops-from-root (ADR 0021): with no root set, EVERY node's hopsFromRoot is the
+	// -1 sentinel, and the top-level farFromRoot list is empty.
+	for _, n := range doc.Nodes {
+		if n.HopsFromRoot != -1 {
+			t.Errorf("node %q hopsFromRoot = %d under indeterminate reachability; want -1", n.ID, n.HopsFromRoot)
+		}
+	}
+	if len(doc.FarFromRoot) != 0 {
+		t.Errorf("farFromRoot must be empty under indeterminate reachability, got %v", doc.FarFromRoot)
+	}
+}
+
+// TestJSON_HopsFromRoot pins the v7 per-node hopsFromRoot sentinel + distances
+// (ADR 0021) against a synthetic corpus so a regression is caught independently
+// of golden regeneration: README is a root (distance 0), a chain README->a->b
+// yields 1 and 2, and an unreachable island renders the -1 sentinel and stays out
+// of farFromRoot.
+func TestJSON_HopsFromRoot(t *testing.T) {
+	c := corpus.NewCorpus()
+	for _, id := range []string{"README.md", "a.md", "b.md", "island.md"} {
+		d := &corpus.Document{
+			ID:   corpusID(id),
+			Root: &corpus.Section{Level: 0, Children: []*corpus.Section{{Level: 1, Text: "T", Slug: "t", StartLine: 1, EndLine: 2}}},
+		}
+		if err := c.Add(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g := graphmodel.BuildReferenceGraph(c, []reference.Reference{
+		pathRef("README.md", "a.md"), pathRef("a.md", "b.md"),
+	}, graphmodel.BuildOptions{})
+	m := graphmodel.Analyze(g, c, graphmodel.AnalyzeOptions{})
+	v := emit.BuildView(application.Result{DocumentCount: c.Len(), Metrics: m, Corpus: c})
+
+	var typed graphjson.Document
+	b, err := graphjson.JSON(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &typed); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{"README.md": 0, "a.md": 1, "b.md": 2, "island.md": -1}
+	for _, n := range typed.Nodes {
+		if got, ok := want[n.ID]; ok && n.HopsFromRoot != got {
+			t.Errorf("node %q hopsFromRoot = %d, want %d", n.ID, n.HopsFromRoot, got)
+		}
+	}
+	// island.md is unreachable (-1), never far-from-root.
+	for _, id := range typed.FarFromRoot {
+		if id == "island.md" {
+			t.Errorf("island.md is unreachable and must not appear in farFromRoot")
+		}
 	}
 }
 

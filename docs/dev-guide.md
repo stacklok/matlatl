@@ -132,7 +132,7 @@ why output is byte-identical at any worker count. See [ADR 0004](adr/0004-ddd-la
 
 - **A new finding kind** — append to the `analysis.FindingKind` iota (keep the
   newest kind last and update `Valid()`'s upper bound to it — currently
-  `LowScentAnchor`),
+  `FarFromRoot`),
   update its `String()`, produce it in `application` with a concrete
   `SuggestedFix` and structured `Details`, add a `remediationGuide` entry **and** a
   `kindPresentationOrder` entry in the findings emitter (a test asserts every kind

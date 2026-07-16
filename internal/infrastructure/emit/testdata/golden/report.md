@@ -13,6 +13,7 @@
 | Ambiguous links | 1 |
 | Orphans | 2 |
 | Unreachable | 9 |
+| Far from root | 0 |
 | Under-linked | 8 |
 | Dead-ends | 1 |
 | Knowledge gaps | 3 |
@@ -117,6 +118,12 @@ _Not reachable from any root. Add an inbound link from a page that is itself rea
 - `docs/island/two.md` — Island Two
 - `docs/links.md` — Link Showcase
 - `docs/stray.md` — Stray Page
+
+## Far from root
+
+_Reachable from a root but at or beyond the hop-distance threshold, so hard to discover by link traversal. Link them closer to an entry point (an index or a root). To keep one intentionally deep, add front matter `matlatl: orphan-intentional`._
+
+None.
 
 ## Hubs and authorities
 

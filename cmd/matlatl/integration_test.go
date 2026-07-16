@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -408,6 +409,117 @@ func TestIntegration_InboundThresholdFlag(t *testing.T) {
 	}
 }
 
+// TestIntegration_FarFromRootThreshold exercises the full config→pipeline→artifact
+// path for hops-from-root (ADR 0021): a README→a→b→c chain with
+// `farFromRootThreshold: 2` in `.matlatl.yml`. c.md is 3 hops from the root, so
+// it is far-from-root; the finding is Info and NEVER gates `check --strict`, yet
+// it surfaces in findings.json and graph.json (per-node hopsFromRoot + the
+// farFromRoot array). This is the only coverage of root.go's config→cfg mapping.
+func TestIntegration_FarFromRootThreshold(t *testing.T) {
+	dir := t.TempDir()
+	writeFile := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Chain: README(0) -> a(1) -> b(2) -> c(3). Threshold 2 ⇒ b and c are far.
+	writeFile("README.md", "# Readme\n\nSee [a](a.md).\n")
+	writeFile("a.md", "# A\n\nSee [b](b.md).\n")
+	writeFile("b.md", "# B\n\nSee [c](c.md).\n")
+	writeFile("c.md", "# C\n\nThe deep one.\n")
+	writeFile(".matlatl.yml", "version: 1\nfarFromRootThreshold: 2\n")
+
+	// (1) far-from-root NEVER gates the exit code, even under --strict.
+	var out, errOut bytes.Buffer
+	if code := runArgs(context.Background(), []string{"check", dir, "--strict"}, &out, &errOut); code != platform.ExitOK {
+		t.Fatalf("check --strict code = %v, want ExitOK (far-from-root is non-gating); stdout=%q stderr=%q",
+			code, out.String(), errOut.String())
+	}
+
+	// (2) the finding + per-node data surface through the artifact bundle.
+	outDir := t.TempDir()
+	out.Reset()
+	errOut.Reset()
+	if code := runArgs(context.Background(), []string{"emit", dir, "--out", outDir}, &out, &errOut); code != platform.ExitOK {
+		t.Fatalf("emit code = %v, want ExitOK (stderr=%q)", code, errOut.String())
+	}
+
+	// findings.json: a far-from-root finding (Info) + a positive summary count.
+	fb, err := os.ReadFile(filepath.Join(outDir, "findings.json"))
+	if err != nil {
+		t.Fatalf("findings.json not written: %v", err)
+	}
+	var fdoc struct {
+		Summary struct {
+			FarFromRoot int `json:"farFromRoot"`
+		} `json:"summary"`
+		Findings []struct {
+			Kind     string            `json:"kind"`
+			Severity string            `json:"severity"`
+			Document string            `json:"document"`
+			Details  map[string]string `json:"details"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(fb, &fdoc); err != nil {
+		t.Fatalf("findings.json does not parse: %v", err)
+	}
+	if fdoc.Summary.FarFromRoot < 1 {
+		t.Errorf("findings.json summary.farFromRoot = %d, want >= 1", fdoc.Summary.FarFromRoot)
+	}
+	var sawC bool
+	for _, f := range fdoc.Findings {
+		if f.Kind != "far-from-root" {
+			continue
+		}
+		if f.Severity != "info" {
+			t.Errorf("far-from-root severity = %q, want info", f.Severity)
+		}
+		if f.Document == "c.md" {
+			sawC = true
+			if f.Details["hopsFromRoot"] != "3" {
+				t.Errorf("c.md far-from-root details.hopsFromRoot = %q, want 3", f.Details["hopsFromRoot"])
+			}
+		}
+	}
+	if !sawC {
+		t.Errorf("findings.json missing a far-from-root finding for c.md")
+	}
+
+	// graph.json: c.md in the top-level farFromRoot array, node hopsFromRoot == 3.
+	gb, err := os.ReadFile(filepath.Join(outDir, "graph.json"))
+	if err != nil {
+		t.Fatalf("graph.json not written: %v", err)
+	}
+	var gdoc struct {
+		Summary struct {
+			FarFromRoot int `json:"farFromRoot"`
+		} `json:"summary"`
+		FarFromRoot []string `json:"farFromRoot"`
+		Nodes       []struct {
+			ID           string `json:"id"`
+			HopsFromRoot int    `json:"hopsFromRoot"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(gb, &gdoc); err != nil {
+		t.Fatalf("graph.json does not parse: %v", err)
+	}
+	if !slices.Contains(gdoc.FarFromRoot, "c.md") {
+		t.Errorf("graph.json farFromRoot = %v, want it to contain c.md", gdoc.FarFromRoot)
+	}
+	if gdoc.Summary.FarFromRoot != len(gdoc.FarFromRoot) {
+		t.Errorf("graph.json summary.farFromRoot = %d, want %d", gdoc.Summary.FarFromRoot, len(gdoc.FarFromRoot))
+	}
+	var hopsC int = -2
+	for _, n := range gdoc.Nodes {
+		if n.ID == "c.md" {
+			hopsC = n.HopsFromRoot
+		}
+	}
+	if hopsC != 3 {
+		t.Errorf("graph.json node c.md hopsFromRoot = %d, want 3", hopsC)
+	}
+}
+
 // --- P4 human-emitter integration tests ---
 
 // TestIntegration_ReportToOut: `report --out` writes a non-empty, parseable
@@ -539,7 +651,7 @@ func TestIntegration_GraphJSONToOut(t *testing.T) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("graph.json does not parse: %v", err)
 	}
-	if doc.SchemaVersion != 6 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
+	if doc.SchemaVersion != 7 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
 		t.Errorf("graph.json content unexpected: version=%d docs=%d nodes=%d", doc.SchemaVersion, doc.Summary.Documents, len(doc.Nodes))
 	}
 	// summary.navigability (ADR 0014) is present with sensible values: the fixture
@@ -597,8 +709,8 @@ func TestIntegration_SuggestedLinks(t *testing.T) {
 	if err := json.Unmarshal(fb, &fdoc); err != nil {
 		t.Fatalf("findings.json does not parse: %v", err)
 	}
-	if fdoc.SchemaVersion != 6 {
-		t.Errorf("findings.json schemaVersion = %d, want 6", fdoc.SchemaVersion)
+	if fdoc.SchemaVersion != 7 {
+		t.Errorf("findings.json schemaVersion = %d, want 7", fdoc.SchemaVersion)
 	}
 	if fdoc.Summary.SuggestedLink < 1 {
 		t.Errorf("findings.json summary.suggestedLink = %d, want >= 1", fdoc.Summary.SuggestedLink)

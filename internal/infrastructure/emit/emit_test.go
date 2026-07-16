@@ -282,6 +282,74 @@ func TestFindingsJSON_StructureKindsValidateAgainstSchema(t *testing.T) {
 	}
 }
 
+// TestFindingsJSON_FarFromRootValidatesAgainstSchema positively exercises the
+// findings.schema v7 addition (ADR 0021): a report with one far-from-root finding
+// validates against the published schema (so the `far-from-root` kind enum member
+// and the farFromRoot summary field are hit by real emitted values), and the
+// summary count + kind + Info severity appear.
+func TestFindingsJSON_FarFromRootValidatesAgainstSchema(t *testing.T) {
+	rep := analysis.NewAnalysisReport([]analysis.Finding{
+		{
+			ID: "far-from-root:deep.md", Kind: analysis.FarFromRoot, Severity: analysis.Info,
+			Location:     analysis.Location{Document: "deep.md"},
+			Message:      "\"deep.md\" is 7 hops from the nearest root (threshold 6): reachable but far from any entry point",
+			SuggestedFix: "Add an inbound link to \"deep.md\" from a document closer to a root.",
+			Details:      map[string]string{"targetDocument": "deep.md", "hopsFromRoot": "7"},
+		},
+	})
+	b, err := FindingsJSON(rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data any
+	if err := json.Unmarshal(b, &data); err != nil {
+		t.Fatal(err)
+	}
+	schemaPath, err := filepath.Abs(filepath.Join("..", "..", "..", "docs", "schemas", "findings.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(sb, &schema); err != nil {
+		t.Fatalf("parse schema: %v", err)
+	}
+	if errs := validateFindingsNode(data, schema, "$"); len(errs) > 0 {
+		sort.Strings(errs)
+		t.Errorf("findings.json with a far-from-root finding does not satisfy schema:\n  %v", errs)
+	}
+
+	var doc struct {
+		Summary struct {
+			FarFromRoot int `json:"farFromRoot"`
+		} `json:"summary"`
+		RemediationGuide map[string]string `json:"remediationGuide"`
+		Findings         []struct {
+			Kind     string            `json:"kind"`
+			Severity string            `json:"severity"`
+			Details  map[string]string `json:"details"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Summary.FarFromRoot != 1 {
+		t.Errorf("summary.farFromRoot = %d, want 1", doc.Summary.FarFromRoot)
+	}
+	if len(doc.Findings) != 1 || doc.Findings[0].Kind != "far-from-root" || doc.Findings[0].Severity != "info" {
+		t.Errorf("emitted finding wrong: %+v", doc.Findings)
+	}
+	if doc.Findings[0].Details["hopsFromRoot"] != "7" {
+		t.Errorf("far-from-root detail hopsFromRoot = %q, want 7", doc.Findings[0].Details["hopsFromRoot"])
+	}
+	if doc.RemediationGuide["far-from-root"] == "" {
+		t.Error("remediationGuide missing entry for the emitted far-from-root kind")
+	}
+}
+
 // TestFindingsJSON_CleanValidatesAgainstSchema asserts a clean (zero-finding)
 // report — an empty findings list and empty remediationGuide — still satisfies
 // the schema (round-trip on the most common emitted shape).

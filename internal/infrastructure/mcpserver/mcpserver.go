@@ -162,7 +162,7 @@ func whatLinksToTool() mcp.Tool {
 
 func listOrphansTool() mcp.Tool {
 	return mcp.NewTool("list-orphans",
-		mcp.WithDescription("List structurally weak documents: isolated (no inbound or outbound navigational links), unreachable (not reachable from the root set), under-linked (fewer inbound links than the discoverability threshold), and dead-end (inbound links but nothing onward). Intentional orphans are suppressed."),
+		mcp.WithDescription("List structurally weak documents: isolated (no inbound or outbound navigational links), unreachable (not reachable from the root set), under-linked (fewer inbound links than the discoverability threshold), dead-end (inbound links but nothing onward), and far-from-root (reachable but at or beyond the hop-distance threshold from every root, so hard to discover by link traversal). Intentional orphans are suppressed."),
 	)
 }
 
@@ -184,7 +184,7 @@ func getSectionTool() mcp.Tool {
 
 func corpusSummaryTool() mcp.Tool {
 	return mcp.NewTool("corpus-summary",
-		mcp.WithDescription("Return the full graph.json manifest of the corpus: nodes, edges, sections, components, HITS hub/authority rankings, betweenness centrality, articulation points, bridges, orphans, unreachable, broken links, knowledge gaps, topology-based suggested links, and summary navigability scalars (compactness, stratum, characteristic/median path length, clustering coefficient, diameter)."),
+		mcp.WithDescription("Return the full graph.json manifest of the corpus: nodes (each with per-node hopsFromRoot, the shortest hop distance from the nearest root, or -1 if unreachable or when reachability.indeterminate is true), edges, sections, components, HITS hub/authority rankings, betweenness centrality, PageRank, articulation points, bridges, orphans, unreachable, far-from-root (docs beyond the hop-distance threshold), broken links, knowledge gaps, topology-based suggested links, and summary navigability scalars (compactness, stratum, characteristic/median path length, clustering coefficient, diameter)."),
 	)
 }
 
@@ -254,14 +254,16 @@ func (a *Analysis) handleListOrphans(_ context.Context, _ mcp.CallToolRequest) (
 	unreachable := identity.IDStrings(a.view.Unreachable)
 	underLinked := identity.IDStrings(a.view.UnderLinked)
 	deadEnd := identity.IDStrings(a.view.DeadEnd)
+	farFromRoot := identity.IDStrings(a.view.FarFromRoot)
 	return mcp.NewToolResultStructured(map[string]any{
 		"isolated":                  orphans,
 		"unreachable":               unreachable,
 		"underLinked":               underLinked,
 		"deadEnd":                   deadEnd,
+		"farFromRoot":               farFromRoot,
 		"reachabilityIndeterminate": a.view.ReachabilityIndeterminate,
-	}, fmt.Sprintf("%d isolated orphan(s), %d unreachable, %d under-linked, %d dead-end document(s)",
-		len(orphans), len(unreachable), len(underLinked), len(deadEnd))), nil
+	}, fmt.Sprintf("%d isolated orphan(s), %d unreachable, %d under-linked, %d dead-end, %d far-from-root document(s)",
+		len(orphans), len(unreachable), len(underLinked), len(deadEnd), len(farFromRoot))), nil
 }
 
 func (a *Analysis) handlePathBetween(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

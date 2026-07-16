@@ -31,7 +31,9 @@ const (
 // findings (two new kind values + articulationPoint/bridge summary counts).
 // v6 (ADR 0016) adds the information-scent "low-scent-anchor" finding (a new
 // kind value + a lowScentAnchor summary count).
-const FindingsSchemaVersion = 6
+// v7 (ADR 0021) adds the hops-from-root "far-from-root" finding (a new kind
+// value + a farFromRoot summary count).
+const FindingsSchemaVersion = 7
 
 // findingsDocument is the stable findings.json schema. Adding fields is
 // backward-compatible; renaming/removing is a breaking change and must bump
@@ -61,6 +63,7 @@ type findingsSum struct {
 	ArticulationPoint int `json:"articulationPoint"`
 	Bridge            int `json:"bridge"`
 	LowScentAnchor    int `json:"lowScentAnchor"`
+	FarFromRoot       int `json:"farFromRoot"`
 }
 
 type findingJSON struct {
@@ -134,6 +137,12 @@ var remediationByKind = map[string]string{
 		"is an experimental discoverability hint, not an error. Rename the anchor in `details.sourceDocument` at " +
 		"`line` to describe the destination — `details.suggestedAnchor` holds the destination's title or " +
 		"best-matching heading as a starting point.",
+	analysis.FarFromRoot.String(): "The document is reachable from a root but far from every entry point — `details.hopsFromRoot` " +
+		"holds its shortest hop distance from the nearest root. A reader or agent following links from an entry " +
+		"point (README.md/index.md) is unlikely to reach it that deep, so it is effectively undiscoverable even " +
+		"though it is not orphaned. This is an experimental discoverability hint, not an error. Add an inbound link " +
+		"to it from a document closer to a root (an index or hub is ideal) so it is fewer hops away. To keep it " +
+		"intentionally deep, add front matter `matlatl: orphan-intentional`.",
 }
 
 // kindPresentationOrder is the single source of truth for the order finding
@@ -144,6 +153,7 @@ var remediationByKind = map[string]string{
 var kindPresentationOrder = []analysis.FindingKind{
 	analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
 	analysis.Orphan, analysis.Unreachable, analysis.UnderLinked, analysis.DeadEnd,
+	analysis.FarFromRoot,
 	analysis.KnowledgeGap, analysis.SuggestedLink, analysis.DeadLink,
 	analysis.ArticulationPoint, analysis.Bridge, analysis.LowScentAnchor,
 }
@@ -183,6 +193,7 @@ func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
 			ArticulationPoint: report.CountByKind(analysis.ArticulationPoint),
 			Bridge:            report.CountByKind(analysis.Bridge),
 			LowScentAnchor:    report.CountByKind(analysis.LowScentAnchor),
+			FarFromRoot:       report.CountByKind(analysis.FarFromRoot),
 		},
 		Findings: make([]findingJSON, 0, report.Len()),
 	}

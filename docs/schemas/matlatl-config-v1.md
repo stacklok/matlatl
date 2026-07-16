@@ -27,13 +27,21 @@ roots:
 
 # Discoverability threshold for the under-linked finding (ADR 0012). A document
 # with fewer than this many inbound navigational links (but at least one outbound
-# link) is reported as under-linked. Default 3; <=0 is normalized to 3.
+# link) is reported as under-linked. Default 3; 0 = the default, negative is a
+# hard error.
 inboundThreshold: 3
 
 # Severity of the graduated structure findings (under-linked, dead-end), ADR 0012.
 # "info" (default) reports them but never fails `check`, even --strict; "warning"
 # promotes BOTH so they fail `check --strict` like orphans/unreachable.
 structureFindingsSeverity: info
+
+# Hop-distance threshold for the far-from-root finding (ADR 0021). A document
+# reachable from a root but at or beyond this many hops from the NEAREST root is
+# reported as far-from-root (reachable but hard to discover by link traversal).
+# Always Info; never fails `check`, even --strict. Default 6; 0 = the default,
+# negative is a hard error.
+farFromRootThreshold: 6
 
 # Docs to keep IN the corpus (link-checked, ranked) but DROP from the
 # consumption surfaces (llms.txt family, index.md, trails.json), ADR 0019.
@@ -104,8 +112,8 @@ The discoverability threshold for the **under-linked** structure finding
 `inboundThreshold` inbound** links is reported as under-linked.
 
 - Default **`3`** (Wikipedia's "discoverable" heuristic).
-- A value **`<= 0`** is normalized (floored) to `3` in the domain.
-- A **negative** value is a hard error; a **non-integer** is a hard error.
+- `0` is accepted and treated as unset (the default `3` applies); a **negative**
+  value or a **non-integer** is a hard error. There is no "off" value.
 - The `--inbound-threshold` CLI flag overrides this key when set explicitly.
 
 ### `structureFindingsSeverity` (string, optional)
@@ -119,6 +127,22 @@ dead-end), ADR 0012.
   orphan/unreachable/ambiguous.
 - Any other value is a hard error. There is no CLI flag for this; it is
   config-only.
+
+### `farFromRootThreshold` (integer, optional)
+
+The hop-distance threshold for the **far-from-root** finding (ADR 0021). A
+non-exempt document reachable from a root but **at or beyond** this many hops
+from the **nearest** root is reported as far-from-root: reachable, but so deep in
+the link graph that a reader or agent traversing from an entry point is unlikely
+to discover it.
+
+- Default **`6`**.
+- `0` is accepted and treated as unset (the default `6` applies); a **negative**
+  value or a **non-integer** is a hard error. There is no "off" value.
+- Always **Info** — it **never** fails `check`, even under `--strict`. There is
+  no CLI flag for this; it is config-only.
+- Root-set members and intentional orphans are exempt; unreachable documents are
+  reported as `unreachable`, not far-from-root.
 
 ### `emitExclude` (list of strings, optional)
 
@@ -170,6 +194,7 @@ would introduce them.
 | `roots` wrong type | hard error | 2 (usage) |
 | `inboundThreshold` negative or wrong type | hard error | 2 (usage) |
 | `structureFindingsSeverity` not `info`/`warning` or wrong type | hard error | 2 (usage) |
+| `farFromRootThreshold` negative or wrong type | hard error | 2 (usage) |
 | `emitExclude` wrong type (a bare string, a non-string element) | hard error | 2 (usage) |
 | `emitExclude` matches a reachability root | notice (renders nothing for it; reachability unaffected) | run continues |
 | Unknown non-version key (typo / future key) | ignored + notice | run continues |

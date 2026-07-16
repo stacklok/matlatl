@@ -48,6 +48,11 @@ type View struct {
 	// by DocumentID. Mutually exclusive with Orphans and each other.
 	UnderLinked []identity.DocumentID
 	DeadEnd     []identity.DocumentID
+	// FarFromRoot are the documents reachable but at or beyond the hop-distance
+	// threshold from every root (ADR 0021), sorted by DocumentID. Their per-doc
+	// hop distance is on the DocView (Hops). Empty when reachability is
+	// indeterminate. Root members and intentional orphans are suppressed upstream.
+	FarFromRoot []identity.DocumentID
 	// ReachabilityIndeterminate mirrors the metrics flag (no root set found).
 	ReachabilityIndeterminate bool
 
@@ -122,6 +127,7 @@ type Counts struct {
 	UnderLinked   int
 	DeadEnd       int
 	SuggestedLink int
+	FarFromRoot   int
 	Components    int
 }
 
@@ -156,6 +162,9 @@ type DocView struct {
 	// PageRank is the document's PageRank score (ADR 0016): global importance via
 	// the random-surfer stationary distribution.
 	PageRank float64
+	// Hops is the document's shortest hop distance from the nearest root
+	// (ADR 0021), or -1 when it is unreachable or the root set is indeterminate.
+	Hops int
 }
 
 // topN bounds how many hubs/authorities the human reports surface.
@@ -180,6 +189,7 @@ func BuildView(res application.Result) View {
 	v.Unreachable = slices.Clone(m.Orphans.Unreachable)
 	v.UnderLinked = slices.Clone(m.Orphans.UnderLinked)
 	v.DeadEnd = slices.Clone(m.Orphans.DeadEnd)
+	v.FarFromRoot = slices.Clone(m.Hops.FarFromRoot)
 	v.Gaps = slices.Clone(m.Gaps)
 	v.GapsTruncated = m.GapsTruncated
 	v.SuggestedLinks = slices.Clone(m.SuggestedLinks)
@@ -199,6 +209,13 @@ func BuildView(res application.Result) View {
 	for _, doc := range c.Documents() { // sorted by ID
 		title, desc := titleAndDescription(doc)
 		deg := m.Degrees.Degree(doc.ID)
+		// Hops-from-root (ADR 0021): the nearest-root distance, or -1 when the doc
+		// is unreachable (absent from the distance map) OR the root set is
+		// indeterminate (the map is empty), so both render as hopsFromRoot: -1.
+		hops := -1
+		if d, ok := m.Hops.Distance(doc.ID); ok {
+			hops = d
+		}
 		dv := DocView{
 			ID:             doc.ID,
 			Title:          title,
@@ -212,6 +229,7 @@ func BuildView(res application.Result) View {
 			Betweenness:    m.Betweenness.Score(doc.ID),
 			IsArticulation: m.Critical.IsArticulation(doc.ID),
 			PageRank:       m.PageRank.Score(doc.ID),
+			Hops:           hops,
 		}
 		if _, ok := intentional[doc.ID]; ok {
 			dv.Intentional = true
@@ -236,7 +254,7 @@ func BuildView(res application.Result) View {
 				v.LowScent = append(v.LowScent, f)
 			case analysis.Orphan, analysis.Unreachable, analysis.KnowledgeGap,
 				analysis.UnderLinked, analysis.DeadEnd, analysis.SuggestedLink,
-				analysis.ArticulationPoint, analysis.Bridge:
+				analysis.ArticulationPoint, analysis.Bridge, analysis.FarFromRoot:
 				// Carried via the dedicated View slices above, not the finding lists.
 			case analysis.DeadLink:
 				// Opt-in (--check-external) only; surfaced via findings.json, not
@@ -316,6 +334,7 @@ func countsFromResult(res application.Result, m *graphmodel.GraphMetrics) Counts
 		UnderLinked:   res.UnderLinkedCount,
 		DeadEnd:       res.DeadEndCount,
 		SuggestedLink: res.SuggestedLinkCount,
+		FarFromRoot:   res.FarFromRootCount,
 	}
 	if m != nil {
 		c.Components = len(m.WCC)

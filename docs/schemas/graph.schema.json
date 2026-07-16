@@ -17,6 +17,7 @@
     "unreachable",
     "underLinked",
     "deadEnd",
+    "farFromRoot",
     "bowtie",
     "brokenLinks",
     "brokenAnchors",
@@ -33,7 +34,7 @@
     "reachability"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 6 },
+    "schemaVersion": { "type": "integer", "const": 7 },
     "tool": { "type": "string" },
     "generatedNote": { "type": "string" },
     "summary": {
@@ -41,7 +42,7 @@
       "additionalProperties": false,
       "required": [
         "documents", "sections", "edges", "references", "components",
-        "orphans", "unreachable", "underLinked", "deadEnd",
+        "orphans", "unreachable", "underLinked", "deadEnd", "farFromRoot",
         "brokenLinks", "brokenAnchors", "ambiguous", "knowledgeGaps", "suggestedLinks",
         "articulationPoints", "bridges",
         "navigability"
@@ -56,6 +57,7 @@
         "unreachable": { "type": "integer", "minimum": 0 },
         "underLinked": { "type": "integer", "minimum": 0 },
         "deadEnd": { "type": "integer", "minimum": 0 },
+        "farFromRoot": { "type": "integer", "minimum": 0 },
         "brokenLinks": { "type": "integer", "minimum": 0 },
         "brokenAnchors": { "type": "integer", "minimum": 0 },
         "ambiguous": { "type": "integer", "minimum": 0 },
@@ -92,7 +94,7 @@
           "id", "kind", "title", "path", "description", "category",
           "inDegree", "outDegree", "component", "hubScore", "authorityScore",
           "reachable", "orphan", "intentionalOrphan", "underLinked", "deadEnd", "bowtie",
-          "betweenness", "isArticulation", "pageRank"
+          "betweenness", "isArticulation", "pageRank", "hopsFromRoot"
         ],
         "properties": {
           "id": { "type": "string" },
@@ -117,7 +119,12 @@
           },
           "betweenness": { "type": "number", "minimum": 0, "maximum": 1 },
           "isArticulation": { "type": "boolean" },
-          "pageRank": { "type": "number", "minimum": 0, "maximum": 1 }
+          "pageRank": { "type": "number", "minimum": 0, "maximum": 1 },
+          "hopsFromRoot": {
+            "description": "Shortest hop distance from the nearest root (ADR 0021), or -1 when the document is unreachable OR the root set is indeterminate. Lower = easier to discover by link traversal from an entry point.",
+            "type": "integer",
+            "minimum": -1
+          }
         }
       }
     },
@@ -154,6 +161,11 @@
     "unreachable": { "type": "array", "items": { "type": "string" } },
     "underLinked": { "type": "array", "items": { "type": "string" } },
     "deadEnd": { "type": "array", "items": { "type": "string" } },
+    "farFromRoot": {
+      "description": "Documents reachable from a root but at or beyond the hop-distance threshold from every root (ADR 0021): reachable but hard to discover by link traversal. Sorted DocumentIDs; empty when reachability is indeterminate. Pure data; surfaced as non-gating Info findings too.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "bowtie": {
       "description": "Corpus-level bow-tie classification relative to the giant strongly-connected component (the 'core'): per-bucket document counts plus the giant SCC id and size. A giantSccSize of 1 means there is no cyclic core (every SCC is a singleton).",
       "type": "object",
