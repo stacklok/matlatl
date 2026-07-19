@@ -88,11 +88,17 @@ real docs**, atrium **478**, toolhive **238**, mecatl **198**, minder **159**.
 
 **The adoption confound (call it out loudly).** An adopted repo's `llms.txt`
 reflects *human curation done with matlatl's help*, not the raw generated
-artifact — exactly the ETH "curated beats generated" axis. Running one adopted +
-one un-adopted repo separates "the artifact" from "curated-with-matlatl." An
-alternative is to regenerate all artifacts fresh (un-curated) on every corpus,
-which measures the pure generated artifact but discards the real adoption story.
-Recommend the split; flag the confound in results.
+artifact — exactly the ETH "curated beats generated" axis.
+
+**DECIDED (maintainer, 2026-07-19): regenerate all artifacts fresh (un-curated)
+on every corpus.** The eval measures the pure generated artifact — the strict
+ETH-comparable claim — not the curation story. Committed artifacts in adopted
+repos are ignored; the harness runs `matlatl emit` at the pinned SHA and injects
+only its own output. Residual caveat to state in results: an adopted repo's
+underlying *link structure* was still improved by matlatl-driven maintenance, so
+adopted vs un-adopted remains a useful secondary lens on structure (not on
+artifact curation), and keeping one of each in the corpus set preserves that
+reading for free.
 
 **Selection criteria:** substantial `docs/` with real link density; permissive
 license (atrium/toolhive/minder carry LICENSE files; mecatl is internal — fine
@@ -219,13 +225,17 @@ Frozen before the first run; deviations logged in `results.md`.
 endpoints (per-task success delta; per-task token delta), the corpora SHAs, the
 task+gold set, the reps count, and the thresholds in the table above.
 
-## 8. Open questions for the maintainer
+## 8. Open questions for the maintainer — ANSWERED (2026-07-19)
 
-1. **Adoption confound** (§2) — accept adopted+un-adopted split, or regenerate
-   fresh artifacts everywhere?
-2. **Single harness vs a second agent** (§4) — generalization vs first-run cost.
-3. **Power vs cost** (§1/§5.3) — is "rule out large harm, detect a large win" an
-   acceptable *done* for #17, or fund a larger, more-powered design?
+1. **Adoption confound** (§2) — **regenerate fresh artifacts everywhere.** The
+   eval measures the pure generated artifact (strict ETH comparison); adopted vs
+   un-adopted is retained only as a secondary structural lens.
+2. **Single harness vs a second agent** (§4) — **single (`claude -p`)** for the
+   first run; a second harness is future work and results are stated as
+   single-agent.
+3. **Power vs cost** (§1/§5.3) — **"rule out large harm, detect a large win" is
+   accepted as done-for-#17.** The directional Stage A design stands; a
+   more-powered design is not funded unless Stage A results argue for it.
 
 ## 9. First-run cost estimate
 
