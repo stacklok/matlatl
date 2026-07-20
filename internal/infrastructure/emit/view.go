@@ -56,6 +56,15 @@ type View struct {
 	// ReachabilityIndeterminate mirrors the metrics flag (no root set found).
 	ReachabilityIndeterminate bool
 
+	// OKF is the OKF v0.1 conformance verdict (ADR 0023), projected once from the
+	// pipeline Result. OKF.Checked gates whether the verdict line + violations
+	// section render at all; OKF.Line() is the shared verdict wording.
+	OKF OKFVerdict
+	// OKFViolations are the okf-* conformance findings (ADR 0023), already sorted
+	// (the AnalysisReport sorts findings). Rendered as a dedicated section in the
+	// human reports so NOT CONFORMANT names the offending files, not just a count.
+	OKFViolations []analysis.Finding
+
 	// TopHubs / TopAuthorities are HITS rankings (descending, tie-break by ID).
 	TopHubs        []graphmodel.RankedDocument
 	TopAuthorities []graphmodel.RankedDocument
@@ -177,6 +186,9 @@ func BuildView(res application.Result) View {
 	v := View{docIndex: map[identity.DocumentID]int{}}
 	c := res.Corpus
 	v.corpus = c
+	// OKF verdict (ADR 0023) is set unconditionally, so the verdict line renders
+	// even for an empty/metrics-less corpus (which is trivially conformant).
+	v.OKF = OKFVerdictFromResult(res)
 	if res.Metrics == nil || c == nil {
 		v.Counts = countsFromResult(res, nil)
 		return v
@@ -259,10 +271,46 @@ func BuildView(res application.Result) View {
 			case analysis.DeadLink:
 				// Opt-in (--check-external) only; surfaced via findings.json, not
 				// the deterministic human View slices.
+			case analysis.OKFMissingFrontmatter, analysis.OKFMissingType,
+				analysis.OKFReservedFileStructure:
+				// OKF conformance findings (ADR 0023): collected into a dedicated
+				// section so the human report names the offending files, not just a
+				// count.
+				v.OKFViolations = append(v.OKFViolations, f)
 			}
 		}
 	}
 	return v
+}
+
+// OKFRuleLabel maps an OKF conformance finding kind (ADR 0023) to the short rule
+// label used in the human reports and the verdict line ("missing-frontmatter",
+// "missing-type", "reserved-file").
+func OKFRuleLabel(k analysis.FindingKind) string {
+	switch k {
+	case analysis.OKFMissingFrontmatter:
+		return "missing-frontmatter"
+	case analysis.OKFMissingType:
+		return "missing-type"
+	case analysis.OKFReservedFileStructure:
+		return "reserved-file"
+	default:
+		return k.String()
+	}
+}
+
+// OKFReason returns a one-line, user-facing reason for an OKF conformance finding
+// (ADR 0023): the structured reason (R2/R3) or the frontmatter state (R1),
+// falling back to the full message. Used by the terminal + markdown reports so a
+// NOT CONFORMANT verdict names WHY each file failed, not just that it did.
+func OKFReason(f analysis.Finding) string {
+	if s := f.Details[application.DetailReason]; s != "" {
+		return s
+	}
+	if s := f.Details[application.DetailFrontmatterState]; s != "" {
+		return "frontmatter " + s
+	}
+	return f.Message
 }
 
 // ReachableSet returns the set of reachable document IDs and whether

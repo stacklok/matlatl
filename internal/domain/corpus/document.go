@@ -90,6 +90,19 @@ type Document struct {
 	RawReferences []reference.RawReference
 	// ModTime is the file's last-modified time.
 	ModTime time.Time
+	// FrontMatterPresent reports whether the source began with a frontmatter fence
+	// block (`---`/`+++`) at all — independent of whether it parsed. It is pure
+	// data set by the parser, used by the OKF conformance mode (ADR 0023) to tell
+	// an ABSENT frontmatter block from a present-but-unparseable one. A document
+	// whose oversized frontmatter was stripped by the size guard (ADR 0003) is
+	// FrontMatterPresent=true, FrontMatterParsed=false.
+	FrontMatterPresent bool
+	// FrontMatterParsed reports whether a present frontmatter block decoded
+	// successfully into FrontMatter. It is false when there was no block at all
+	// (FrontMatterPresent=false), when the YAML/TOML failed to decode, or when the
+	// oversized-frontmatter guard stripped the block before decoding. Pure data
+	// set by the parser (ADR 0023).
+	FrontMatterParsed bool
 }
 
 // Title returns the document's display title with the documented fallbacks

@@ -36,6 +36,7 @@ func newRootCommand() *cobra.Command {
 		outputDir     string
 		quiet         bool
 		verbose       bool
+		okfMode       bool
 		roots         []string
 
 		inboundThreshold int
@@ -106,6 +107,14 @@ func newRootCommand() *cobra.Command {
 	root.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress non-essential output")
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable detailed logging")
 	root.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable ANSI color (also honored: NO_COLOR env, non-TTY output)")
+	// NOTE: no backticked token in this usage string — pflag's UnquoteUsage
+	// treats the first `...`-quoted word as the flag's value placeholder, which
+	// would render as "--okf check". Keep it backtick-free so it shows as a bool.
+	root.PersistentFlags().BoolVar(&okfMode, "okf", false,
+		"enable OKF v0.1 conformance mode: check the corpus against the Open Knowledge Format "+
+			"conformance rules and report a CONFORMANT/NOT CONFORMANT verdict. When on, check "+
+			"exits 1 on any conformance violation regardless of --strict (health checks still apply). "+
+			"Also settable via .matlatl.yml (okf: true)")
 	root.PersistentFlags().StringSliceVar(&roots, "root", nil,
 		"reachability root glob(s), matched against document paths; repeatable and/or "+
 			"comma-separated. Added to the autodetected roots (README.md/index.md/type:index). "+
@@ -225,6 +234,14 @@ func configFromFlags(cmd *cobra.Command, args []string) (application.Config, err
 	// but NEVER read by the pipeline — only the consumption-surface commands
 	// (`emit`, `index`) apply it, at the emit boundary. `check` is unaffected.
 	cfg.EmitExclude = slices.Clone(file.EmitExclude)
+
+	// OKF conformance mode (ADR 0023). Effective = `--okf` flag OR `.matlatl.yml
+	// okf: true`. The flag defaults false, so a repo can opt in via config and any
+	// invocation still turns it on with the flag; there is no way to force it OFF
+	// from the flag when the config enables it (consistent with the other additive
+	// config knobs). The loader validated the value is a bool.
+	flagOKF, _ := flags.GetBool("okf")
+	cfg.OKF = flagOKF || (file.OKF != nil && *file.OKF)
 	return cfg, nil
 }
 

@@ -66,6 +66,13 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    the minimum over all roots), mirroring `ComputeReachability` with the
    explicit-head-index queue idiom; absence = unreachable, and it shares the
    `structureExemptSet` helper with the orphan ladder for exemptions (ADR 0021).
+   When **OKF conformance mode** is on (`--okf` / `.matlatl.yml okf: true`), a
+   pure-domain conformance pass (`internal/domain/okf`, `okf.Check`) runs over the
+   frozen corpus and appends the mode-scoped `okf-*` **Error** findings; the
+   verdict (CONFORMANT / NOT CONFORMANT) is carried on the `Result` and reported
+   separately from the health gate ([ADR 0023](adr/0023-okf-conformance-mode.md)).
+   `okf.Check` reads only two pure-data bools the parser sets on `Document`
+   (`FrontMatterPresent` / `FrontMatterParsed`), so it stays free of YAML parsing.
 6. **Emit** — render the report for humans (terminal, Markdown, Mermaid, DOT,
    index.md with a Backlinks column) and LLMs (graph.json, trails.json, the
    llms.txt family with a reading-order block + backlinks, findings.json; JUnit

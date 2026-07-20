@@ -8,6 +8,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **OKF v0.1 conformance mode ([ADR 0023](docs/adr/0023-okf-conformance-mode.md)).**
+  An opt-in `--okf` flag (and `.matlatl.yml okf: true` key) checks a repo against
+  Google's [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog)
+  v0.1 §9 conformance rules and reports a CONFORMANT / NOT CONFORMANT verdict:
+  R1 every non-reserved `.md` has a parseable YAML frontmatter block; R2 that
+  frontmatter carries a non-empty `type` (the value is never validated against a
+  list — OKF forbids a central registry); R3 reserved files (`index.md`/`log.md`
+  only — `README.md` is a concept doc) follow their §6/§7 structure. Three new
+  Error-severity finding kinds (`okf-missing-frontmatter`, `okf-missing-type`,
+  `okf-reserved-file-structure`) are produced **only** in the mode and gate
+  `check` (exit 1) regardless of `--strict`. The verdict is reported **separately**
+  from the health gate — a broken link is conformant per OKF, so it never makes a
+  bundle NOT CONFORMANT, and `--okf` never relaxes the health checks (a superset
+  gate). `findings.json` bumps to **schema v8**: the three kinds/counts plus an
+  always-present top-level `okfConformance` object (`checked:false` when off);
+  `graph.json` is unchanged (v7). Matlatl's own repo is not an OKF bundle, so
+  `task dogfood` does not run `--okf`.
+
 - **`emitExclude` ([ADR 0019](docs/adr/0019-emit-exclude.md)).** A new
   `.matlatl.yml` key that keeps documents **in the corpus** — link-checked,
   ranked, present in `graph.json`/`findings.json` — while dropping them from the

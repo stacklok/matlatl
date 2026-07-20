@@ -10,10 +10,11 @@
     "tool",
     "summary",
     "remediationGuide",
+    "okfConformance",
     "findings"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 7 },
+    "schemaVersion": { "type": "integer", "const": 8 },
     "tool": { "type": "string" },
     "summary": {
       "type": "object",
@@ -21,7 +22,8 @@
       "required": [
         "total", "brokenLink", "brokenAnchor", "ambiguous",
         "orphan", "unreachable", "knowledgeGap", "underLinked", "deadEnd", "suggestedLink",
-        "articulationPoint", "bridge", "lowScentAnchor", "farFromRoot"
+        "articulationPoint", "bridge", "lowScentAnchor", "farFromRoot",
+        "okfMissingFrontmatter", "okfMissingType", "okfReservedFileStructure"
       ],
       "properties": {
         "total": { "type": "integer", "minimum": 0 },
@@ -37,13 +39,51 @@
         "articulationPoint": { "type": "integer", "minimum": 0 },
         "bridge": { "type": "integer", "minimum": 0 },
         "lowScentAnchor": { "type": "integer", "minimum": 0 },
-        "farFromRoot": { "type": "integer", "minimum": 0 }
+        "farFromRoot": { "type": "integer", "minimum": 0 },
+        "okfMissingFrontmatter": { "type": "integer", "minimum": 0 },
+        "okfMissingType": { "type": "integer", "minimum": 0 },
+        "okfReservedFileStructure": { "type": "integer", "minimum": 0 }
       }
     },
     "remediationGuide": {
       "description": "Maps each finding kind present in this report to a standalone, one-paragraph how-to so an agent can act using only this document. Keyed by the finding kind string; a clean report yields an empty object.",
       "type": "object",
       "additionalProperties": { "type": "string" }
+    },
+    "okfConformance": {
+      "description": "OKF v0.1 conformance verdict (ADR 0023). ALWAYS present: when conformance mode was off, `checked` is false and the rest are zero values. When on, `conformant` is the §9 verdict, `version` is the bundle's declared okf_version (\"\" when none), and the three counts tally the okf-* Error findings.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checked", "conformant", "version",
+        "missingFrontmatter", "missingType", "reservedFileStructure"
+      ],
+      "properties": {
+        "checked": {
+          "description": "Whether OKF conformance mode (--okf / .matlatl.yml okf: true) was on for this run. When false, every other field in this object is a zero value and carries no meaning.",
+          "type": "boolean"
+        },
+        "conformant": {
+          "description": "The OKF v0.1 §9 verdict. Meaningful only when `checked` is true; always false when the mode was off. True iff all three violation counts below are zero.",
+          "type": "boolean"
+        },
+        "version": {
+          "description": "The okf_version declared in the bundle-root index.md frontmatter (OKF §11). Empty when none is declared — which is allowed, so a conformant bundle may still have an empty version.",
+          "type": "string"
+        },
+        "missingFrontmatter": {
+          "description": "Count of okf-missing-frontmatter findings (rule R1).",
+          "type": "integer", "minimum": 0
+        },
+        "missingType": {
+          "description": "Count of okf-missing-type findings (rule R2).",
+          "type": "integer", "minimum": 0
+        },
+        "reservedFileStructure": {
+          "description": "Count of okf-reserved-file-structure findings (rule R3).",
+          "type": "integer", "minimum": 0
+        }
+      }
     },
     "findings": {
       "type": "array",
@@ -59,7 +99,8 @@
               "broken-link", "broken-anchor", "ambiguous",
               "orphan", "unreachable", "under-linked", "dead-end",
               "knowledge-gap", "suggested-link", "dead-link",
-              "articulation-point", "bridge", "low-scent-anchor", "far-from-root"
+              "articulation-point", "bridge", "low-scent-anchor", "far-from-root",
+              "okf-missing-frontmatter", "okf-missing-type", "okf-reserved-file-structure"
             ]
           },
           "severity": { "type": "string", "enum": ["info", "warning", "error"] },

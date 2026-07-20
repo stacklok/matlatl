@@ -22,7 +22,8 @@ func newCheckCommand() *cobra.Command {
 		Long: "check scans a repository's markdown, resolves every link and anchor, " +
 			"and reports broken links, broken anchors and ambiguous targets.\n\n" +
 			"Exit codes (ADR 0005): 0 clean, 1 findings at/above threshold " +
-			"(broken links/anchors; --strict adds ambiguous), 2 usage, 3 runtime.",
+			"(broken links/anchors; --strict adds ambiguous; --okf adds any OKF " +
+			"conformance violation, independent of --strict), 2 usage, 3 runtime.",
 		Args:          usageArgs(cobra.MaximumNArgs(1)),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -59,7 +60,7 @@ func newCheckCommand() *cobra.Command {
 			printCheckSummary(cmd, res)
 
 			if code := res.CheckExitCode(cfg.Strict); code != platform.ExitOK {
-				return exitCodeError{code: code, err: fmt.Errorf("findings present")}
+				return exitCodeError{code: code, err: fmt.Errorf("%s", checkFailureReason(res))}
 			}
 			return nil
 		},
@@ -87,7 +88,7 @@ func parseResolutionPolicy(s string) (reference.ResolutionPolicy, error) {
 
 // writeCheckArtifacts renders and writes findings.json + junit.xml under outDir.
 func writeCheckArtifacts(ctx context.Context, outDir string, res application.Result) error {
-	findingsJSON, err := emit.FindingsJSON(res.Report)
+	findingsJSON, err := emit.FindingsJSON(res.Report, emit.OKFVerdictFromResult(res))
 	if err != nil {
 		return err
 	}
@@ -100,6 +101,17 @@ func writeCheckArtifacts(ctx context.Context, outDir string, res application.Res
 		{Name: emit.FindingsJSONName, Content: findingsJSON},
 		{Name: emit.JUnitXMLName, Content: junitXML},
 	})
+}
+
+// checkFailureReason phrases the non-zero-exit reason. In the one state that
+// otherwise reads as a contradiction — OKF mode on, verdict CONFORMANT, but a
+// health finding forces exit 1 — it names the gate so the CONFORMANT line above
+// doesn't cause a double-take. Every other failing state keeps the plain wording.
+func checkFailureReason(res application.Result) string {
+	if res.OKFMode && res.OKFConformant {
+		return "findings present (health gate; OKF verdict unaffected)"
+	}
+	return "findings present"
 }
 
 // printCheckSummary writes a human-readable summary to stdout.
@@ -115,4 +127,9 @@ func printCheckSummary(cmd *cobra.Command, res application.Result) {
 		res.DocumentCount, res.ReferenceCount,
 		res.BrokenLinkCount, res.BrokenAnchorCount, res.AmbiguousCount,
 		res.OrphanCount, res.UnreachableCount)
+	if res.OKFMode {
+		// The verdict wording lives in ONE place (emit.OKFVerdict.Line), shared with
+		// the human reports so the check summary and report lines are byte-identical.
+		_, _ = fmt.Fprintln(out, emit.OKFVerdictFromResult(res).Line())
+	}
 }

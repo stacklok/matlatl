@@ -29,6 +29,23 @@ func Markdown(v emit.View) []byte {
 
 	b.WriteString("# matlatl report\n\n")
 
+	// OKF conformance verdict (ADR 0023): shown only in OKF mode, front-loaded. A
+	// NOT CONFORMANT verdict is followed by a table of the offending files.
+	if v.OKF.Checked {
+		fmt.Fprintf(&b, "**%s**\n\n", emit.EscapeMarkdownText(v.OKF.Line()))
+		if !v.OKF.Conformant {
+			b.WriteString("| File | Line | Rule | Reason |\n| --- | --- | --- | --- |\n")
+			for _, f := range v.OKFViolations {
+				fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
+					emit.EscapeTableCell(f.Location.Document.String()),
+					emit.EscapeTableCell(lineCell(f.Location.Line)),
+					emit.EscapeTableCell(emit.OKFRuleLabel(f.Kind)),
+					emit.EscapeTableCell(emit.OKFReason(f)))
+			}
+			b.WriteString("\n_Fix: run `matlatl fix-prompt <path> --okf`, or see `findings.json`._\n\n")
+		}
+	}
+
 	// Corpus overview table.
 	b.WriteString("## Corpus overview\n\n")
 	b.WriteString("| Metric | Count |\n| --- | --- |\n")

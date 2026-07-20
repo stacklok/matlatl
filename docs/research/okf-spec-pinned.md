@@ -12,6 +12,13 @@ matlatl: orphan-intentional
 > machinery.
 >
 > Marked `orphan-intentional` so matlatl doesn't flag its own research note.
+>
+> **Status (2026-07-20): IMPLEMENTED.** The conformance mode this note designs
+> shipped in issue #18 as [ADR 0023](../adr/0023-okf-conformance-mode.md) — the
+> `--okf` flag / `.matlatl.yml okf: true` key, the three §9 rules, the
+> verdict-vs-health separation, and `findings.json` schema v8. This note is
+> retained as the pinned normative source; when a rule's semantics are in doubt,
+> the verbatim spec text below is authoritative.
 
 ## Provenance (what was pinned, and how confident)
 

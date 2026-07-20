@@ -46,6 +46,7 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 | `--out <dir>` | Write artifacts into `<dir>` (paths are sanitized to stay inside it). |
 | `--strict` | Promote orphan/ambiguous **warnings** to **failures** (affects `check`'s exit code). |
 | `--check-external` | Opt in to HTTP liveness checks of external links (off by default; see below). |
+| `--okf` | Enable **OKF v0.1 conformance mode** — report a CONFORMANT/NOT CONFORMANT verdict and fail `check` on a conformance violation (off by default; see [OKF conformance](#okf-conformance)). |
 | `--root <glob>` | Add reachability root(s) on top of the autodetected ones (`README.md`/`index.md`/`SKILL.md` by filename, plus `type: index`). Repeatable and/or comma-separated; matched against document paths with `path.Match` (a single `*` does **not** cross `/`, and `**` is unsupported — e.g. `docs/*.md`, not `docs/**`). |
 | `--no-color` | Disable ANSI color. `NO_COLOR` env and non-TTY output are also honored. |
 | `--quiet` / `--verbose` | Less / more output. |
@@ -550,6 +551,51 @@ error, exit 2); empty or absent means no filtering. A pattern that matches a
 root/README is allowed — the root simply doesn't render and reachability is
 unaffected — but matlatl emits a notice so it isn't silent. See
 [ADR 0019](adr/0019-emit-exclude.md).
+
+## OKF conformance
+
+[OKF (Open Knowledge Format)](https://github.com/GoogleCloudPlatform/knowledge-catalog)
+is Google's small, markdown-native spec for distributing "knowledge bundles": a
+directory tree of concept documents, each a markdown file with a YAML frontmatter
+block. matlatl can check a repo against **OKF v0.1** conformance
+([ADR 0023](adr/0023-okf-conformance-mode.md); the spec is pinned and mapped in
+[the research note](research/okf-spec-pinned.md)).
+
+**Turn it on** with the `--okf` flag or `.matlatl.yml okf: true`
+(effective = flag OR config):
+
+```console
+matlatl check . --okf
+```
+
+**The three conformance rules (OKF §9), and only these:**
+
+1. **Parseable frontmatter** — every non-reserved `.md` concept document has a
+   parseable YAML frontmatter block. (Reserved files are **only** `index.md` and
+   `log.md`, case-insensitive; `README.md` is a concept document.)
+2. **Non-empty `type`** — that frontmatter carries a non-empty `type` field.
+   matlatl accepts **any** value — OKF forbids a central type registry, so there
+   is no allow-list.
+3. **Reserved-file structure** — a `log.md`'s `##` headings are ISO 8601
+   `YYYY-MM-DD` dates; a non-root `index.md` carries no frontmatter; the
+   bundle-root `index.md` may carry only an `okf_version` key.
+
+**Verdict vs. health — they are separate.** The verdict line
+(`OKF v0.1: CONFORMANT` / `OKF v0.1: NOT CONFORMANT — N violation(s) …`) reports
+only the three rules above. It is **independent** of matlatl's health checks
+(broken links, orphans, …): a broken cross-link is *conformant* per OKF, so it
+never makes a bundle NOT CONFORMANT — but matlatl's health gate still fails on
+it. In other words, `--okf` is a **superset gate**: it can only add failure
+conditions, never relax them.
+
+**Exit codes.** When the mode is on, a conformance violation fails `check` at
+exit `1` **regardless of `--strict`**. A CONFORMANT bundle with a broken link is
+still exit `1` (on health). See [ADR 0005](adr/0005-exit-code-contract.md).
+
+**Machine output.** `findings.json` (schema v8) adds the `okf-missing-frontmatter`,
+`okf-missing-type`, and `okf-reserved-file-structure` finding kinds, their summary
+counts, and an always-present top-level `okfConformance` object
+(`checked:false` when the mode is off).
 
 ## Checking external links (opt-in)
 

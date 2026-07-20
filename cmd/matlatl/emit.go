@@ -89,7 +89,7 @@ func bundleArtifacts(view emit.View, res application.Result, rootPath string, op
 	if err != nil {
 		return nil, err
 	}
-	findingsJSON, err := emit.FindingsJSON(res.Report)
+	findingsJSON, err := emit.FindingsJSON(res.Report, emit.OKFVerdictFromResult(res))
 	if err != nil {
 		return nil, err
 	}

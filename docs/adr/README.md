@@ -29,3 +29,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0020 | `fix-prompt` scope: curated default, kind selection, and emitExclude | Accepted |
 | 0021 | Hops-from-root: distance from the entry points as the discoverability metric | Accepted |
 | 0022 | Root-absolute links: a single leading `/` resolves from the scan root | Accepted |
+| 0023 | OKF v0.1 conformance mode | Accepted |
