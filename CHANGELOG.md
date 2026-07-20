@@ -42,8 +42,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     graph edge. Stable-identifier anchors (e.g. "ADR 0010") and directory-link
     expansion edges (ADR 0008) are deliberately not flagged.
 
+- **Hops-from-root discoverability signal ([ADR 0021](docs/adr/0021-hops-from-root.md)).**
+  Each document now carries `hopsFromRoot` (shortest distance from the nearest
+  root, `-1` when unreachable/indeterminate) in `graph.json`, and a non-gating
+  `far-from-root` Info finding flags docs at/beyond the config-only
+  `farFromRootThreshold` (default 6). Bumps `graph.json`/`findings.json` to
+  **schema version 7** (additively).
+
 ### Changed
 
+- **Root-absolute links resolve from the scan root ([ADR 0022](docs/adr/0022-root-absolute-links.md)).**
+  A link with a single leading `/` (e.g. `/tables/orders.md`) now resolves from
+  the scan root, independent of the linking document's directory — previously it
+  was misresolved origin-relative (folded under the origin's folder) and reported
+  as a broken link from any non-root document. `//host/...` stays external. This
+  softens the `check` gate monotonically (it can only newly-resolve links, never
+  newly break one) and needs no schema or version change.
 - **Nested git repositories are skipped by default.** Submodules, linked
   worktrees, and nested clones are pruned from the scan wherever they live,
   detected by the presence of a `.git` entry inside a directory (a file for

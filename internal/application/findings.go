@@ -161,19 +161,32 @@ func rawTargetText(r reference.Reference) string {
 func brokenLinkFinding(r reference.Reference) analysis.Finding {
 	target := rawTargetText(r)
 	return analysis.Finding{
-		ID:       findingID(analysis.BrokenLink, r.Origin, r.Line, target),
-		Kind:     analysis.BrokenLink,
-		Severity: analysis.Error,
-		Location: analysis.Location{Document: r.Origin, Line: r.Line},
-		Message:  fmt.Sprintf("%s link target %q does not resolve to a document in the corpus", r.Type, target),
-		SuggestedFix: fmt.Sprintf(
-			"Check that %q exists and is spelled correctly relative to %q; if it lives elsewhere, fix the path or move the file.",
-			target, r.Origin),
+		ID:           findingID(analysis.BrokenLink, r.Origin, r.Line, target),
+		Kind:         analysis.BrokenLink,
+		Severity:     analysis.Error,
+		Location:     analysis.Location{Document: r.Origin, Line: r.Line},
+		Message:      fmt.Sprintf("%s link target %q does not resolve to a document in the corpus", r.Type, target),
+		SuggestedFix: brokenLinkFix(r, target),
 		Details: map[string]string{
 			DetailTarget:   target,
 			DetailLinkType: r.Type.String(),
 		},
 	}
+}
+
+// brokenLinkFix phrases the broken-link hint. A root-absolute target (single
+// leading "/", ADR 0022) resolves from the scan root — NOT the linking file's
+// directory and NOT necessarily the git repo root — so the origin-relative hint
+// would be actively misleading; branch on the same predicate the resolver uses.
+func brokenLinkFix(r reference.Reference, target string) string {
+	if reference.IsRootAbsolute(r.RawTarget) {
+		return fmt.Sprintf(
+			"A leading '/' resolves from the scan root, not the linking file's directory or the git repository root; check that %q exists under the scan root, or scan from the repository root.",
+			strings.TrimPrefix(r.RawTarget, "/"))
+	}
+	return fmt.Sprintf(
+		"Check that %q exists and is spelled correctly relative to %q; if it lives elsewhere, fix the path or move the file.",
+		target, r.Origin)
 }
 
 func brokenAnchorFinding(r reference.Reference) analysis.Finding {

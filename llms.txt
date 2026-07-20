@@ -1,6 +1,6 @@
 # matlatl
 
-> A markdown documentation corpus of 36 document(s) across 2 component(s), with 356 heading(s) and 179 resolved reference(s). Entries are ordered by importance (most-connected first). Compactness 0.25, docs ~1.9 clicks apart.
+> A markdown documentation corpus of 37 document(s) across 1 component(s), with 366 heading(s) and 185 resolved reference(s). Entries are ordered by importance (most-connected first). Compactness 0.25, docs ~2.0 clicks apart.
 
 ## Documentation
 
@@ -16,19 +16,20 @@
 - [20. fix-prompt scope: curated default, kind selection, and emitExclude](docs/adr/0020-fix-prompt-scope.md): 20. fix-prompt scope: curated default, kind selection, and emitExclude (linked from: README.md, docs/adr/0019-emit-exclude.md, docs/architecture.md, docs/dev-guide.md, docs/research/eval-harness-design.md, docs/research/matlatl-and-the-llm-wiki-pattern.md, docs/user-guide.md)
 - [5. check exit-code contract](docs/adr/0005-exit-code-contract.md): 5. check exit-code contract (linked from: README.md, docs/adr/0011-per-repo-config-file.md, docs/adr/0019-emit-exclude.md, docs/adr/0020-fix-prompt-scope.md, docs/architecture.md, docs/dev-guide.md, docs/research/semantic-similarity-and-determinism.md, docs/user-guide.md)
 - [3. Security model for untrusted repositories](docs/adr/0003-security-model.md): 3. Security model for untrusted repositories (linked from: README.md, docs/adr/0011-per-repo-config-file.md, docs/adr/0019-emit-exclude.md, docs/architecture.md, docs/dev-guide.md, docs/research/semantic-similarity-and-determinism.md, docs/user-guide.md)
+- [22. Root-absolute links: a single leading / resolves from the scan root](docs/adr/0022-root-absolute-links.md): 22. Root-absolute links: a single leading / resolves from the scan root (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/research/okf-spec-pinned.md, docs/user-guide.md)
 - [8. Directory links resolve and confer navigational reachability](docs/adr/0008-directory-links.md): 8. Directory links resolve and confer navigational reachability (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [12. Graduated structure findings and bow-tie classification](docs/adr/0012-graduated-structure-and-bowtie.md): 12. Graduated structure findings and bow-tie classification (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [14. Corpus navigability metrics](docs/adr/0014-navigability-metrics.md): 14. Corpus navigability metrics (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [17. Nested git repositories are out of scan scope](docs/adr/0017-nested-repo-scan-boundary.md): 17. Nested git repositories are out of scan scope (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
+- [21. Hops-from-root: distance from the entry points as the discoverability metric](docs/adr/0021-hops-from-root.md): 21. Hops-from-root: distance from the entry points as the discoverability metric (linked from: CHANGELOG.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [7. Graph node semantics and the document projection](docs/adr/0007-graph-node-semantics.md): 7. Graph node semantics and the document projection (linked from: README.md, docs/adr/0011-per-repo-config-file.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [2. Library choices](docs/adr/0002-library-choices.md): 2. Library choices (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/research/semantic-similarity-and-determinism.md, docs/user-guide.md)
-- [Architecture Decision Records](docs/adr/README.md): Architecture Decision Records (linked from: AGENTS.md, CONTRIBUTING.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
-- [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md): 6. Canonical anchor-slug dialect (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 
 ## Optional
 
+- [Architecture Decision Records](docs/adr/README.md): Architecture Decision Records (linked from: AGENTS.md, CONTRIBUTING.md, README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
+- [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md): 6. Canonical anchor-slug dialect (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [18. Default-ignore .claude/agent-memory](docs/adr/0018-default-ignore-agent-memory.md): 18. Default-ignore .claude/agent-memory (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
-- [21. Hops-from-root: distance from the entry points as the discoverability metric](docs/adr/0021-hops-from-root.md): 21. Hops-from-root: distance from the entry points as the discoverability metric (linked from: README.md, docs/architecture.md, docs/dev-guide.md, docs/user-guide.md)
 - [matlatl architecture](docs/architecture.md): matlatl architecture (linked from: AGENTS.md, README.md, docs/dev-guide.md, docs/research/matlatl-and-the-llm-wiki-pattern.md, docs/user-guide.md)
 - [matlatl developer guide](docs/dev-guide.md): matlatl developer guide (linked from: AGENTS.md, CONTRIBUTING.md, README.md, docs/user-guide.md)
 - [.matlatl.yml — per-repo configuration (schema v1)](docs/schemas/matlatl-config-v1.md): .matlatl.yml — per-repo configuration (schema v1) (linked from: CHANGELOG.md, docs/adr/0011-per-repo-config-file.md, docs/adr/0019-emit-exclude.md, docs/user-guide.md)
@@ -75,10 +76,12 @@ _Associative trails (Bush 1945): a topologically-valid path through each cluster
 29. [12. Graduated structure findings and bow-tie classification](docs/adr/0012-graduated-structure-and-bowtie.md)
 30. [14. Corpus navigability metrics](docs/adr/0014-navigability-metrics.md)
 31. [17. Nested git repositories are out of scan scope](docs/adr/0017-nested-repo-scan-boundary.md)
-32. [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md)
-33. [18. Default-ignore .claude/agent-memory](docs/adr/0018-default-ignore-agent-memory.md)
-34. [10. How matlatl treats agent-tooling scaffolding](docs/adr/0010-agent-scaffolding-roots-and-default-ignores.md)
-35. [21. Hops-from-root: distance from the entry points as the discoverability metric](docs/adr/0021-hops-from-root.md)
+32. [21. Hops-from-root: distance from the entry points as the discoverability metric](docs/adr/0021-hops-from-root.md)
+33. [6. Canonical anchor-slug dialect](docs/adr/0006-slug-dialect.md)
+34. [18. Default-ignore .claude/agent-memory](docs/adr/0018-default-ignore-agent-memory.md)
+35. [10. How matlatl treats agent-tooling scaffolding](docs/adr/0010-agent-scaffolding-roots-and-default-ignores.md)
+36. [Open Knowledge Format (OKF) v0.1 — pinned spec + matlatl mapping](docs/research/okf-spec-pinned.md)
+37. [22. Root-absolute links: a single leading / resolves from the scan root](docs/adr/0022-root-absolute-links.md)
 
 ## Known gaps
 
@@ -87,8 +90,8 @@ This corpus is INCOMPLETE for navigation; an agent should not assume full covera
 - 0 orphan document(s) (nothing links to them)
 - 0 unreachable document(s) (not reachable from a root)
 - 4 under-linked document(s) (few inbound links; hard to discover)
-- 17 dead-end document(s) (no onward links)
+- 18 dead-end document(s) (no onward links)
 - 0 broken link(s)
 - 0 broken anchor(s)
 - 0 ambiguous link(s)
-- 313 suggested link(s) (unlinked but topologically related; experimental)
+- 339 suggested link(s) (unlinked but topologically related; experimental)

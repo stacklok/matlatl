@@ -17,7 +17,10 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    into a pure-domain `Document` (front matter, section tree, raw references).
 3. **Resolve** — the `LinkResolver` turns each raw reference into a typed, health-
    classified edge (valid / broken / broken-anchor / non-note / ambiguous / external),
-   using the `HeadingInventory` and `AliasTable`.
+   using the `HeadingInventory` and `AliasTable`. Relative links resolve against
+   the linking document's directory; a **root-absolute** target (a single leading
+   `/`, e.g. `/tables/orders.md`) resolves from the scan root, independent of the
+   origin ([ADR 0022](adr/0022-root-absolute-links.md)). `//host` stays external.
 4. **Build** — assemble the directed `ReferenceGraph` (documents + sections as
    vertices, typed edges) and the `HierarchyTree`. Node/edge semantics and the
    document projection that analysis runs over are pinned in

@@ -29,7 +29,10 @@ linked docs rather than re-deriving them.
     reachability-indeterminate, via one
     multi-source BFS in `hops.go`; the non-gating `far-from-root` Info finding for
     docs at/beyond the config-only `farFromRootThreshold`, default 6; shares
-    `structureExemptSet` with the orphan ladder).
+    `structureExemptSet` with the orphan ladder); 0022 root-absolute links (a
+    single leading `/` resolves from the scan root, not the origin dir, in
+    `resolveInRoot`; `//` stays external; strip-slash→clean→EscapesRoot ordering
+    keeps the ADR 0003 guard; no schema/version change; wikilinks out of scope).
 - **docs/schemas/** — published JSON Schemas for the three machine artifacts:
   [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 7),
   [findings.schema.json](docs/schemas/findings.schema.json) (findings schema

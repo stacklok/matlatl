@@ -54,6 +54,13 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
 ## What it detects
 
 - **Broken links** — a link/wikilink whose target isn't a document in the repo.
+  Two link forms resolve as in-repo paths: **relative** (`../tables/orders.md`,
+  resolved against the linking file's directory) and **root-absolute** (`/tables/orders.md`,
+  a single leading `/` resolved from the **scan root** — the directory you point
+  matlatl at, independent of where the link lives. If you scan a subdirectory, `/`
+  means that subdirectory, not the git repository root; see
+  [ADR 0022](adr/0022-root-absolute-links.md)). A `//host/...` target is a
+  protocol-relative URL and is treated as external.
 - **Broken anchors** — `other.md#heading` where that heading doesn't exist. Slugs
   are GitHub-style (lowercase, spaces→`-`); see [ADR 0006](adr/0006-slug-dialect.md).
 - **Ambiguous links** — e.g. `[[notes]]` when two `notes.md` exist. matlatl

@@ -318,10 +318,16 @@ func TestExternalSchemeClassification(t *testing.T) {
 		{"mailto", "mailto:a@b.com", reference.External},
 		{"ftp", "ftp://host/f", reference.External},
 		{"protocol-relative", "//cdn.example.com/x", reference.External},
+		// Any leading run of two-or-more slashes is protocol-relative → External;
+		// only a single leading slash is an in-corpus root-absolute link (ADR 0022).
+		{"protocol-relative triple slash", "///host/p", reference.External},
 		{"file scheme", "file:///etc/passwd", reference.External},
 		{"file scheme uppercase", "FILE://localhost/etc/passwd", reference.External},
 		{"data uri", "data:text/plain;base64,SGk=", reference.External},
 		{"local relative still in-corpus", "docs/page.md", reference.RelativeLink},
+		// Root-absolute /-link (ADR 0022): a single leading slash is an in-corpus
+		// relative link, NOT external; the resolver resolves it from the scan root.
+		{"root-absolute single slash in-corpus", "/foo.md", reference.RelativeLink},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -333,6 +339,29 @@ func TestExternalSchemeClassification(t *testing.T) {
 				t.Errorf("%q classified as %s, want %s", tt.dest, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestRootAbsoluteLinkParsed confirms a single-leading-slash link is parsed as a
+// RelativeLink carrying the raw "/foo.md" target (ADR 0022) — the resolver, not
+// the parser, folds the leading slash to the scan root. A double-slash target is
+// protocol-relative (External) and never reaches relative resolution.
+func TestRootAbsoluteLinkParsed(t *testing.T) {
+	doc := parse(t, "# T\n\n[x](/foo.md)\n")
+	if len(doc.RawReferences) != 1 {
+		t.Fatalf("got %d refs, want 1", len(doc.RawReferences))
+	}
+	r := doc.RawReferences[0]
+	if r.Type != reference.RelativeLink {
+		t.Errorf("'/foo.md' type = %s, want relative-link", r.Type)
+	}
+	if r.RawTarget != "/foo.md" {
+		t.Errorf("'/foo.md' raw target = %q, want %q", r.RawTarget, "/foo.md")
+	}
+
+	ext := parse(t, "# T\n\n[x](//host/p)\n")
+	if len(ext.RawReferences) != 1 || ext.RawReferences[0].Type != reference.External {
+		t.Errorf("'//host/p' refs = %+v, want one external", ext.RawReferences)
 	}
 }
 

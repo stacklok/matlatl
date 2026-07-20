@@ -60,7 +60,9 @@ testdata/                fixture corpora + golden artifacts
    + `DocumentParserFactory`, `ExternalLinkChecker`, `ArtifactWriter`) exist
    because they're test seams / swap points — not as ceremony.
 5. **Identity is the canonical relative path** ([ADR 0001](adr/0001-document-identity.md)) —
-   never the basename.
+   never the basename. Relative links resolve against the linking document's
+   directory; a single leading `/` is root-absolute and resolves from the scan
+   root ([ADR 0022](adr/0022-root-absolute-links.md)).
 
 ## Build, test, lint
 

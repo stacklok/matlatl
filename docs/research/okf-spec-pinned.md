@@ -395,6 +395,10 @@ signals, not conformance failures**:
 
 ### 🔴 Conflict 1 (the big one): OKF absolute `/`-links vs matlatl's origin-relative resolution
 
+> **Resolved in #27 / [ADR 0022](../adr/0022-root-absolute-links.md).** A single
+> leading `/` now resolves from the scan root (default-on, all modes); `//` stays
+> external. The analysis below is retained as the original problem statement.
+
 OKF §5.1 makes `/`-prefixed, **bundle-root-relative** links the **recommended**
 form. matlatl does **not** resolve these correctly today.
 

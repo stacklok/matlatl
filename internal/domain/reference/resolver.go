@@ -70,10 +70,16 @@ func NewResolver(catalog Catalog, assets AssetExistence, policy ResolutionPolicy
 //   - Anchor-only targets (no path, has fragment) → resolved within the origin
 //     document; Valid if the slug exists there, else BrokenAnchor.
 //   - Relative links: resolved relative to the origin's directory and cleaned.
-//     A target that escapes the corpus root → Broken (recorded as a finding,
-//     never read). A target resolving to a known markdown doc → Valid (anchor
-//     checked if present). A target resolving to an existing non-markdown asset
-//     → NonNote. Otherwise → Broken.
+//     A single leading "/" makes the link root-absolute (ADR 0022): it resolves
+//     from the scan root instead of the origin's directory, independent of where
+//     the origin lives. A double leading slash ("//") is protocol-relative: the
+//     parser classifies "//"-links as External, so they arrive here as External;
+//     a FrontmatterRelated "//"-target (which bypasses that classification) is
+//     refused root-absolute treatment and falls through relative resolution
+//     (typically Broken). Either way, a target that escapes the corpus root →
+//     Broken (recorded as a finding, never read). A target resolving to a known
+//     markdown doc → Valid (anchor checked if present). A target resolving to an
+//     existing non-markdown asset → NonNote. Otherwise → Broken.
 //   - Wikilinks/transclusions: resolved by ResolutionPolicy against known docs;
 //     exactly one candidate → Valid (anchor checked), more than one → Ambiguous
 //     (candidates surfaced), zero → alias table, else Broken.
@@ -114,7 +120,10 @@ func (r *Resolver) resolveAnchorOnly(raw RawReference) Reference {
 	return ref(raw, ResolvedTarget{Kind: TargetSection, DocumentID: raw.Origin}, BrokenAnchor)
 }
 
-// resolveRelative resolves a relative link/image against the origin directory.
+// resolveRelative resolves a relative or root-absolute link/image. A single
+// leading "/" on the target resolves from the scan root (ADR 0022); otherwise
+// the target is joined onto the origin's directory. Both paths go through
+// resolveInRoot, which enforces the ADR 0003 root-containment guard.
 func (r *Resolver) resolveRelative(raw RawReference) Reference {
 	target := raw.RawTarget
 	// A relative link with no path but a fragment is an in-document anchor.
@@ -410,18 +419,46 @@ func cleanWikilinkPath(target string) string {
 	return cleaned
 }
 
-// resolveInRoot joins a relative target onto the origin document's directory and
-// cleans it to a root-relative slash path. It returns ok=false when the result
-// escapes the corpus root (ADR 0003) — the target is then never read.
+// resolveInRoot turns a link target into a cleaned, root-relative slash path. A
+// root-absolute target (a single leading "/", ADR 0022) resolves from the scan
+// root, independent of the origin; any other target is joined onto the origin
+// document's directory. It returns ok=false when the result escapes the corpus
+// root (ADR 0003) — the target is then never read.
 func resolveInRoot(origin identity.DocumentID, target string) (string, bool) {
 	target = strings.ReplaceAll(target, "\\", "/")
-	dir := path.Dir(string(origin)) // "." for a top-level origin
-	joined := path.Join(dir, target)
+
+	var joined string
+	if IsRootAbsolute(target) {
+		// SECURITY-CRITICAL ORDER (ADR 0003/0022): strip the single leading slash
+		// FIRST, then let path.Clean below normalise. Cleaning before stripping
+		// would fold "/../etc/passwd" into "/etc/passwd" and hide the traversal;
+		// stripping first yields "../etc/passwd", which path.Clean preserves and
+		// EscapesRoot then rejects. IsRootAbsolute guarantees exactly one leading
+		// slash, so target[1:] drops it (and fails loudly if that guard is ever
+		// loosened). The slash is not URL-decoded, so "/..%2F.." stays a literal
+		// in-root filename (Broken), never an escape.
+		joined = target[1:]
+	} else {
+		dir := path.Dir(string(origin)) // "." for a top-level origin
+		joined = path.Join(dir, target)
+	}
+
 	cleaned := path.Clean(joined)
 	if identity.EscapesRoot(cleaned) {
 		return "", false
 	}
 	return cleaned, true
+}
+
+// IsRootAbsolute reports whether target is a root-absolute link (ADR 0022): a
+// single leading "/". A double leading slash ("//") is protocol-relative and is
+// treated as External by the parser (ADR 0003); the explicit guard here keeps it
+// out of root-absolute resolution for FrontmatterRelated targets, which bypass
+// the parser's isExternal classification. It is exported so the application layer
+// can phrase root-absolute-aware broken-link hints on the same predicate the
+// resolver resolves on (they must not drift).
+func IsRootAbsolute(target string) bool {
+	return strings.HasPrefix(target, "/") && !strings.HasPrefix(target, "//")
 }
 
 // ref builds a resolved Reference.

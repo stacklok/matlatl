@@ -16,27 +16,11 @@ import (
 	"github.com/stacklok/matlatl/internal/platform"
 )
 
-func corpusFixture(t *testing.T) string {
+// fixture returns the absolute path to the named testdata corpus (e.g.
+// "corpus", "clean", "ambiguous", "dirlinks", "rootabsolute").
+func fixture(t *testing.T, name string) string {
 	t.Helper()
-	p, err := filepath.Abs(filepath.Join("..", "..", "testdata", "corpus"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return p
-}
-
-func cleanFixture(t *testing.T) string {
-	t.Helper()
-	p, err := filepath.Abs(filepath.Join("..", "..", "testdata", "clean"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return p
-}
-
-func ambiguousFixture(t *testing.T) string {
-	t.Helper()
-	p, err := filepath.Abs(filepath.Join("..", "..", "testdata", "ambiguous"))
+	p, err := filepath.Abs(filepath.Join("..", "..", "testdata", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +45,7 @@ func TestIntegration_RootEmpty(t *testing.T) {
 func TestIntegration_CheckClean(t *testing.T) {
 	outDir := t.TempDir()
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"check", cleanFixture(t), "--out", outDir}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"check", fixture(t, "clean"), "--out", outDir}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("clean check code = %v, want ExitOK (stdout=%q stderr=%q)", code, out.String(), errOut.String())
 	}
@@ -91,6 +75,22 @@ func TestIntegration_CheckClean(t *testing.T) {
 	}
 }
 
+// TestIntegration_CheckRootAbsolute exercises root-absolute (`/path`) links
+// (ADR 0022) end-to-end through the scanner/parser/resolver/check pipeline: a
+// nested document reaches sibling subtrees via `/`-form file, directory, and
+// anchor links. Every such link resolves from the scan root, so the corpus has
+// zero broken links and exits ExitOK.
+func TestIntegration_CheckRootAbsolute(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runArgs(context.Background(), []string{"check", fixture(t, "rootabsolute")}, &out, &errOut)
+	if code != platform.ExitOK {
+		t.Fatalf("root-absolute check code = %v, want ExitOK (stdout=%q stderr=%q)", code, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "0 broken link(s), 0 broken anchor(s)") {
+		t.Errorf("root-absolute summary = %q, want 0 broken links/anchors", out.String())
+	}
+}
+
 // TestIntegration_CheckEmpty: no markdown found → exit 0 with notice.
 func TestIntegration_CheckEmpty(t *testing.T) {
 	var out, errOut bytes.Buffer
@@ -108,7 +108,7 @@ func TestIntegration_CheckEmpty(t *testing.T) {
 func TestIntegration_CheckBroken(t *testing.T) {
 	outDir := t.TempDir()
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"check", corpusFixture(t), "--out", outDir}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"check", fixture(t, "corpus"), "--out", outDir}, &out, &errOut)
 
 	if code != platform.ExitFindings {
 		t.Fatalf("broken check code = %v, want ExitFindings (1) (stdout=%q)", code, out.String())
@@ -164,7 +164,7 @@ func TestIntegration_CheckDeterministic(t *testing.T) {
 	read := func() []byte {
 		outDir := t.TempDir()
 		var out, errOut bytes.Buffer
-		runArgs(context.Background(), []string{"check", corpusFixture(t), "--out", outDir}, &out, &errOut)
+		runArgs(context.Background(), []string{"check", fixture(t, "corpus"), "--out", outDir}, &out, &errOut)
 		b, err := os.ReadFile(filepath.Join(outDir, "findings.json"))
 		if err != nil {
 			t.Fatal(err)
@@ -182,7 +182,7 @@ func TestIntegration_CheckDeterministic(t *testing.T) {
 // the run is well-formed).
 func TestIntegration_CheckStrict(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"check", corpusFixture(t), "--strict"}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"check", fixture(t, "corpus"), "--strict"}, &out, &errOut)
 	if code != platform.ExitFindings {
 		t.Fatalf("strict check code = %v, want ExitFindings", code)
 	}
@@ -191,7 +191,7 @@ func TestIntegration_CheckStrict(t *testing.T) {
 // TestIntegration_CheckBadResolution: an invalid --resolution is a usage error.
 func TestIntegration_CheckBadResolution(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"check", cleanFixture(t), "--resolution", "bogus"}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"check", fixture(t, "clean"), "--resolution", "bogus"}, &out, &errOut)
 	if code != platform.ExitUsage {
 		t.Fatalf("bad --resolution code = %v, want ExitUsage (2)", code)
 	}
@@ -201,7 +201,7 @@ func TestIntegration_CheckBadResolution(t *testing.T) {
 // a corpus whose ONLY finding is an ambiguous wikilink exits 0 by default and 1
 // under --strict.
 func TestIntegration_AmbiguousOnly(t *testing.T) {
-	root := ambiguousFixture(t)
+	root := fixture(t, "ambiguous")
 
 	var out1, err1 bytes.Buffer
 	if code := runArgs(context.Background(), []string{"check", root}, &out1, &err1); code != platform.ExitOK {
@@ -221,7 +221,7 @@ func TestIntegration_AmbiguousOnly(t *testing.T) {
 // so the extensionless [[notes]] no longer matches a full path → broken (exit 1).
 func TestIntegration_ResolutionExact(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"check", ambiguousFixture(t), "--resolution", "exact"}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"check", fixture(t, "ambiguous"), "--resolution", "exact"}, &out, &errOut)
 	if code != platform.ExitFindings {
 		t.Fatalf("exact-policy code = %v, want ExitFindings (broken, not ambiguous)", code)
 	}
@@ -235,7 +235,7 @@ func TestIntegration_ResolutionExact(t *testing.T) {
 // flag→policy routing differs from exact.
 func TestIntegration_ResolutionBasename(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"check", ambiguousFixture(t), "--resolution", "basename"}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"check", fixture(t, "ambiguous"), "--resolution", "basename"}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("basename-policy code = %v, want ExitOK", code)
 	}
@@ -248,7 +248,7 @@ func TestIntegration_ResolutionBasename(t *testing.T) {
 // the corpus fixture and asserts the known set (intentional orphan suppressed).
 func TestIntegration_Orphans(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"orphans", corpusFixture(t)}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"orphans", fixture(t, "corpus")}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("orphans code = %v, want ExitOK (always 0)", code)
 	}
@@ -276,7 +276,7 @@ func TestIntegration_Orphans(t *testing.T) {
 func TestIntegration_OrphansDeterministic(t *testing.T) {
 	run := func() string {
 		var out, errOut bytes.Buffer
-		runArgs(context.Background(), []string{"orphans", corpusFixture(t)}, &out, &errOut)
+		runArgs(context.Background(), []string{"orphans", fixture(t, "corpus")}, &out, &errOut)
 		return out.String()
 	}
 	if run() != run() {
@@ -288,7 +288,7 @@ func TestIntegration_OrphansDeterministic(t *testing.T) {
 // --unreachable-only together is a usage error.
 func TestIntegration_OrphansMutuallyExclusiveFlags(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"orphans", corpusFixture(t), "--isolated-only", "--unreachable-only"}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"orphans", fixture(t, "corpus"), "--isolated-only", "--unreachable-only"}, &out, &errOut)
 	if code != platform.ExitUsage {
 		t.Fatalf("conflicting flags code = %v, want ExitUsage (2)", code)
 	}
@@ -300,7 +300,7 @@ func TestIntegration_OrphansMutuallyExclusiveFlags(t *testing.T) {
 // this asserts --strict does not REDUCE the exit code and the run is well-formed.
 func TestIntegration_CheckStrictWithOrphans(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"check", corpusFixture(t), "--strict"}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"check", fixture(t, "corpus"), "--strict"}, &out, &errOut)
 	if code != platform.ExitFindings {
 		t.Fatalf("strict check code = %v, want ExitFindings", code)
 	}
@@ -527,7 +527,7 @@ func TestIntegration_FarFromRootThreshold(t *testing.T) {
 func TestIntegration_ReportToOut(t *testing.T) {
 	outDir := t.TempDir()
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"report", corpusFixture(t), "--out", outDir}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"report", fixture(t, "corpus"), "--out", outDir}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("report code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
@@ -554,7 +554,7 @@ func TestIntegration_ReportToOut(t *testing.T) {
 func TestIntegration_GraphDotToOut(t *testing.T) {
 	outDir := t.TempDir()
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"graph", corpusFixture(t), "--format", "dot", "--out", outDir}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"graph", fixture(t, "corpus"), "--format", "dot", "--out", outDir}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("graph dot code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
@@ -575,7 +575,7 @@ func TestIntegration_GraphDotToOut(t *testing.T) {
 // TestIntegration_GraphMermaidDefault: `graph` defaults to mermaid on stdout.
 func TestIntegration_GraphMermaidDefault(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"graph", corpusFixture(t)}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"graph", fixture(t, "corpus")}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("graph default code = %v, want ExitOK", code)
 	}
@@ -588,7 +588,7 @@ func TestIntegration_GraphMermaidDefault(t *testing.T) {
 func TestIntegration_IndexToOut(t *testing.T) {
 	outDir := t.TempDir()
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"index", corpusFixture(t), "--out", outDir}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"index", fixture(t, "corpus"), "--out", outDir}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("index code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
@@ -605,7 +605,7 @@ func TestIntegration_IndexToOut(t *testing.T) {
 // TestIntegration_GraphBadFormat: an unknown --format is a usage error.
 func TestIntegration_GraphBadFormat(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"graph", corpusFixture(t), "--format", "svg"}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"graph", fixture(t, "corpus"), "--format", "svg"}, &out, &errOut)
 	if code != platform.ExitUsage {
 		t.Fatalf("bad --format code = %v, want ExitUsage (2)", code)
 	}
@@ -618,7 +618,7 @@ func TestIntegration_GraphBadFormat(t *testing.T) {
 func TestIntegration_GraphJSONToOut(t *testing.T) {
 	outDir := t.TempDir()
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"graph", corpusFixture(t), "--format", "json", "--out", outDir}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"graph", fixture(t, "corpus"), "--format", "json", "--out", outDir}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("graph json code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
@@ -686,7 +686,7 @@ func TestIntegration_SuggestedLinks(t *testing.T) {
 	// (findings.json + graph.json). The corpus fixture's island three/four pair is
 	// unlinked and shares two neighbours, so it yields a suggested-link.
 	if code := runArgs(context.Background(),
-		[]string{"emit", corpusFixture(t), "--out", outDir}, &out, &errOut); code != platform.ExitOK {
+		[]string{"emit", fixture(t, "corpus"), "--out", outDir}, &out, &errOut); code != platform.ExitOK {
 		t.Fatalf("emit code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
 
@@ -756,7 +756,7 @@ func TestIntegration_SuggestedLinks(t *testing.T) {
 
 	// The report renders a Suggested links section.
 	var rout, rerr bytes.Buffer
-	if rc := runArgs(context.Background(), []string{"report", corpusFixture(t)}, &rout, &rerr); rc != platform.ExitOK {
+	if rc := runArgs(context.Background(), []string{"report", fixture(t, "corpus")}, &rout, &rerr); rc != platform.ExitOK {
 		t.Fatalf("report code = %v, want ExitOK (stderr=%q)", rc, rerr.String())
 	}
 	if !strings.Contains(rout.String(), "## Suggested links") {
@@ -796,7 +796,7 @@ func TestIntegration_SuggestedLinksDoNotGate(t *testing.T) {
 func TestIntegration_EmitBundle(t *testing.T) {
 	outDir := t.TempDir()
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"emit", corpusFixture(t), "--out", outDir}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"emit", fixture(t, "corpus"), "--out", outDir}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("emit code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
@@ -937,15 +937,6 @@ func TestIntegration_ScentExemptions(t *testing.T) {
 	}
 }
 
-func dirlinksFixture(t *testing.T) string {
-	t.Helper()
-	p, err := filepath.Abs(filepath.Join("..", "..", "testdata", "dirlinks"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return p
-}
-
 // TestIntegration_DirectoryLinks exercises ADR 0008 end-to-end: a directory link
 // ([the ADRs](adr/)) is NOT a broken link, and the folder's docs are reachable
 // (no orphans) under the default policy. A link to an existing non-markdown
@@ -956,7 +947,7 @@ func dirlinksFixture(t *testing.T) string {
 func TestIntegration_DirectoryLinks(t *testing.T) {
 	// Default policy: directory link resolves, contents reachable, exit 0.
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"check", dirlinksFixture(t)}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"check", fixture(t, "dirlinks")}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("default dirlinks check code = %v, want ExitOK (stdout=%q stderr=%q)", code, out.String(), errOut.String())
 	}
@@ -971,7 +962,7 @@ func TestIntegration_DirectoryLinks(t *testing.T) {
 	// non-index ADRs surface as orphans → exit 1.
 	out.Reset()
 	errOut.Reset()
-	scode := runArgs(context.Background(), []string{"check", dirlinksFixture(t), "--strict"}, &out, &errOut)
+	scode := runArgs(context.Background(), []string{"check", fixture(t, "dirlinks"), "--strict"}, &out, &errOut)
 	if scode != platform.ExitFindings {
 		t.Fatalf("strict dirlinks check code = %v, want ExitFindings (stdout=%q)", scode, out.String())
 	}
@@ -1162,7 +1153,7 @@ func slicesContains(haystack []string, needle string) bool {
 // TestIntegration_EmitRequiresOut: `emit` without --out is a usage error.
 func TestIntegration_EmitRequiresOut(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"emit", corpusFixture(t)}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"emit", fixture(t, "corpus")}, &out, &errOut)
 	if code != platform.ExitUsage {
 		t.Fatalf("emit without --out code = %v, want ExitUsage (2)", code)
 	}
@@ -1175,7 +1166,7 @@ func TestIntegration_EmitRequiresOut(t *testing.T) {
 // path, and a remediation substring.
 func TestIntegration_FixPromptStdout(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"fix-prompt", corpusFixture(t)}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"fix-prompt", fixture(t, "corpus")}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("fix-prompt code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
@@ -1199,7 +1190,7 @@ func TestIntegration_FixPromptStdout(t *testing.T) {
 // keeping the error-severity broken link/anchor findings.
 func TestIntegration_FixPromptErrorsOnly(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"fix-prompt", corpusFixture(t), "--errors-only"}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"fix-prompt", fixture(t, "corpus"), "--errors-only"}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("fix-prompt --errors-only code = %v, want ExitOK", code)
 	}
@@ -1229,7 +1220,7 @@ func TestIntegration_FixPromptErrorsOnly(t *testing.T) {
 // message and still exits 0.
 func TestIntegration_FixPromptClean(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"fix-prompt", cleanFixture(t)}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"fix-prompt", fixture(t, "clean")}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("fix-prompt clean code = %v, want ExitOK", code)
 	}
@@ -1242,7 +1233,7 @@ func TestIntegration_FixPromptClean(t *testing.T) {
 func TestIntegration_FixPromptDeterministic(t *testing.T) {
 	run := func() string {
 		var out, errOut bytes.Buffer
-		runArgs(context.Background(), []string{"fix-prompt", corpusFixture(t)}, &out, &errOut)
+		runArgs(context.Background(), []string{"fix-prompt", fixture(t, "corpus")}, &out, &errOut)
 		return out.String()
 	}
 	if run() != run() {
@@ -1255,7 +1246,7 @@ func TestIntegration_FixPromptDeterministic(t *testing.T) {
 func TestIntegration_FixPromptToOut(t *testing.T) {
 	outDir := t.TempDir()
 	var out, errOut bytes.Buffer
-	code := runArgs(context.Background(), []string{"fix-prompt", corpusFixture(t), "--out", outDir}, &out, &errOut)
+	code := runArgs(context.Background(), []string{"fix-prompt", fixture(t, "corpus"), "--out", outDir}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("fix-prompt --out code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
@@ -1628,7 +1619,7 @@ func TestIntegration_EmitExcludeWrongTypeExitsUsage(t *testing.T) {
 func TestIntegration_FixPromptKinds(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := runArgs(context.Background(),
-		[]string{"fix-prompt", corpusFixture(t), "--kinds", "unreachable"}, &out, &errOut)
+		[]string{"fix-prompt", fixture(t, "corpus"), "--kinds", "unreachable"}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("fix-prompt --kinds code = %v, want ExitOK (stderr=%q)", code, errOut.String())
 	}
@@ -1651,7 +1642,7 @@ func TestIntegration_FixPromptKinds(t *testing.T) {
 func TestIntegration_FixPromptKindsBogus(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := runArgs(context.Background(),
-		[]string{"fix-prompt", corpusFixture(t), "--kinds", "bogus-kind"}, &out, &errOut)
+		[]string{"fix-prompt", fixture(t, "corpus"), "--kinds", "bogus-kind"}, &out, &errOut)
 	if code != platform.ExitUsage {
 		t.Fatalf("fix-prompt --kinds bogus code = %v, want ExitUsage", code)
 	}
@@ -1677,7 +1668,7 @@ func TestIntegration_FixPromptModeFlagsExclusive(t *testing.T) {
 	} {
 		var out, errOut bytes.Buffer
 		code := runArgs(context.Background(),
-			append([]string{"fix-prompt", corpusFixture(t)}, args...), &out, &errOut)
+			append([]string{"fix-prompt", fixture(t, "corpus")}, args...), &out, &errOut)
 		if code != platform.ExitUsage {
 			t.Errorf("fix-prompt %v code = %v, want ExitUsage", args, code)
 		}
@@ -1693,7 +1684,7 @@ func TestIntegration_FixPromptModeFlagsExclusive(t *testing.T) {
 func TestIntegration_FixPromptKindsEmptyToHonestNoOp(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := runArgs(context.Background(),
-		[]string{"fix-prompt", corpusFixture(t), "--kinds", "dead-link"}, &out, &errOut)
+		[]string{"fix-prompt", fixture(t, "corpus"), "--kinds", "dead-link"}, &out, &errOut)
 	if code != platform.ExitOK {
 		t.Fatalf("fix-prompt --kinds dead-link code = %v, want ExitOK", code)
 	}

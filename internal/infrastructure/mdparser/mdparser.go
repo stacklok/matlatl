@@ -569,6 +569,10 @@ func splitFragment(dest string) (target, fragment string) {
 // being treated as in-corpus relative paths — a latent SSRF/local-file-read
 // hazard for the opt-in P6 --check-external path (ADR 0003).
 func isExternal(dest string) bool {
+	// The "//" (protocol-relative) entry is the parser-side counterpart of
+	// reference.IsRootAbsolute, which refuses "//" root-absolute treatment on the
+	// resolver side (ADR 0022): a single leading "/" is an in-corpus root-absolute
+	// link, a double leading "/" is external. Keep the two in sync.
 	lower := strings.ToLower(dest)
 	for _, p := range []string{"http://", "https://", "mailto:", "ftp://", "file://", "data:", "//"} {
 		if strings.HasPrefix(lower, p) {
