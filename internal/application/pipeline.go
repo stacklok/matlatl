@@ -13,6 +13,7 @@ import (
 	"github.com/stacklok/matlatl/internal/domain/corpus"
 	"github.com/stacklok/matlatl/internal/domain/graphmodel"
 	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/okf"
 	"github.com/stacklok/matlatl/internal/domain/reference"
 	"github.com/stacklok/matlatl/internal/platform"
 )
@@ -118,6 +119,18 @@ type Result struct {
 	// root. Info; NEVER affects the exit code; carried for the human summary and
 	// machine artifacts.
 	FarFromRootCount int
+	// OKF conformance (ADR 0023). OKFMode reports whether OKF conformance mode was
+	// on for this run; the rest are meaningful only when it is. OKFConformant is
+	// the §9 verdict (all three rule counts zero); OKFVersion is the bundle's
+	// declared okf_version ("" when none). The three counts are the Error-severity
+	// okf-* finding tallies. When OKFMode && !OKFConformant, CheckExitCode gates
+	// exit 1 regardless of --strict.
+	OKFMode                       bool
+	OKFConformant                 bool
+	OKFVersion                    string
+	OKFMissingFrontmatterCount    int
+	OKFMissingTypeCount           int
+	OKFReservedFileStructureCount int
 	// Report is the frozen analysis report (all finding kinds).
 	Report *analysis.AnalysisReport
 	// Metrics is the frozen P3 graph-analysis carrier (graph, components, HITS,
@@ -276,6 +289,17 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	if p.cfg.CheckExternal {
 		findings = append(findings, p.checkExternalLinks(ctx, refs)...)
 	}
+	// OKF conformance mode (ADR 0023). Only when --okf is on: run the three §9
+	// rules over the frozen corpus and append the mode-scoped okf-* Error findings.
+	// The verdict is carried on the Result (below) and reported separately; the
+	// findings gate `check` via CheckExitCode. Health findings are untouched — the
+	// verdict never turns a broken link into non-conformance and never relaxes the
+	// health gate.
+	var okfReport okf.Report
+	if p.cfg.OKF {
+		okfReport = okf.Check(c)
+		findings = append(findings, okfFindings(okfReport)...)
+	}
 	report := analysis.NewAnalysisReport(findings)
 	brokenEdges := brokenEdgesFromReferences(refs)
 
@@ -305,6 +329,13 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		LowScentAnchorCount: report.CountByKind(analysis.LowScentAnchor),
 
 		FarFromRootCount: report.CountByKind(analysis.FarFromRoot),
+
+		OKFMode:                       p.cfg.OKF,
+		OKFConformant:                 okfReport.Conformant,
+		OKFVersion:                    okfReport.DetectedVersion,
+		OKFMissingFrontmatterCount:    report.CountByKind(analysis.OKFMissingFrontmatter),
+		OKFMissingTypeCount:           report.CountByKind(analysis.OKFMissingType),
+		OKFReservedFileStructureCount: report.CountByKind(analysis.OKFReservedFileStructure),
 
 		Report:      report,
 		Metrics:     metrics,

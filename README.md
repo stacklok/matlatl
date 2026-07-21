@@ -38,6 +38,10 @@ From those it surfaces:
   **reading-order trails** (a suggested path through each cluster), **backlinks**
   (what links to each doc), and **low-scent anchors** (links whose text — a
   generic "click here" — barely previews where they lead).
+- **OKF conformance** — an opt-in **OKF v0.1 conformance mode** (`--okf`) that
+  checks a repo against Google's [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog)
+  and reports a CONFORMANT / NOT CONFORMANT verdict, kept separate from the health
+  gate ([ADR 0023](docs/adr/0023-okf-conformance-mode.md)).
 
 It then renders the result for three audiences:
 

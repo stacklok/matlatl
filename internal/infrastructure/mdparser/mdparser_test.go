@@ -93,6 +93,73 @@ func TestFrontMatter_OversizedGuarded(t *testing.T) {
 	}
 }
 
+// TestFrontMatterPresenceBools exercises the FrontMatterPresent /
+// FrontMatterParsed pure-data signals (ADR 0023) across every frontmatter state.
+func TestFrontMatterPresenceBools(t *testing.T) {
+	cases := []struct {
+		name            string
+		src             string
+		present, parsed bool
+	}{
+		{"absent", "# Body only\n\nno front matter\n", false, false},
+		{"valid-yaml", "---\ntype: Reference\n---\n\n# Body\n", true, true},
+		// TOML (+++) frontmatter also counts as present+parsed (ADR 0023 known
+		// leniency: a TOML block satisfies OKF R1 presence though §4 specifies YAML).
+		{"valid-toml", "+++\ntype = \"Reference\"\n+++\n\n# Body\n", true, true},
+		{"unparseable-yaml", "---\ntitle: [unterminated\n  bad: : :\n---\n\n# Body\n", true, false},
+		// goldmark's frontmatter extension is LENIENT about the trailing fence: a
+		// block of valid YAML with no closing `---` still parses to the EOF, so it
+		// is present AND parsed. (A missing fence is not by itself a parse failure.)
+		{"unterminated-but-valid-yaml", "---\ntype: Reference\n\n# Body with no closing fence\n", true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := parse(t, tc.src)
+			if doc.FrontMatterPresent != tc.present {
+				t.Errorf("FrontMatterPresent = %v, want %v", doc.FrontMatterPresent, tc.present)
+			}
+			if doc.FrontMatterParsed != tc.parsed {
+				t.Errorf("FrontMatterParsed = %v, want %v", doc.FrontMatterParsed, tc.parsed)
+			}
+		})
+	}
+}
+
+// TestTOMLFrontMatterExposesType asserts a TOML (+++) frontmatter's `type` key
+// lands in Extra (case its non-modeled), so OKF R2 (ADR 0023) sees it the same
+// as a YAML `type`. Together with the present+parsed bools this is the TOML
+// leniency path end-to-end at the parser boundary.
+func TestTOMLFrontMatterExposesType(t *testing.T) {
+	doc := parse(t, "+++\ntype = \"Reference\"\n+++\n\n# Body\n")
+	if !doc.FrontMatterPresent || !doc.FrontMatterParsed {
+		t.Fatalf("TOML frontmatter should be present+parsed: present=%v parsed=%v",
+			doc.FrontMatterPresent, doc.FrontMatterParsed)
+	}
+	if got, _ := doc.FrontMatter.Extra["type"].(string); got != "Reference" {
+		t.Errorf("Extra[type] = %v, want \"Reference\"", doc.FrontMatter.Extra["type"])
+	}
+}
+
+// TestFrontMatterPresenceBools_Oversized asserts the oversized-guard path
+// (ADR 0003) records the block as present-but-unparsed (ADR 0023).
+func TestFrontMatterPresenceBools_Oversized(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("---\ntype: Reference\npadding: \"")
+	b.WriteString(strings.Repeat("x", 200))
+	b.WriteString("\"\n---\n\n# Real H1\n")
+	p := New(Config{MaxFrontMatterBytes: 64}) // tiny cap forces the guard
+	doc, err := p.ParseBytes(context.Background(), "t.md", []byte(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !doc.FrontMatterPresent {
+		t.Error("oversized-guarded block should be FrontMatterPresent=true")
+	}
+	if doc.FrontMatterParsed {
+		t.Error("oversized-guarded block should be FrontMatterParsed=false (never decoded)")
+	}
+}
+
 func TestSectionTreeShape(t *testing.T) {
 	doc := parse(t, "# A\n\n## B\n\n### C\n\n## D\n\n# E\n")
 	root := doc.Root

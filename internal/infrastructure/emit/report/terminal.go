@@ -117,6 +117,12 @@ func summaryLine(w io.Writer, p palette, v emit.View) error {
 		p.colorCount(c.BrokenLink, fmt.Sprintf("%d broken link(s)", c.BrokenLink)),
 		p.colorCount(c.BrokenAnchor, fmt.Sprintf("%d broken anchor(s)", c.BrokenAnchor)),
 		c.Ambiguous, c.Orphan, c.Unreachable)
+	if err != nil {
+		return err
+	}
+	if v.OKF.Checked {
+		_, err = fmt.Fprintln(w, v.OKF.Line())
+	}
 	return err
 }
 
@@ -140,6 +146,24 @@ func fullReport(w io.Writer, p palette, v emit.View) error {
 		plural(c.Documents, "document"), plural(c.Headings, "heading"),
 		plural(c.References, "reference"), plural(c.Components, "component")))
 	ew.line("")
+
+	// OKF conformance verdict (ADR 0023): shown only in OKF mode, front-loaded as
+	// the headline verdict, colored green/red by conformance. A NOT CONFORMANT
+	// verdict is followed by the offending files (rule + one-line reason) so the
+	// human report names them, not just a count.
+	if v.OKF.Checked {
+		if v.OKF.Conformant {
+			ew.line(p.green(v.OKF.Line()))
+			ew.line("")
+		} else {
+			ew.line(p.red(v.OKF.Line()))
+			for _, f := range v.OKFViolations {
+				ew.line("  " + p.red(location(f)) + " " + emit.OKFRuleLabel(f.Kind) + ": " + emit.OKFReason(f))
+			}
+			ew.line("  " + p.dim("fix: run `matlatl fix-prompt <path> --okf`, or see findings.json"))
+			ew.line("")
+		}
+	}
 
 	// 1. Broken links — the highest-priority problems, front-loaded.
 	section(ew, p, "Broken links", len(v.BrokenLinks))

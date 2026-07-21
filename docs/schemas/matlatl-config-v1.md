@@ -51,6 +51,14 @@ emitExclude:
   - ".claude/agents/"
   - ".claude/skills/"
   - ".agents/"
+
+# Enable OKF v0.1 conformance mode (ADR 0023). When true, `check` also validates
+# the corpus against the Open Knowledge Format conformance rules and reports a
+# CONFORMANT / NOT CONFORMANT verdict; a conformance violation fails `check`
+# (exit 1) regardless of --strict. Off by default. Equivalent to the --okf flag
+# (effective mode = flag OR this key). Must be a boolean; any other type is a
+# hard error.
+okf: false
 ```
 
 ## Fields
@@ -169,6 +177,23 @@ stay link-checked, but no LLM navigates to it via `llms.txt`.
 - Patterns are only string-matched against in-corpus document IDs — never a
   filesystem read.
 
+### `okf` (boolean, optional)
+
+Enables **OKF v0.1 conformance mode** ([ADR 0023](../adr/0023-okf-conformance-mode.md)).
+When true, `matlatl check` additionally validates the corpus against the
+[Open Knowledge Format](../research/okf-spec-pinned.md) §9 conformance rules and
+reports a CONFORMANT / NOT CONFORMANT verdict.
+
+- Default **`false`**. Must be a **boolean**; any other type (`okf: "yes"`) is a
+  hard error.
+- Equivalent to the `--okf` flag — the effective mode is `--okf` **OR** this key,
+  so a repo that *is* an OKF bundle can turn the mode on for every invocation by
+  setting it here (this is why, unusually, a run-mode has a config equivalent:
+  "this repo is an OKF bundle" is a property of the repo's shape).
+- When on, a conformance violation fails `check` (exit `1`) **regardless of
+  `--strict`**, and the health gate (broken links etc.) still applies unchanged —
+  a superset gate, never a relaxation.
+
 ## What v1 does NOT configure
 
 - **Ignoring files** — `.matlatlignore` remains the sole ignore mechanism. The
@@ -176,7 +201,8 @@ stay link-checked, but no LLM navigates to it via `llms.txt`.
   `.matlatl.yml` *declares the role* of files that stay in it.
 - **Run behavior** — `--strict`, `--out`, `--resolution`, `--check-external`,
   etc. stay flag-only. The config describes the repo's *shape*, not how a given
-  run *behaves*.
+  run *behaves*. (`okf` is the one exception: "this repo is an OKF bundle" is a
+  shape property, so it has both a flag and a config key.)
 - **Disabling the built-in conventions** — v1 is additive-only.
 
 These are deferred, not rejected; the `version` field is how a future schema

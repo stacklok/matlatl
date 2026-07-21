@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/stacklok/matlatl/internal/application"
 	"github.com/stacklok/matlatl/internal/domain/analysis"
 )
 
@@ -33,7 +34,11 @@ const (
 // kind value + a lowScentAnchor summary count).
 // v7 (ADR 0021) adds the hops-from-root "far-from-root" finding (a new kind
 // value + a farFromRoot summary count).
-const FindingsSchemaVersion = 7
+// v8 (ADR 0023) adds the OKF v0.1 conformance-mode findings
+// "okf-missing-frontmatter", "okf-missing-type", "okf-reserved-file-structure"
+// (three new kind values + three summary counts) and the always-present
+// top-level "okfConformance" object (checked:false when the mode is off).
+const FindingsSchemaVersion = 8
 
 // findingsDocument is the stable findings.json schema. Adding fields is
 // backward-compatible; renaming/removing is a breaking change and must bump
@@ -46,7 +51,63 @@ type findingsDocument struct {
 	// one-paragraph, standalone how-to, so an agent can act on a finding using
 	// only this document. Keyed by the finding kind string (e.g. "broken-link").
 	RemediationGuide map[string]string `json:"remediationGuide"`
-	Findings         []findingJSON     `json:"findings"`
+	// OKFConformance is the OKF v0.1 conformance verdict (ADR 0023). It is ALWAYS
+	// present: when the mode is off, Checked is false and the rest are zero values.
+	OKFConformance okfConformanceJSON `json:"okfConformance"`
+	Findings       []findingJSON      `json:"findings"`
+}
+
+// okfConformanceJSON is the top-level OKF verdict block. Always emitted so the
+// shape is stable regardless of mode; consumers key on Checked first.
+type okfConformanceJSON struct {
+	Checked               bool   `json:"checked"`
+	Conformant            bool   `json:"conformant"`
+	Version               string `json:"version"`
+	MissingFrontmatter    int    `json:"missingFrontmatter"`
+	MissingType           int    `json:"missingType"`
+	ReservedFileStructure int    `json:"reservedFileStructure"`
+}
+
+// OKFVerdict carries the OKF conformance verdict from the pipeline Result to the
+// findings.json emitter (ADR 0023). The zero value (Checked:false) is the
+// mode-off shape. Use OKFVerdictFromResult to build one from an application.Result.
+type OKFVerdict struct {
+	Checked               bool
+	Conformant            bool
+	Version               string
+	MissingFrontmatter    int
+	MissingType           int
+	ReservedFileStructure int
+}
+
+// Line renders the one-line OKF conformance verdict (ADR 0023). It is the single
+// home for the verdict wording, shared by the `check` summary
+// (cmd/matlatl via OKFVerdictFromResult) and the human reports (terminal +
+// markdown via View.OKF), so the two are byte-identical by construction. It is
+// only meaningful when Checked is true; callers gate on that.
+func (v OKFVerdict) Line() string {
+	if v.Conformant {
+		return "OKF v0.1: CONFORMANT"
+	}
+	total := v.MissingFrontmatter + v.MissingType + v.ReservedFileStructure
+	return fmt.Sprintf(
+		"OKF v0.1: NOT CONFORMANT — %d violation(s) (%d missing-frontmatter, %d missing-type, %d reserved-file)",
+		total, v.MissingFrontmatter, v.MissingType, v.ReservedFileStructure)
+}
+
+// OKFVerdictFromResult projects the OKF fields of a frozen pipeline Result into
+// an OKFVerdict for the findings emitter and the verdict Line. When OKF mode was
+// off, the result is the zero verdict (Checked:false), which renders
+// okfConformance.checked=false.
+func OKFVerdictFromResult(res application.Result) OKFVerdict {
+	return OKFVerdict{
+		Checked:               res.OKFMode,
+		Conformant:            res.OKFConformant,
+		Version:               res.OKFVersion,
+		MissingFrontmatter:    res.OKFMissingFrontmatterCount,
+		MissingType:           res.OKFMissingTypeCount,
+		ReservedFileStructure: res.OKFReservedFileStructureCount,
+	}
 }
 
 type findingsSum struct {
@@ -64,6 +125,10 @@ type findingsSum struct {
 	Bridge            int `json:"bridge"`
 	LowScentAnchor    int `json:"lowScentAnchor"`
 	FarFromRoot       int `json:"farFromRoot"`
+	// OKF conformance-mode counts (ADR 0023). Zero when the mode is off.
+	OKFMissingFrontmatter    int `json:"okfMissingFrontmatter"`
+	OKFMissingType           int `json:"okfMissingType"`
+	OKFReservedFileStructure int `json:"okfReservedFileStructure"`
 }
 
 type findingJSON struct {
@@ -137,6 +202,23 @@ var remediationByKind = map[string]string{
 		"is an experimental discoverability hint, not an error. Rename the anchor in `details.sourceDocument` at " +
 		"`line` to describe the destination — `details.suggestedAnchor` holds the destination's title or " +
 		"best-matching heading as a starting point.",
+	analysis.OKFMissingFrontmatter.String(): "OKF v0.1 conformance (rule R1): every non-reserved `.md` concept document must contain a " +
+		"PARSEABLE YAML frontmatter block. `details.targetDocument` is the file; `details.frontmatterState` is " +
+		"\"absent\" (no block) or \"unparseable\" (a block that failed to decode or exceeded the size cap). Add " +
+		"a `---`-delimited YAML block at the top of the file — or fix its syntax — and give it at least a " +
+		"non-empty `type:` field. Reserved files (index.md, log.md) are exempt from this rule. Reported only in " +
+		"OKF mode (--okf).",
+	analysis.OKFMissingType.String(): "OKF v0.1 conformance (rule R2): every concept document's frontmatter must carry a non-empty " +
+		"`type` field. `details.targetDocument` is the file and `details.reason` states what was wrong (absent, " +
+		"empty, or a non-string value). Add a `type:` string; OKF does not restrict the vocabulary (consumers " +
+		"must tolerate any value), so use a short descriptive type such as `Reference`, `Playbook`, or " +
+		"`API Endpoint`. matlatl never validates the type value against a list. Reported only in OKF mode (--okf).",
+	analysis.OKFReservedFileStructure.String(): "OKF v0.1 conformance (rule R3): reserved files must follow their structure. A `log.md`'s `##` " +
+		"headings must be ISO 8601 `YYYY-MM-DD` dates (OKF §7); a non-root `index.md` must carry no " +
+		"frontmatter (OKF §6); and the bundle-root `index.md` may carry only an `okf_version` key (OKF §11). " +
+		"`details.reservedFile` is the reserved file (`index.md` / `log.md`), `details.reason` states which rule " +
+		"was broken, and `details.okfVersion` (when present) is the bundle's declared version. Reported only in " +
+		"OKF mode (--okf).",
 	analysis.FarFromRoot.String(): "The document is reachable from a root but far from every entry point — `details.hopsFromRoot` " +
 		"holds its shortest hop distance from the nearest root. A reader or agent following links from an entry " +
 		"point (README.md/index.md) is unlikely to reach it that deep, so it is effectively undiscoverable even " +
@@ -151,6 +233,7 @@ var remediationByKind = map[string]string{
 // kind" section (kindsPresent) both iterate it, so a newly-added FindingKind
 // cannot slip past one and be ordered inconsistently in the other.
 var kindPresentationOrder = []analysis.FindingKind{
+	analysis.OKFMissingFrontmatter, analysis.OKFMissingType, analysis.OKFReservedFileStructure,
 	analysis.BrokenLink, analysis.BrokenAnchor, analysis.Ambiguous,
 	analysis.Orphan, analysis.Unreachable, analysis.UnderLinked, analysis.DeadEnd,
 	analysis.FarFromRoot,
@@ -174,11 +257,32 @@ func remediationGuideFor(report *analysis.AnalysisReport) map[string]string {
 // FindingsJSON renders an AnalysisReport as the canonical findings.json bytes
 // (pretty-printed, trailing newline). The report's findings are already sorted,
 // so output is deterministic.
-func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
+//
+// The okf verdict is rendered into the always-present top-level okfConformance
+// object (ADR 0023). Only the NON-DERIVABLE parts of the verdict are read from
+// the parameter — Checked and Version; the three counts AND the conformant bit
+// are DERIVED from the report's own okf-* finding counts, so findings.json can
+// never emit an okfConformance inconsistent with its findings list (a hand-built
+// verdict cannot lie about the counts). Pass the zero OKFVerdict (or
+// OKFVerdictFromResult of a non-OKF run) for the mode-off shape (checked:false).
+func FindingsJSON(report *analysis.AnalysisReport, okf OKFVerdict) ([]byte, error) {
+	okfMF := report.CountByKind(analysis.OKFMissingFrontmatter)
+	okfMT := report.CountByKind(analysis.OKFMissingType)
+	okfRS := report.CountByKind(analysis.OKFReservedFileStructure)
 	doc := findingsDocument{
 		SchemaVersion:    FindingsSchemaVersion,
 		Tool:             "matlatl",
 		RemediationGuide: remediationGuideFor(report),
+		OKFConformance: okfConformanceJSON{
+			Checked: okf.Checked,
+			// Conformant is derived, not taken from the verdict: in OKF mode the
+			// bundle is conformant iff no okf-* finding was produced. Off-mode → false.
+			Conformant:            okf.Checked && okfMF+okfMT+okfRS == 0,
+			Version:               okf.Version,
+			MissingFrontmatter:    okfMF,
+			MissingType:           okfMT,
+			ReservedFileStructure: okfRS,
+		},
 		Summary: findingsSum{
 			Total:             report.Len(),
 			BrokenLink:        report.CountByKind(analysis.BrokenLink),
@@ -194,6 +298,10 @@ func FindingsJSON(report *analysis.AnalysisReport) ([]byte, error) {
 			Bridge:            report.CountByKind(analysis.Bridge),
 			LowScentAnchor:    report.CountByKind(analysis.LowScentAnchor),
 			FarFromRoot:       report.CountByKind(analysis.FarFromRoot),
+
+			OKFMissingFrontmatter:    okfMF,
+			OKFMissingType:           okfMT,
+			OKFReservedFileStructure: okfRS,
 		},
 		Findings: make([]findingJSON, 0, report.Len()),
 	}

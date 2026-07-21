@@ -160,9 +160,23 @@ stays pure** — it never learns there is a config file, only that
   convention-disabling, and run-behavior keys. Each is a future, additively
   versioned decision.
 
+## Amendment (2026-07-20, ADR 0023 — OKF conformance mode)
+
+v1 deferred "run-behavior keys" (above): `--strict`, `--out`, etc. stay flag-only
+because the config describes the repo's *shape*, not a run's *behavior*. The
+`okf` boolean key ([ADR 0023](0023-okf-conformance-mode.md)) is a deliberate,
+narrow exception: "this repo is an OKF bundle" **is** a shape property, so OKF
+conformance mode has both a `--okf` flag and an `okf` config key. The effective
+mode is `flag OR config` (additive, like every other key — enabling it in config
+can only add the conformance gate, never remove a check). `okf` follows the same
+loud/tolerated contract: a non-boolean value is a HARD error (ExitUsage), absent
+is the zero-config default (off). This does not reopen the general run-behavior
+deferral — other run flags remain flag-only.
+
 ## See also
 
 - [ADR 0003](0003-security-model.md) — security model (caps, scan scope, bounded decode).
+- [ADR 0023](0023-okf-conformance-mode.md) — OKF conformance mode (the `okf` key exception).
 - [ADR 0004](0004-ddd-layering-and-scope.md) — DDD layering (domain purity).
 - [ADR 0005](0005-exit-code-contract.md) — the exit-code contract (ExitUsage = 2).
 - [ADR 0007](0007-graph-node-semantics.md) — roots, orphans, unreachable.

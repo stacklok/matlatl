@@ -341,6 +341,56 @@ func TestLoad_FarFromRootThresholdNotFlaggedUnknown(t *testing.T) {
 	}
 }
 
+// --- ADR 0023: okf ---
+
+func TestLoad_OKF(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\nokf: true\n")))
+	if err != nil {
+		t.Fatalf("valid okf should load, got %v", err)
+	}
+	if file.OKF == nil || *file.OKF != true {
+		t.Errorf("okf = %v, want pointer to true", file.OKF)
+	}
+}
+
+func TestLoad_OKFFalse(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("okf: false\n")))
+	if err != nil {
+		t.Fatalf("okf: false should load, got %v", err)
+	}
+	if file.OKF == nil || *file.OKF != false {
+		t.Errorf("okf = %v, want pointer to false", file.OKF)
+	}
+}
+
+func TestLoad_OKFAbsentIsNil(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if file.OKF != nil {
+		t.Errorf("absent okf should be nil, got %v", *file.OKF)
+	}
+}
+
+func TestLoad_OKFWrongType(t *testing.T) {
+	if _, _, err := Load(rootWithBytes(t, []byte("okf: \"yes\"\n"))); err == nil {
+		t.Fatal("non-boolean okf should be a HARD error")
+	}
+}
+
+func TestLoad_OKFNotFlaggedUnknown(t *testing.T) {
+	_, notices, err := Load(rootWithBytes(t, []byte("okf: true\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for _, n := range notices {
+		if strings.Contains(n.Detail, "okf") {
+			t.Errorf("okf flagged as unknown key: %q", n.Detail)
+		}
+	}
+}
+
 func TestLoad_StructureFindingsSeverity(t *testing.T) {
 	for _, v := range []string{"info", "warning"} {
 		file, _, err := Load(rootWithBytes(t, []byte("structureFindingsSeverity: "+v+"\n")))

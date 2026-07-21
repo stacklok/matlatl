@@ -80,6 +80,10 @@ type File struct {
 	// terminal report, graph.json, findings.json, junit.xml (ADR 0019). Empty or
 	// absent = no filtering.
 	EmitExclude []string
+	// OKF enables OKF v0.1 conformance mode (ADR 0023). nil when the key is absent
+	// (the CLI keeps its flag/default); a present value must be a bool (anything
+	// else is a hard error). The effective mode is `--okf` flag OR this value.
+	OKF *bool
 }
 
 // rawFile is the permissive decode target. We decode into a generic map first
@@ -217,6 +221,12 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		return File{}, nil, err
 	}
 
+	// --- okf ---
+	okfMode, err := resolveOptionalBool(raw, "okf")
+	if err != nil {
+		return File{}, nil, err
+	}
+
 	// --- unknown keys (typo / future additive key): ignore + notice ---
 	notices = append(notices, unknownKeyNotices(path, raw)...)
 
@@ -228,7 +238,27 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		LinkSuggestionMinShared:   linkMinShared,
 		FarFromRootThreshold:      farFromRoot,
 		EmitExclude:               emitExclude,
+		OKF:                       okfMode,
 	}, notices, nil
+}
+
+// resolveOptionalBool enforces the shape of an optional boolean config key (okf,
+// ADR 0023): absent → nil; a bool → parsed; any other shape → hard error (a thing
+// matlatl understands but that is wrong is loud, ADR 0011). The key name is
+// interpolated so every caller reports an identical error shape.
+func resolveOptionalBool(raw rawFile, key string) (*bool, error) {
+	v, present := raw[key]
+	if !present || v == nil {
+		return nil, nil
+	}
+	b, ok := v.(bool)
+	if !ok {
+		// YAML 1.2 (yaml.v3) does NOT treat `yes`/`no`/`on`/`off` as booleans — they
+		// decode as strings — so name the two accepted literals in the hint.
+		return nil, fmt.Errorf(
+			"%s: `%s` must be a boolean, got %T; use `%s: true` or `%s: false`", fileName, key, v, key, key)
+	}
+	return &b, nil
 }
 
 // resolveOptionalNonNegInt enforces the shared shape of the optional
@@ -362,6 +392,7 @@ func unknownKeyNotices(path string, raw rawFile) []application.Notice {
 		"version": {}, "roots": {},
 		"inboundThreshold": {}, "structureFindingsSeverity": {},
 		"linkSuggestionMinShared": {}, "farFromRootThreshold": {}, "emitExclude": {},
+		"okf": {},
 	}
 	var unknown []string
 	for k := range raw {

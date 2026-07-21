@@ -363,6 +363,16 @@ func TestCheckExitCode(t *testing.T) {
 		// the build, even under --strict.
 		{"far-from-root non-strict", Result{FarFromRootCount: 4}, false, platform.ExitOK},
 		{"far-from-root strict", Result{FarFromRootCount: 4}, true, platform.ExitOK},
+		// ADR 0023: OKF conformance mode. A conformant bundle in OKF mode passes;
+		// a non-conformant one fails (exit 1) regardless of --strict; and the OKF
+		// fields are inert when the mode is off (OKFMode=false).
+		{"okf conformant", Result{OKFMode: true, OKFConformant: true}, false, platform.ExitOK},
+		{"okf non-conformant non-strict", Result{OKFMode: true, OKFConformant: false}, false, platform.ExitFindings},
+		{"okf non-conformant strict-noop", Result{OKFMode: true, OKFConformant: false}, true, platform.ExitFindings},
+		// Mode off: even a false OKFConformant (its zero value) must not gate.
+		{"okf mode off ignores conformant flag", Result{OKFMode: false, OKFConformant: false}, false, platform.ExitOK},
+		// Superset gate: a CONFORMANT bundle with a broken link still fails on health.
+		{"okf conformant but broken link", Result{OKFMode: true, OKFConformant: true, BrokenLinkCount: 1}, false, platform.ExitFindings},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

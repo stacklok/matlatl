@@ -87,7 +87,7 @@ func sampleReport() *analysis.AnalysisReport {
 }
 
 func TestFindingsJSON_ShapeAndParse(t *testing.T) {
-	b, err := FindingsJSON(sampleReport())
+	b, err := FindingsJSON(sampleReport(), OKFVerdict{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestRemediationGuide_CoversAllKinds(t *testing.T) {
 // the schema-object form used for the `details`/`remediationGuide` string maps),
 // so a shape drift between findingsDocument and the published schema fails here.
 func TestFindingsJSON_ValidatesAgainstSchema(t *testing.T) {
-	b, err := FindingsJSON(sampleReport())
+	b, err := FindingsJSON(sampleReport(), OKFVerdict{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestFindingsJSON_ValidatesAgainstSchema(t *testing.T) {
 // new `kind` enum members and the underLinked/deadEnd summary fields are hit by
 // real emitted values), and asserts the summary counts + the kinds appear.
 func TestFindingsJSON_StructureKindsValidateAgainstSchema(t *testing.T) {
-	b, err := FindingsJSON(allKindsReport())
+	b, err := FindingsJSON(allKindsReport(), OKFVerdict{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestFindingsJSON_FarFromRootValidatesAgainstSchema(t *testing.T) {
 			Details:      map[string]string{"targetDocument": "deep.md", "hopsFromRoot": "7"},
 		},
 	})
-	b, err := FindingsJSON(rep)
+	b, err := FindingsJSON(rep, OKFVerdict{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,11 +350,187 @@ func TestFindingsJSON_FarFromRootValidatesAgainstSchema(t *testing.T) {
 	}
 }
 
+// TestFindingsJSON_OKFValidatesAgainstSchema positively exercises the
+// findings.schema v8 additions (ADR 0023): a report carrying all three OKF
+// conformance kinds, emitted with a non-conformant OKFVerdict, validates against
+// the published schema (new kind-enum members, the three summary counts, and the
+// okfConformance object with checked:true) and surfaces the verdict + counts.
+func TestFindingsJSON_OKFValidatesAgainstSchema(t *testing.T) {
+	rep := analysis.NewAnalysisReport([]analysis.Finding{
+		{
+			ID: "okf-missing-frontmatter:a.md", Kind: analysis.OKFMissingFrontmatter, Severity: analysis.Error,
+			Location: analysis.Location{Document: "a.md", Line: 1},
+			Message:  "\"a.md\" has no YAML frontmatter block (rule R1)",
+			Details:  map[string]string{"targetDocument": "a.md", "frontmatterState": "absent"},
+		},
+		{
+			ID: "okf-missing-type:b.md", Kind: analysis.OKFMissingType, Severity: analysis.Error,
+			Location: analysis.Location{Document: "b.md", Line: 1},
+			Message:  "\"b.md\" does not declare a non-empty OKF `type` (rule R2)",
+			Details:  map[string]string{"targetDocument": "b.md", "reason": "frontmatter has no `type` field"},
+		},
+		{
+			ID: "okf-reserved-file-structure:log.md:5", Kind: analysis.OKFReservedFileStructure, Severity: analysis.Error,
+			Location: analysis.Location{Document: "log.md", Line: 5},
+			Message:  "\"log.md\": heading is not a date (rule R3)",
+			Details:  map[string]string{"targetDocument": "log.md", "reservedFile": "log.md", "reason": "bad date", "okfVersion": "0.1"},
+		},
+	})
+	// Pass ONLY the non-derivable parts (Checked, Version) — deliberately omitting
+	// the counts and conformant bit. FindingsJSON must DERIVE those from the report
+	// (ADR 0023), so the emitted okfConformance cannot disagree with the findings
+	// list even though the verdict carries no counts. (Also proves a hand-built
+	// verdict can't inject inconsistent counts.)
+	verdict := OKFVerdict{Checked: true, Version: "0.1"}
+	b, err := FindingsJSON(rep, verdict)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data any
+	if err := json.Unmarshal(b, &data); err != nil {
+		t.Fatal(err)
+	}
+	schemaPath, _ := filepath.Abs(filepath.Join("..", "..", "..", "docs", "schemas", "findings.schema.json"))
+	sb, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(sb, &schema); err != nil {
+		t.Fatalf("parse schema: %v", err)
+	}
+	if errs := validateFindingsNode(data, schema, "$"); len(errs) > 0 {
+		sort.Strings(errs)
+		t.Errorf("OKF findings.json does not satisfy schema:\n  %v", errs)
+	}
+
+	var doc struct {
+		Summary struct {
+			OKFMissingFrontmatter    int `json:"okfMissingFrontmatter"`
+			OKFMissingType           int `json:"okfMissingType"`
+			OKFReservedFileStructure int `json:"okfReservedFileStructure"`
+		} `json:"summary"`
+		OKFConformance struct {
+			Checked               bool   `json:"checked"`
+			Conformant            bool   `json:"conformant"`
+			Version               string `json:"version"`
+			MissingFrontmatter    int    `json:"missingFrontmatter"`
+			MissingType           int    `json:"missingType"`
+			ReservedFileStructure int    `json:"reservedFileStructure"`
+		} `json:"okfConformance"`
+		RemediationGuide map[string]string `json:"remediationGuide"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if !doc.OKFConformance.Checked || doc.OKFConformance.Conformant {
+		t.Errorf("okfConformance verdict wrong: %+v", doc.OKFConformance)
+	}
+	if doc.OKFConformance.Version != "0.1" {
+		t.Errorf("okfConformance.version = %q, want 0.1", doc.OKFConformance.Version)
+	}
+	if doc.OKFConformance.MissingFrontmatter != 1 || doc.OKFConformance.MissingType != 1 || doc.OKFConformance.ReservedFileStructure != 1 {
+		t.Errorf("okfConformance counts wrong: %+v", doc.OKFConformance)
+	}
+	if doc.Summary.OKFMissingFrontmatter != 1 || doc.Summary.OKFMissingType != 1 || doc.Summary.OKFReservedFileStructure != 1 {
+		t.Errorf("summary okf counts wrong: %+v", doc.Summary)
+	}
+	for _, k := range []string{"okf-missing-frontmatter", "okf-missing-type", "okf-reserved-file-structure"} {
+		if doc.RemediationGuide[k] == "" {
+			t.Errorf("remediationGuide missing entry for emitted kind %q", k)
+		}
+	}
+}
+
+// TestFindingsJSON_OKFModeOff asserts the mode-off shape: okfConformance is
+// present with checked:false (the zero OKFVerdict) and still validates.
+func TestFindingsJSON_OKFModeOff(t *testing.T) {
+	b, err := FindingsJSON(sampleReport(), OKFVerdict{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		OKFConformance struct {
+			Checked bool `json:"checked"`
+		} `json:"okfConformance"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.OKFConformance.Checked {
+		t.Error("okfConformance.checked should be false when OKF mode is off")
+	}
+}
+
+// TestFindingsJSON_OKFConformanceDerivedFromReport asserts FindingsJSON DERIVES
+// okfConformance's counts and conformant bit from the report, ignoring lying
+// values on the passed verdict (ADR 0023) — so a hand-built verdict can never
+// produce an okfConformance inconsistent with the findings list.
+func TestFindingsJSON_OKFConformanceDerivedFromReport(t *testing.T) {
+	// A report with exactly ONE okf-missing-type finding...
+	rep := analysis.NewAnalysisReport([]analysis.Finding{{
+		ID: "okf-missing-type:b.md", Kind: analysis.OKFMissingType, Severity: analysis.Error,
+		Location: analysis.Location{Document: "b.md", Line: 1},
+		Message:  "no type",
+	}})
+	// ...but a verdict that LIES: claims conformant, wrong counts.
+	lying := OKFVerdict{
+		Checked: true, Conformant: true, Version: "9.9",
+		MissingFrontmatter: 42, MissingType: 0, ReservedFileStructure: 7,
+	}
+	b, err := FindingsJSON(rep, lying)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		OKFConformance struct {
+			Checked               bool   `json:"checked"`
+			Conformant            bool   `json:"conformant"`
+			Version               string `json:"version"`
+			MissingFrontmatter    int    `json:"missingFrontmatter"`
+			MissingType           int    `json:"missingType"`
+			ReservedFileStructure int    `json:"reservedFileStructure"`
+		} `json:"okfConformance"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	// Counts + conformant come from the report, not the verdict.
+	if doc.OKFConformance.MissingFrontmatter != 0 || doc.OKFConformance.MissingType != 1 || doc.OKFConformance.ReservedFileStructure != 0 {
+		t.Errorf("counts not derived from report: %+v", doc.OKFConformance)
+	}
+	if doc.OKFConformance.Conformant {
+		t.Error("conformant must be derived false (report has a violation), not taken from the lying verdict")
+	}
+	// Only the non-derivable parts (checked, version) come from the verdict.
+	if !doc.OKFConformance.Checked || doc.OKFConformance.Version != "9.9" {
+		t.Errorf("non-derivable fields wrong: %+v", doc.OKFConformance)
+	}
+}
+
+// TestOKFVerdictLine_Lockstep asserts the verdict line is byte-identical whether
+// rendered from the check summary path (OKFVerdictFromResult(res).Line()) or the
+// report path (BuildView(res).OKF.Line()), for both CONFORMANT and NOT
+// CONFORMANT (ADR 0023 3c: the two surfaces share one Line()).
+func TestOKFVerdictLine_Lockstep(t *testing.T) {
+	cases := []application.Result{
+		{OKFMode: true, OKFConformant: true, OKFVersion: "0.1"},
+		{OKFMode: true, OKFConformant: false, OKFMissingFrontmatterCount: 1, OKFMissingTypeCount: 2, OKFReservedFileStructureCount: 3},
+	}
+	for _, res := range cases {
+		check := OKFVerdictFromResult(res).Line()
+		report := BuildView(res).OKF.Line()
+		if check != report {
+			t.Errorf("verdict line drift:\n  check:  %q\n  report: %q", check, report)
+		}
+	}
+}
+
 // TestFindingsJSON_CleanValidatesAgainstSchema asserts a clean (zero-finding)
 // report — an empty findings list and empty remediationGuide — still satisfies
 // the schema (round-trip on the most common emitted shape).
 func TestFindingsJSON_CleanValidatesAgainstSchema(t *testing.T) {
-	b, err := FindingsJSON(analysis.NewAnalysisReport(nil))
+	b, err := FindingsJSON(analysis.NewAnalysisReport(nil), OKFVerdict{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,8 +640,8 @@ func validateFindingsNode(data, schema any, path string) []string {
 }
 
 func TestFindingsJSON_Deterministic(t *testing.T) {
-	a, _ := FindingsJSON(sampleReport())
-	b, _ := FindingsJSON(sampleReport())
+	a, _ := FindingsJSON(sampleReport(), OKFVerdict{})
+	b, _ := FindingsJSON(sampleReport(), OKFVerdict{})
 	if !bytes.Equal(a, b) {
 		t.Error("findings.json is not byte-stable across runs")
 	}

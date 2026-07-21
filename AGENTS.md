@@ -32,11 +32,19 @@ linked docs rather than re-deriving them.
     `structureExemptSet` with the orphan ladder); 0022 root-absolute links (a
     single leading `/` resolves from the scan root, not the origin dir, in
     `resolveInRoot`; `//` stays external; strip-slash→clean→EscapesRoot ordering
-    keeps the ADR 0003 guard; no schema/version change; wikilinks out of scope).
+    keeps the ADR 0003 guard; no schema/version change; wikilinks out of scope);
+    0023 OKF v0.1 conformance mode (opt-in `--okf` / `.matlatl.yml okf: true`; a
+    pure-domain `internal/domain/okf` package checks the three §9 rules — R1
+    parseable frontmatter, R2 non-empty `type` (never validate the value), R3
+    reserved-file structure; reserved = `index.md`/`log.md` ONLY, README is a
+    concept doc; three mode-scoped Error finding kinds gate exit 1 independent of
+    `--strict`; verdict is reported SEPARATELY from health and never relaxes it
+    (superset gate); parser sets `FrontMatterPresent`/`FrontMatterParsed` bools;
+    findings v8, graph unchanged).
 - **docs/schemas/** — published JSON Schemas for the three machine artifacts:
   [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 7),
   [findings.schema.json](docs/schemas/findings.schema.json) (findings schema
-  version 7), and [trails.schema.json](docs/schemas/trails.schema.json) (trails
+  version 8), and [trails.schema.json](docs/schemas/trails.schema.json) (trails
   schema version 1). The emitter types are kept in lockstep and validated by
   tests; if you change an artifact's shape, change the schema and bump its
   version.
@@ -90,4 +98,6 @@ excluded via `.matlatlignore` so the gate sees only real docs. If you add
 markdown with links, keep that gate green — don't introduce doc-link rot.
 `llms.txt` is generated (`.gitattributes` marks it `linguist-generated`); on a
 merge/rebase conflict in it, never hand-merge — take either side and re-run
-`task dogfood`.
+`task dogfood`. The dogfood gate is a **health** gate only — it does **not** run
+`--okf`: this repo's docs are not an OKF bundle (no `type` frontmatter), so
+`matlatl check . --okf` would report NOT CONFORMANT, and that is expected (ADR 0023).
