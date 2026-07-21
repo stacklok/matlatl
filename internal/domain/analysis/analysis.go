@@ -106,6 +106,26 @@ const (
 	// discoverability hint, not a defect — mirroring UnderLinked's intent but
 	// keyed on distance-from-entry-point rather than raw in-degree.
 	FarFromRoot
+	// OKFMissingFrontmatter is an OKF v0.1 conformance violation (rule R1, ADR
+	// 0023): a non-reserved concept document (any `.md` other than index.md /
+	// log.md) has no parseable YAML frontmatter block — either absent entirely or
+	// present-but-unparseable (the state is carried in Details). It is produced
+	// ONLY in OKF conformance mode (--okf) and is Error severity: when the mode is
+	// on it gates the exit code (exit 1) regardless of --strict.
+	OKFMissingFrontmatter
+	// OKFMissingType is an OKF v0.1 conformance violation (rule R2, ADR 0023): a
+	// concept document's frontmatter has no non-empty string `type` field. matlatl
+	// NEVER validates the type VALUE against any list (OKF §4.1 forbids a central
+	// registry). Produced ONLY in OKF mode; Error severity; gates exit 1
+	// independent of --strict.
+	OKFMissingType
+	// OKFReservedFileStructure is an OKF v0.1 conformance violation (rule R3, ADR
+	// 0023): a reserved file does not follow its required structure — a log.md `##`
+	// heading is not an ISO 8601 `YYYY-MM-DD` date, a non-root index.md carries
+	// frontmatter, or a root index.md carries a frontmatter key other than
+	// okf_version. Produced ONLY in OKF mode; Error severity; gates exit 1
+	// independent of --strict.
+	OKFReservedFileStructure
 )
 
 // String returns the canonical name of the finding kind.
@@ -139,6 +159,12 @@ func (k FindingKind) String() string {
 		return "low-scent-anchor"
 	case FarFromRoot:
 		return "far-from-root"
+	case OKFMissingFrontmatter:
+		return "okf-missing-frontmatter"
+	case OKFMissingType:
+		return "okf-missing-type"
+	case OKFReservedFileStructure:
+		return "okf-reserved-file-structure"
 	default:
 		return "unknown"
 	}
@@ -146,7 +172,7 @@ func (k FindingKind) String() string {
 
 // Valid reports whether k is a defined FindingKind.
 func (k FindingKind) Valid() bool {
-	return k >= BrokenLink && k <= FarFromRoot
+	return k >= BrokenLink && k <= OKFReservedFileStructure
 }
 
 // ParseFindingKind maps a canonical kind name (the String form, e.g.

@@ -121,6 +121,36 @@ func TestFixPrompt_EveryPresentKindRemediation(t *testing.T) {
 	}
 }
 
+// TestFixPrompt_IncludesOKFFindings asserts OKF conformance findings (ADR 0023),
+// being Error severity, are embedded in the default (curated) fix-prompt scope so
+// an agent can be pointed at fixing a non-conformant bundle.
+func TestFixPrompt_IncludesOKFFindings(t *testing.T) {
+	rep := analysis.NewAnalysisReport([]analysis.Finding{
+		{
+			ID: "okf-missing-frontmatter:a.md", Kind: analysis.OKFMissingFrontmatter, Severity: analysis.Error,
+			Location: analysis.Location{Document: "a.md", Line: 1},
+			Message:  "\"a.md\" has no YAML frontmatter block (rule R1)",
+			Details:  map[string]string{"frontmatterState": "absent"},
+		},
+		{
+			ID: "okf-missing-type:b.md", Kind: analysis.OKFMissingType, Severity: analysis.Error,
+			Location: analysis.Location{Document: "b.md", Line: 1},
+			Message:  "\"b.md\" does not declare a non-empty OKF `type` (rule R2)",
+		},
+	})
+	out := string(FixPrompt(rep, FixPromptOptions{}))
+	for _, want := range []string{
+		"### okf-missing-frontmatter",
+		"### okf-missing-type",
+		"okf-missing-frontmatter", // finding line
+		"a.md:1",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("fix-prompt missing %q:\n%s", want, out)
+		}
+	}
+}
+
 // TestFixPrompt_GuardrailPhrases asserts the baked-in guardrails are present.
 func TestFixPrompt_GuardrailPhrases(t *testing.T) {
 	out := string(FixPrompt(sampleReport(), FixPromptOptions{}))

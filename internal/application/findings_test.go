@@ -71,6 +71,33 @@ func TestFindingsFromReferences_KindsAndSeverity(t *testing.T) {
 	}
 }
 
+// TestBrokenLinkFix_RootAbsolute pins the ADR 0022 broken-link hint: a
+// root-absolute target (single leading "/") must NOT be described as resolving
+// relative to the origin — the hint has to say it resolves from the scan root.
+func TestBrokenLinkFix_RootAbsolute(t *testing.T) {
+	// Relative broken link keeps the origin-relative wording.
+	rel := findingsFromReferences([]reference.Reference{{
+		RawReference: reference.RawReference{Origin: "datasets/sales.md", RawTarget: "nope.md", Line: 1, Type: reference.RelativeLink},
+		Health:       reference.Broken,
+	}})[0]
+	if !strings.Contains(rel.SuggestedFix, "relative to") {
+		t.Errorf("relative broken-link fix should be origin-relative: %q", rel.SuggestedFix)
+	}
+
+	// Root-absolute broken link gets the scan-root wording and NOT the misleading
+	// "relative to <origin>" phrasing; it names the slash-stripped path.
+	ra := findingsFromReferences([]reference.Reference{{
+		RawReference: reference.RawReference{Origin: "datasets/sales.md", RawTarget: "/tables/orders.md", Line: 1, Type: reference.RelativeLink},
+		Health:       reference.Broken,
+	}})[0]
+	if strings.Contains(ra.SuggestedFix, "relative to") {
+		t.Errorf("root-absolute fix must not say 'relative to <origin>': %q", ra.SuggestedFix)
+	}
+	if !strings.Contains(ra.SuggestedFix, "scan root") || !strings.Contains(ra.SuggestedFix, "tables/orders.md") {
+		t.Errorf("root-absolute fix should mention the scan root and the stripped path: %q", ra.SuggestedFix)
+	}
+}
+
 func TestFindingID_Stable(t *testing.T) {
 	r := reference.Reference{
 		RawReference: reference.RawReference{Origin: "a.md", RawTarget: "nope.md", Line: 3, Type: reference.RelativeLink},
@@ -336,6 +363,16 @@ func TestCheckExitCode(t *testing.T) {
 		// the build, even under --strict.
 		{"far-from-root non-strict", Result{FarFromRootCount: 4}, false, platform.ExitOK},
 		{"far-from-root strict", Result{FarFromRootCount: 4}, true, platform.ExitOK},
+		// ADR 0023: OKF conformance mode. A conformant bundle in OKF mode passes;
+		// a non-conformant one fails (exit 1) regardless of --strict; and the OKF
+		// fields are inert when the mode is off (OKFMode=false).
+		{"okf conformant", Result{OKFMode: true, OKFConformant: true}, false, platform.ExitOK},
+		{"okf non-conformant non-strict", Result{OKFMode: true, OKFConformant: false}, false, platform.ExitFindings},
+		{"okf non-conformant strict-noop", Result{OKFMode: true, OKFConformant: false}, true, platform.ExitFindings},
+		// Mode off: even a false OKFConformant (its zero value) must not gate.
+		{"okf mode off ignores conformant flag", Result{OKFMode: false, OKFConformant: false}, false, platform.ExitOK},
+		// Superset gate: a CONFORMANT bundle with a broken link still fails on health.
+		{"okf conformant but broken link", Result{OKFMode: true, OKFConformant: true, BrokenLinkCount: 1}, false, platform.ExitFindings},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

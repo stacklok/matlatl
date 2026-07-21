@@ -252,12 +252,14 @@ func TestResolve_OutOfRootIsBrokenNeverRead(t *testing.T) {
 	}
 }
 
-// TestResolve_AbsolutePathsStayInRoot documents the ADR-0003 handling of
-// absolute-looking targets. path.Join folds a leading "/" into the origin
-// directory, so "/etc/passwd" and "[[/absolute/path]]" become IN-ROOT relative
-// paths (docs/etc/passwd, absolute/path) rather than filesystem-absolute escapes.
-// They therefore resolve to Broken (no such corpus doc) — never an absolute-path
-// filesystem access, and never a root-escape read.
+// TestResolve_AbsolutePathsStayInRoot documents the handling of absolute-looking
+// targets under ADR 0022 (root-absolute /-links). A single leading "/" on a
+// relative link now resolves from the SCAN ROOT, independent of the origin's
+// directory — so "/etc/passwd" from docs/links.md resolves to the in-root path
+// "etc/passwd" (NOT the old origin-folded "docs/etc/passwd"). With no such corpus
+// doc or asset it is still Broken — never a filesystem-absolute access, never a
+// root-escape read. Wikilinks are OUT OF SCOPE for ADR 0022: "[[/absolute/path]]"
+// keeps its prior behaviour and stays Broken.
 func TestResolve_AbsolutePathsStayInRoot(t *testing.T) {
 	cat := newFakeCatalog("docs/links.md")
 	// Record the path the asset probe is asked about (always answering false) to
@@ -266,20 +268,173 @@ func TestResolve_AbsolutePathsStayInRoot(t *testing.T) {
 	probe := assetProbe(func(p string) bool { probedPath = p; return false })
 	r := NewResolver(cat, probe, LongestSuffix)
 
-	// Absolute-looking relative link: path.Join folds the leading "/" under the
-	// origin dir → in-root "docs/etc/passwd", not a known doc/asset → Broken.
+	// Root-absolute relative link (ADR 0022): the leading "/" resolves from the
+	// scan root → in-root "etc/passwd", not a known doc/asset → Broken.
 	abs := r.Resolve(RawReference{Origin: "docs/links.md", RawTarget: "/etc/passwd", Type: RelativeLink})
 	if abs.Health != Broken {
-		t.Errorf("'/etc/passwd' relative link health = %s, want broken (folded in-root)", abs.Health)
+		t.Errorf("'/etc/passwd' relative link health = %s, want broken (root-absolute in-root)", abs.Health)
 	}
-	if probedPath != "docs/etc/passwd" {
-		t.Errorf("asset probe saw %q, want in-root 'docs/etc/passwd' (no absolute escape)", probedPath)
+	if probedPath != "etc/passwd" {
+		t.Errorf("asset probe saw %q, want root-absolute in-root 'etc/passwd'", probedPath)
 	}
 
 	// Absolute-looking wikilink: cleaned target "absolute/path" matches no doc.
 	wl := r.Resolve(RawReference{Origin: "docs/links.md", RawTarget: "/absolute/path", Type: Wikilink})
 	if wl.Health != Broken {
 		t.Errorf("'[[/absolute/path]]' health = %s, want broken", wl.Health)
+	}
+}
+
+// TestResolve_RootAbsoluteLinks covers the ADR 0022 happy paths: a single
+// leading "/" resolves from the scan root, independent of the origin document's
+// directory (origin-independence), across markdown docs, anchors, directories,
+// and image assets.
+func TestResolve_RootAbsoluteLinks(t *testing.T) {
+	cat := newFakeCatalog(
+		"README.md", "datasets/sales.md", "tables/orders.md", "docs/guide.md",
+		"adr/0001.md",
+	).withHeading("docs/guide.md", "sec")
+	assets := fakeAssets{"assets/logo.png": {}}
+	r := NewResolver(cat, assets, LongestSuffix)
+
+	// From a nested origin: "/tables/orders.md" resolves root-absolute.
+	nested := r.Resolve(RawReference{Origin: "datasets/sales.md", RawTarget: "/tables/orders.md", Type: RelativeLink})
+	if nested.Health != Valid || nested.Target.DocumentID != "tables/orders.md" {
+		t.Errorf("nested origin /tables/orders.md = %s doc=%q, want valid tables/orders.md", nested.Health, nested.Target.DocumentID)
+	}
+
+	// From a root origin: same target resolves to the SAME doc (origin-independent).
+	fromRoot := r.Resolve(RawReference{Origin: "README.md", RawTarget: "/tables/orders.md", Type: RelativeLink})
+	if fromRoot.Health != Valid || fromRoot.Target.DocumentID != "tables/orders.md" {
+		t.Errorf("root origin /tables/orders.md = %s doc=%q, want valid tables/orders.md", fromRoot.Health, fromRoot.Target.DocumentID)
+	}
+	if fromRoot.Target.DocumentID != nested.Target.DocumentID {
+		t.Errorf("root-absolute target is origin-dependent: %q vs %q", fromRoot.Target.DocumentID, nested.Target.DocumentID)
+	}
+
+	// Anchor on a root-absolute link is validated against the heading inventory,
+	// and resolves to the root-absolute target document (not the origin).
+	anchor := r.Resolve(RawReference{Origin: "datasets/sales.md", RawTarget: "/docs/guide.md", Fragment: "sec", Type: RelativeLink})
+	if anchor.Health != Valid || anchor.Target.Kind != TargetSection {
+		t.Errorf("/docs/guide.md#sec = %s/%s, want valid section", anchor.Health, anchor.Target.Kind)
+	}
+	if anchor.Target.DocumentID != "docs/guide.md" {
+		t.Errorf("/docs/guide.md#sec doc = %q, want docs/guide.md", anchor.Target.DocumentID)
+	}
+
+	// A BAD anchor on a root-absolute link still runs slug validation: the doc
+	// resolves root-absolute but the missing fragment yields BrokenAnchor (proves
+	// root-absolute does NOT skip heading-inventory validation).
+	badAnchor := r.Resolve(RawReference{Origin: "datasets/sales.md", RawTarget: "/docs/guide.md", Fragment: "nope", Type: RelativeLink})
+	if badAnchor.Health != BrokenAnchor || badAnchor.Target.DocumentID != "docs/guide.md" {
+		t.Errorf("/docs/guide.md#nope = %s doc=%q, want broken-anchor docs/guide.md", badAnchor.Health, badAnchor.Target.DocumentID)
+	}
+
+	// Root-absolute directory link.
+	dir := r.Resolve(RawReference{Origin: "datasets/sales.md", RawTarget: "/adr/", Type: RelativeLink})
+	if dir.Health != Valid || dir.Target.Kind != TargetDirectory || dir.Target.Directory != "adr" {
+		t.Errorf("/adr/ = %s/%s dir=%q, want valid directory adr", dir.Health, dir.Target.Kind, dir.Target.Directory)
+	}
+
+	// Root-absolute resolution is case-sensitive (identity is the exact path,
+	// ADR 0001): "/Tables/orders.md" does not match "tables/orders.md" → Broken.
+	mixedCase := r.Resolve(RawReference{Origin: "datasets/sales.md", RawTarget: "/Tables/orders.md", Type: RelativeLink})
+	if mixedCase.Health != Broken || mixedCase.Target.Kind != TargetNone {
+		t.Errorf("/Tables/orders.md = %s/%s, want broken/none (case-sensitive)", mixedCase.Health, mixedCase.Target.Kind)
+	}
+
+	// A bare "/" names the scan root, which is not a linkable directory (ADR 0022):
+	// it strips to "" → cleans to "." → Broken, same posture as a relative "./".
+	bare := r.Resolve(RawReference{Origin: "datasets/sales.md", RawTarget: "/", Type: RelativeLink})
+	if bare.Health != Broken || bare.Target.Kind != TargetNone {
+		t.Errorf("'/' = %s/%s, want broken/none (scan root is not linkable)", bare.Health, bare.Target.Kind)
+	}
+
+	// Root-absolute image: the asset probe sees the root-relative "assets/logo.png".
+	var probedPath string
+	probe := assetProbe(func(p string) bool { probedPath = p; return p == "assets/logo.png" })
+	ri := NewResolver(cat, probe, LongestSuffix)
+	img := ri.Resolve(RawReference{Origin: "datasets/sales.md", RawTarget: "/assets/logo.png", Type: ImageEmbed})
+	if img.Health != NonNote || img.Target.Kind != TargetAsset {
+		t.Errorf("/assets/logo.png = %s/%s, want nonnote asset", img.Health, img.Target.Kind)
+	}
+	if probedPath != "assets/logo.png" {
+		t.Errorf("asset probe saw %q, want root-absolute 'assets/logo.png'", probedPath)
+	}
+}
+
+// TestResolve_RootAbsoluteEscape is the ADR 0022 security test: a root-absolute
+// target that traverses out of the scan root is Broken and the asset probe is
+// NEVER consulted (order: strip leading slash → clean → EscapesRoot). A
+// percent-encoded traversal ("/..%2F..") is NOT URL-decoded, so it stays a
+// literal in-root filename → Broken, not an escape.
+func TestResolve_RootAbsoluteEscape(t *testing.T) {
+	cat := newFakeCatalog("datasets/sales.md")
+	escapeProbed := false
+	// A root-escape target must be rejected BEFORE the probe: this probe records
+	// consultation and always answers true, so if an escaping target ever reached
+	// it the target would (wrongly) resolve NonNote instead of Broken.
+	escapeProbe := assetProbe(func(string) bool { escapeProbed = true; return true })
+	r := NewResolver(cat, escapeProbe, LongestSuffix)
+
+	for _, tgt := range []string{"/../etc/passwd", "/./../x", "/../../secret.md"} {
+		ref := r.Resolve(RawReference{Origin: "datasets/sales.md", RawTarget: tgt, Type: RelativeLink})
+		if ref.Health != Broken || ref.Target.Kind != TargetNone {
+			t.Errorf("%q = %s/%s, want broken/none (root escape)", tgt, ref.Health, ref.Target.Kind)
+		}
+	}
+	if escapeProbed {
+		t.Error("asset probe consulted for a root-absolute escaping target (must never read)")
+	}
+
+	// "/..%2F.." is a literal in-root filename (no URL decoding), so it is NOT an
+	// escape: it reaches the probe like any in-root path. With no such asset it is
+	// Broken — a genuine escape would have short-circuited above. Use a distinct
+	// probe answering false so "no such asset" (not "rejected as escape") is what
+	// yields Broken here.
+	nfProbe := assetProbe(func(string) bool { return false })
+	enc := NewResolver(cat, nfProbe, LongestSuffix).Resolve(RawReference{Origin: "datasets/sales.md", RawTarget: "/..%2F..", Type: RelativeLink})
+	if enc.Health != Broken || enc.Target.Kind != TargetNone {
+		t.Errorf("'/..%%2F..' = %s/%s, want broken/none (in-root literal)", enc.Health, enc.Target.Kind)
+	}
+}
+
+// TestResolve_DoubleSlashNotRootAbsolute asserts that a double-slash (or
+// more-than-one-slash) target is NOT treated as root-absolute at the resolver
+// boundary. The parser classifies "//host/x" as External, but FrontmatterRelated
+// edges bypass that classification and reach resolveRelative directly
+// (ADR 0022 D3): IsRootAbsolute must refuse "//..." so it falls through relative
+// resolution (typically Broken). A positive FrontmatterRelated single-slash case
+// proves the type still gets genuine root-absolute treatment.
+func TestResolve_DoubleSlashNotRootAbsolute(t *testing.T) {
+	cat := newFakeCatalog("docs/sub/page.md", "docs/guide.md")
+
+	// Positive control: a single-slash FrontmatterRelated target IS root-absolute
+	// and resolves from the scan root, independent of the nested origin.
+	pos := NewResolver(cat, nil, LongestSuffix).
+		Resolve(RawReference{Origin: "docs/sub/page.md", RawTarget: "/docs/guide.md", Type: FrontmatterRelated})
+	if pos.Health != Valid || pos.Target.DocumentID != "docs/guide.md" {
+		t.Errorf("'/docs/guide.md' FrontmatterRelated = %s doc=%q, want valid docs/guide.md", pos.Health, pos.Target.DocumentID)
+	}
+
+	// From the nested origin docs/sub/page.md, a genuine root-absolute link would
+	// resolve to "host/x"; a non-root-absolute relative join yields
+	// "docs/sub/host/x". Both "//host/x" and "///host/x" must take the relative
+	// branch, proving the guard rejects any leading run of two-or-more slashes.
+	for _, tgt := range []string{"//host/x", "///host/x"} {
+		var probedPath string
+		probe := assetProbe(func(p string) bool { probedPath = p; return false })
+		r := NewResolver(cat, probe, LongestSuffix)
+		ref := r.Resolve(RawReference{Origin: "docs/sub/page.md", RawTarget: tgt, Type: FrontmatterRelated})
+		if ref.Health != Broken {
+			t.Errorf("%q FrontmatterRelated = %s, want broken", tgt, ref.Health)
+		}
+		if probedPath == "host/x" {
+			t.Errorf("%q was folded root-absolute to %q (must not treat multi-slash as root-absolute)", tgt, probedPath)
+		}
+		if probedPath != "docs/sub/host/x" {
+			t.Errorf("%q asset probe saw %q, want relative-joined 'docs/sub/host/x'", tgt, probedPath)
+		}
 	}
 }
 

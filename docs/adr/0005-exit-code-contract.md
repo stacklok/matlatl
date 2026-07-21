@@ -54,3 +54,19 @@ of exit code, so CI dashboards get structured results on both pass and fail.
 - Each outcome above ships with a golden integration test asserting both the exit
   code and the emitted artifacts.
 - The threshold knob (`--strict`, severity config) maps cleanly onto codes `0`/`1`.
+
+## Amendment (2026-07-20, ADR 0023 — OKF conformance mode)
+
+OKF v0.1 conformance mode (`--okf` / `.matlatl.yml okf: true`) adds three
+Error-severity finding kinds (`okf-missing-frontmatter`, `okf-missing-type`,
+`okf-reserved-file-structure`). When the mode is on, any such finding gates
+`matlatl check` at exit `1` — **independent of `--strict`** (a conformance
+violation is not a "warning" that `--strict` promotes; it gates whenever the mode
+is on). This is a **superset** of the table above: the health checks (broken
+links/anchors; orphans under `--strict`) still apply unchanged, so `--okf` can
+only ADD failure conditions, never relax them. The conformance **verdict**
+(CONFORMANT / NOT CONFORMANT) is reported **separately** from the health gate — a
+CONFORMANT bundle with a broken link is still exit `1` on health, and a broken
+link is never itself a conformance violation (OKF §5.3/§9). Enforced in
+`Result.CheckExitCode` (the `OKFMode && !OKFConformant` branch) and pinned by the
+`okf-*` rows in `TestCheckExitCode` and the CLI integration tests.

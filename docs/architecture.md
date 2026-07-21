@@ -17,7 +17,10 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    into a pure-domain `Document` (front matter, section tree, raw references).
 3. **Resolve** — the `LinkResolver` turns each raw reference into a typed, health-
    classified edge (valid / broken / broken-anchor / non-note / ambiguous / external),
-   using the `HeadingInventory` and `AliasTable`.
+   using the `HeadingInventory` and `AliasTable`. Relative links resolve against
+   the linking document's directory; a **root-absolute** target (a single leading
+   `/`, e.g. `/tables/orders.md`) resolves from the scan root, independent of the
+   origin ([ADR 0022](adr/0022-root-absolute-links.md)). `//host` stays external.
 4. **Build** — assemble the directed `ReferenceGraph` (documents + sections as
    vertices, typed edges) and the `HierarchyTree`. Node/edge semantics and the
    document projection that analysis runs over are pinned in
@@ -63,6 +66,13 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    the minimum over all roots), mirroring `ComputeReachability` with the
    explicit-head-index queue idiom; absence = unreachable, and it shares the
    `structureExemptSet` helper with the orphan ladder for exemptions (ADR 0021).
+   When **OKF conformance mode** is on (`--okf` / `.matlatl.yml okf: true`), a
+   pure-domain conformance pass (`internal/domain/okf`, `okf.Check`) runs over the
+   frozen corpus and appends the mode-scoped `okf-*` **Error** findings; the
+   verdict (CONFORMANT / NOT CONFORMANT) is carried on the `Result` and reported
+   separately from the health gate ([ADR 0023](adr/0023-okf-conformance-mode.md)).
+   `okf.Check` reads only two pure-data bools the parser sets on `Document`
+   (`FrontMatterPresent` / `FrontMatterParsed`), so it stays free of YAML parsing.
 6. **Emit** — render the report for humans (terminal, Markdown, Mermaid, DOT,
    index.md with a Backlinks column) and LLMs (graph.json, trails.json, the
    llms.txt family with a reading-order block + backlinks, findings.json; JUnit

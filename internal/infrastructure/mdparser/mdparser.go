@@ -181,15 +181,24 @@ func (p *Parser) ParseBytes(ctx context.Context, id identity.DocumentID, src []b
 	root := p.md.Parser().Parse(text.NewReader(src), parser.WithContext(pctx))
 
 	fm := corpus.FrontMatter{}
-	if !guarded {
-		fm = decodeFrontMatter(pctx)
+	// frontMatterPresent / frontMatterParsed are pure-data signals for the OKF
+	// conformance mode (ADR 0023): "was there a frontmatter block at all" vs "did
+	// it decode". The oversized-guard path (ADR 0003) counts as present-but-
+	// unparsed: a block WAS there, we just refused to decode it.
+	var frontMatterPresent, frontMatterParsed bool
+	if guarded {
+		frontMatterPresent = true
+	} else {
+		fm, frontMatterPresent, frontMatterParsed = decodeFrontMatter(pctx)
 	}
 
 	lines := newLineIndex(src)
 	doc := &corpus.Document{
-		ID:          id,
-		FrontMatter: fm,
-		Root:        buildSectionTree(root, src, lines),
+		ID:                 id,
+		FrontMatter:        fm,
+		FrontMatterPresent: frontMatterPresent,
+		FrontMatterParsed:  frontMatterParsed,
+		Root:               buildSectionTree(root, src, lines),
 	}
 	doc.RawReferences = extractReferences(root, src, id, lines)
 
@@ -251,17 +260,23 @@ var knownFMKeys = map[string]struct{}{
 // decode into a generic map, then extracts the typed fields and routes the rest
 // to Extra. One decode removes the double-decode attack surface. Malformed front
 // matter degrades to a zero value.
-func decodeFrontMatter(pctx parser.Context) corpus.FrontMatter {
+//
+// The two bools report, for the OKF conformance mode (ADR 0023): present — a
+// frontmatter fence block was detected by goldmark's frontmatter extension; and
+// parsed — that block decoded successfully. A present-but-undecodable block
+// (present=true, parsed=false) is exactly OKF's "present-but-unparseable" state;
+// no block at all is (false, false).
+func decodeFrontMatter(pctx parser.Context) (fm corpus.FrontMatter, present, parsed bool) {
 	data := frontmatter.Get(pctx)
 	if data == nil {
-		return corpus.FrontMatter{}
+		return corpus.FrontMatter{}, false, false
 	}
 	var all map[string]any
 	if err := data.Decode(&all); err != nil {
-		return corpus.FrontMatter{}
+		return corpus.FrontMatter{}, true, false
 	}
 
-	fm := corpus.FrontMatter{
+	fm = corpus.FrontMatter{
 		Title:       fmString(all, "title"),
 		Description: fmString(all, "description"),
 		Tags:        fmStringSlice(all, "tags"),
@@ -281,7 +296,7 @@ func decodeFrontMatter(pctx parser.Context) corpus.FrontMatter {
 		}
 		fm.Extra[k] = v
 	}
-	return fm
+	return fm, true, true
 }
 
 // fmString reads a string value for key (case-insensitive), coercing simple
@@ -569,6 +584,10 @@ func splitFragment(dest string) (target, fragment string) {
 // being treated as in-corpus relative paths — a latent SSRF/local-file-read
 // hazard for the opt-in P6 --check-external path (ADR 0003).
 func isExternal(dest string) bool {
+	// The "//" (protocol-relative) entry is the parser-side counterpart of
+	// reference.IsRootAbsolute, which refuses "//" root-absolute treatment on the
+	// resolver side (ADR 0022): a single leading "/" is an in-corpus root-absolute
+	// link, a double leading "/" is external. Keep the two in sync.
 	lower := strings.ToLower(dest)
 	for _, p := range []string{"http://", "https://", "mailto:", "ftp://", "file://", "data:", "//"} {
 		if strings.HasPrefix(lower, p) {

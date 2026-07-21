@@ -36,6 +36,16 @@ import (
 // that wants to fail on dead external links should consume findings.json
 // explicitly. This is why r.DeadLinkCount is intentionally not read here.
 func (r Result) CheckExitCode(strict bool) platform.ExitCode {
+	// OKF conformance mode (ADR 0023): when the mode is on, a non-conformant
+	// bundle gates the exit code (exit 1) regardless of --strict. This is a
+	// documented, mode-scoped addition to the ADR 0005 contract: it is INDEPENDENT
+	// of --strict (an okf-* Error kind is not a "warning" that --strict promotes)
+	// and it is a SUPERSET gate — the health checks below still apply unchanged, so
+	// --okf can only ever add failure conditions, never relax them. The verdict is
+	// reported separately (see printCheckSummary); this is only the gate.
+	if r.OKFMode && !r.OKFConformant {
+		return platform.ExitFindings
+	}
 	if r.BrokenLinkCount > 0 || r.BrokenAnchorCount > 0 {
 		return platform.ExitFindings
 	}
@@ -113,6 +123,16 @@ const (
 	// far-from-root document (ADR 0021): the data behind the distance-threshold
 	// comparison, so an agent can act without re-deriving it.
 	DetailHopsFromRoot = "hopsFromRoot"
+	// OKF conformance detail keys (ADR 0023). DetailFrontmatterState is "absent" or
+	// "unparseable" on an okf-missing-frontmatter finding; DetailReservedFile names
+	// the reserved file kind ("index.md" / "log.md") on an
+	// okf-reserved-file-structure finding; DetailReason carries the human-readable
+	// cause of an okf-missing-type / okf-reserved-file-structure violation; and
+	// DetailOKFVersion carries the bundle's declared okf_version when known.
+	DetailFrontmatterState = "frontmatterState"
+	DetailReservedFile     = "reservedFile"
+	DetailReason           = "reason"
+	DetailOKFVersion       = "okfVersion"
 )
 
 // findingsFromReferences turns resolved references into analysis Findings. Only
@@ -161,19 +181,32 @@ func rawTargetText(r reference.Reference) string {
 func brokenLinkFinding(r reference.Reference) analysis.Finding {
 	target := rawTargetText(r)
 	return analysis.Finding{
-		ID:       findingID(analysis.BrokenLink, r.Origin, r.Line, target),
-		Kind:     analysis.BrokenLink,
-		Severity: analysis.Error,
-		Location: analysis.Location{Document: r.Origin, Line: r.Line},
-		Message:  fmt.Sprintf("%s link target %q does not resolve to a document in the corpus", r.Type, target),
-		SuggestedFix: fmt.Sprintf(
-			"Check that %q exists and is spelled correctly relative to %q; if it lives elsewhere, fix the path or move the file.",
-			target, r.Origin),
+		ID:           findingID(analysis.BrokenLink, r.Origin, r.Line, target),
+		Kind:         analysis.BrokenLink,
+		Severity:     analysis.Error,
+		Location:     analysis.Location{Document: r.Origin, Line: r.Line},
+		Message:      fmt.Sprintf("%s link target %q does not resolve to a document in the corpus", r.Type, target),
+		SuggestedFix: brokenLinkFix(r, target),
 		Details: map[string]string{
 			DetailTarget:   target,
 			DetailLinkType: r.Type.String(),
 		},
 	}
+}
+
+// brokenLinkFix phrases the broken-link hint. A root-absolute target (single
+// leading "/", ADR 0022) resolves from the scan root — NOT the linking file's
+// directory and NOT necessarily the git repo root — so the origin-relative hint
+// would be actively misleading; branch on the same predicate the resolver uses.
+func brokenLinkFix(r reference.Reference, target string) string {
+	if reference.IsRootAbsolute(r.RawTarget) {
+		return fmt.Sprintf(
+			"A leading '/' resolves from the scan root, not the linking file's directory or the git repository root; check that %q exists under the scan root, or scan from the repository root.",
+			strings.TrimPrefix(r.RawTarget, "/"))
+	}
+	return fmt.Sprintf(
+		"Check that %q exists and is spelled correctly relative to %q; if it lives elsewhere, fix the path or move the file.",
+		target, r.Origin)
 }
 
 func brokenAnchorFinding(r reference.Reference) analysis.Finding {

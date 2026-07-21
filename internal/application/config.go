@@ -90,6 +90,14 @@ type Config struct {
 	// trails.json). Sourced from `.matlatl.yml emitExclude` and consumed only at
 	// the emit boundary by the CLI layer (ADR 0019). Empty = no filtering.
 	EmitExclude []string
+	// OKF enables OKF v0.1 conformance mode (ADR 0023): the pipeline runs the
+	// okf.Check conformance rules over the corpus, appends the mode-scoped
+	// okf-* Error findings, and reports a CONFORMANT / NOT CONFORMANT verdict.
+	// Off by default; the effective value is `--okf` flag OR `.matlatl.yml okf`.
+	// When on, an okf-* finding gates `check` (exit 1) regardless of --strict, but
+	// the health gate (broken links etc.) is unchanged — the verdict is reported
+	// separately and never relaxes it (superset gate).
+	OKF bool
 }
 
 // DefaultConfig returns a Config with sane defaults: scan the current
