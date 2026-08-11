@@ -30,3 +30,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0021 | Hops-from-root: distance from the entry points as the discoverability metric | Accepted |
 | 0022 | Root-absolute links: a single leading `/` resolves from the scan root | Accepted |
 | 0023 | OKF v0.1 conformance mode | Accepted |
+| 0024 | Opt-in exclusion of git-ignored files (`--respect-gitignore`) | Accepted |

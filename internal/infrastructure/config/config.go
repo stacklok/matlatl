@@ -84,6 +84,12 @@ type File struct {
 	// (the CLI keeps its flag/default); a present value must be a bool (anything
 	// else is a hard error). The effective mode is `--okf` flag OR this value.
 	OKF *bool
+	// RespectGitignore unions the repo's effective git-ignore set with
+	// .matlatlignore so git-ignored working files stay out of the corpus
+	// (ADR 0024). nil when the key is absent (the CLI keeps its flag/default);
+	// a present value must be a bool (anything else is a hard error). The
+	// effective mode is `--respect-gitignore` flag OR this value.
+	RespectGitignore *bool
 }
 
 // rawFile is the permissive decode target. We decode into a generic map first
@@ -227,6 +233,12 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		return File{}, nil, err
 	}
 
+	// --- respectGitignore ---
+	respectGitignore, err := resolveOptionalBool(raw, "respectGitignore")
+	if err != nil {
+		return File{}, nil, err
+	}
+
 	// --- unknown keys (typo / future additive key): ignore + notice ---
 	notices = append(notices, unknownKeyNotices(path, raw)...)
 
@@ -239,6 +251,7 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		FarFromRootThreshold:      farFromRoot,
 		EmitExclude:               emitExclude,
 		OKF:                       okfMode,
+		RespectGitignore:          respectGitignore,
 	}, notices, nil
 }
 
@@ -392,7 +405,7 @@ func unknownKeyNotices(path string, raw rawFile) []application.Notice {
 		"version": {}, "roots": {},
 		"inboundThreshold": {}, "structureFindingsSeverity": {},
 		"linkSuggestionMinShared": {}, "farFromRootThreshold": {}, "emitExclude": {},
-		"okf": {},
+		"okf": {}, "respectGitignore": {},
 	}
 	var unknown []string
 	for k := range raw {

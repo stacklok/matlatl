@@ -115,6 +115,12 @@ func newRootCommand() *cobra.Command {
 			"conformance rules and report a CONFORMANT/NOT CONFORMANT verdict. When on, check "+
 			"exits 1 on any conformance violation regardless of --strict (health checks still apply). "+
 			"Also settable via .matlatl.yml (okf: true)")
+	root.PersistentFlags().Bool("respect-gitignore", false,
+		"exclude git-ignored files from the corpus: union the repo's effective git ignore set "+
+			"(tracked and nested .gitignore rules, .git/info/exclude, global excludes) with "+
+			".matlatlignore, so local-only working files (HANDOFF.md, scratch notes) are not "+
+			"scanned and local runs match a clean CI checkout. No-op when the scan root is not "+
+			"a git work tree. Also settable via .matlatl.yml (respectGitignore: true)")
 	root.PersistentFlags().StringSliceVar(&roots, "root", nil,
 		"reachability root glob(s), matched against document paths; repeatable and/or "+
 			"comma-separated. Added to the autodetected roots (README.md/index.md/type:index). "+
@@ -242,6 +248,13 @@ func configFromFlags(cmd *cobra.Command, args []string) (application.Config, err
 	// config knobs). The loader validated the value is a bool.
 	flagOKF, _ := flags.GetBool("okf")
 	cfg.OKF = flagOKF || (file.OKF != nil && *file.OKF)
+
+	// Respect-gitignore (ADR 0024). Effective = `--respect-gitignore` flag OR
+	// `.matlatl.yml respectGitignore: true` — the same additive shape as okf:
+	// enabling it can only shrink the corpus, never grow it. The loader
+	// validated the value is a bool.
+	flagGitignore, _ := flags.GetBool("respect-gitignore")
+	cfg.RespectGitignore = flagGitignore || (file.RespectGitignore != nil && *file.RespectGitignore)
 	return cfg, nil
 }
 
@@ -249,7 +262,10 @@ func configFromFlags(cmd *cobra.Command, args []string) (application.Config, err
 // Artifacts are rendered/written by the command layer (e.g. check) after Run, so
 // the pipeline stays emitter-agnostic.
 func buildPipeline(cfg application.Config, logSink io.Writer) *application.Pipeline {
-	scanner := fsscanner.New(fsscanner.Config{OutputDir: cfg.OutputDir})
+	scanner := fsscanner.New(fsscanner.Config{
+		OutputDir:        cfg.OutputDir,
+		RespectGitignore: cfg.RespectGitignore,
+	})
 	parserFac := mdparser.NewFactory(mdparser.Config{})
 	// Wire the external link checker only when --check-external is set so a
 	// default run pays nothing for it and stays deterministic (ADR 0003). The

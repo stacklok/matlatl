@@ -40,7 +40,15 @@ linked docs rather than re-deriving them.
     concept doc; three mode-scoped Error finding kinds gate exit 1 independent of
     `--strict`; verdict is reported SEPARATELY from health and never relaxes it
     (superset gate); parser sets `FrontMatterPresent`/`FrontMatterParsed` bools;
-    findings v8, graph unchanged).
+    findings v8, graph unchanged); 0024 respect-gitignore (opt-in
+    `--respect-gitignore` / `.matlatl.yml respectGitignore: true`, effective =
+    flag OR config; the scanner derives the repo's effective git ignore set by
+    shelling out to `git ls-files --others --ignored --exclude-standard
+    --directory --no-empty-directory -z` — argv-only, `-c alias.ls-files=` +
+    `GIT_CONFIG_NOSYSTEM=1`, 30 s + 64 MiB caps, fail-open with one `gitignore`
+    notice on a non-git root — and prepends it to the `.matlatlignore` lines so
+    the committed file stays the final word; off by default, corpus only
+    shrinks, no schema change).
 - **docs/schemas/** — published JSON Schemas for the three machine artifacts:
   [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 7),
   [findings.schema.json](docs/schemas/findings.schema.json) (findings schema

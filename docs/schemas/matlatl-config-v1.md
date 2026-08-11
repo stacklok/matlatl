@@ -59,6 +59,15 @@ emitExclude:
 # (effective mode = flag OR this key). Must be a boolean; any other type is a
 # hard error.
 okf: false
+
+# Exclude git-ignored files from the corpus (ADR 0024). When true, the repo's
+# effective git ignore set (tracked and nested .gitignore rules,
+# .git/info/exclude, global excludes) is unioned with .matlatlignore, so
+# local-only working files stay out of the corpus and local runs match a clean
+# CI checkout. Off by default. Equivalent to the --respect-gitignore flag
+# (effective mode = flag OR this key). No-op when the scan root is not a git
+# work tree. Must be a boolean; any other type is a hard error.
+respectGitignore: false
 ```
 
 ## Fields
@@ -194,6 +203,26 @@ reports a CONFORMANT / NOT CONFORMANT verdict.
   `--strict`**, and the health gate (broken links etc.) still applies unchanged —
   a superset gate, never a relaxation.
 
+### `respectGitignore` (boolean, optional)
+
+Excludes **git-ignored files** from the corpus
+([ADR 0024](../adr/0024-respect-gitignore.md)). When true, matlatl derives the
+repo's effective git ignore set — tracked and nested `.gitignore` rules,
+`.git/info/exclude`, and the global `core.excludesFile` — by asking git itself,
+and unions it with `.matlatlignore`, so local-only working files
+(`HANDOFF.md`, `CLAUDE.local.md`, scratch notes) are not scanned.
+
+- Default **`false`**. Must be a **boolean**; any other type is a hard error.
+- Equivalent to the `--respect-gitignore` flag — the effective mode is the flag
+  **OR** this key.
+- The committed `.matlatlignore` stays the **final word**: its `!` can
+  re-include a path git ignores; the git set can never re-include a path
+  `.matlatlignore` excludes.
+- A **no-op with one `gitignore` notice** when the scan root is not a git work
+  tree or git is unavailable (fail-open to `.matlatlignore` only).
+- Enabling it can only **shrink** the corpus, never grow it — so `check` only
+  softens, matching a clean CI checkout.
+
 ## What v1 does NOT configure
 
 - **Ignoring files** — `.matlatlignore` remains the sole ignore mechanism. The
@@ -223,6 +252,8 @@ would introduce them.
 | `farFromRootThreshold` negative or wrong type | hard error | 2 (usage) |
 | `emitExclude` wrong type (a bare string, a non-string element) | hard error | 2 (usage) |
 | `emitExclude` matches a reachability root | notice (renders nothing for it; reachability unaffected) | run continues |
+| `okf` / `respectGitignore` wrong type | hard error | 2 (usage) |
+| `respectGitignore: true` on a non-git root | fail-open + `gitignore` notice (`.matlatlignore` only) | run continues |
 | Unknown non-version key (typo / future key) | ignored + notice | run continues |
 | Bad glob in `roots` | notice (matches nothing) | run continues |
 
