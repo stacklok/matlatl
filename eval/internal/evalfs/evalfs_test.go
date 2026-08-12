@@ -74,7 +74,34 @@ func TestRejectInRootSymlinkAndSymlinkRoot(t *testing.T) {
 		t.Skipf("symlink unavailable: %v", err)
 	}
 	if _, err := Root(alias); err == nil {
-		t.Fatal("Root accepted a symlink component")
+		t.Fatal("Root accepted an explicitly symlinked root")
+	}
+}
+
+func TestCanonicalizesSymlinkedParentAlias(t *testing.T) {
+	base := t.TempDir()
+	realParent := filepath.Join(base, "real-parent")
+	child := filepath.Join(realParent, "child")
+	if err := os.MkdirAll(child, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(base, "parent-alias")
+	if err := os.Symlink(realParent, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	got, err := Root(filepath.Join(alias, "child"))
+	if err != nil {
+		t.Fatalf("Root rejected canonicalizable parent alias: %v", err)
+	}
+	want, err := filepath.EvalSymlinks(child)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("Root = %q, want canonical %q", got, want)
+	}
+	if err := WriteExclusive(got, "record.json", []byte("ok")); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -20,7 +20,10 @@ const (
 	MaxFiles = 4096
 )
 
-// Root returns an absolute directory path and rejects every symlink component.
+// Root returns a canonical absolute directory path. The root entry itself must
+// not be a symlink. Symlinks in its absolute parent path are canonicalized
+// before os.OpenRoot (notably macOS /var -> /private/var); symlinks below the
+// resulting caller-controlled root are still rejected by every operation.
 func Root(name string) (string, error) {
 	abs, err := resolveRoot(name)
 	if err != nil {
@@ -44,30 +47,21 @@ func resolveRoot(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("evalfs: resolve root: %w", err)
 	}
-	base := filepath.VolumeName(abs) + string(filepath.Separator)
-	rel, err := filepath.Rel(base, abs)
-	if err != nil {
-		return "", fmt.Errorf("evalfs: relativize root: %w", err)
-	}
-	current := base
-	for _, part := range splitPath(rel) {
-		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
-		if err != nil {
-			return "", fmt.Errorf("evalfs: stat root: %w", err)
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return "", fmt.Errorf("evalfs: symlink rejected in root %q", name)
-		}
-	}
 	info, err := os.Lstat(abs)
 	if err != nil {
 		return "", fmt.Errorf("evalfs: stat root: %w", err)
 	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("evalfs: root must not be a symlink: %q", name)
+	}
 	if !info.IsDir() {
 		return "", fmt.Errorf("evalfs: root is not a directory: %q", name)
 	}
-	return abs, nil
+	canonical, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", fmt.Errorf("evalfs: canonicalize root: %w", err)
+	}
+	return canonical, nil
 }
 
 // Path returns an absolute child path for APIs that require one (the existing
