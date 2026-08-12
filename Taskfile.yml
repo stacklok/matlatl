@@ -80,6 +80,26 @@ tasks:
       - task: llms
       - task: docs
 
+  eval:validate:
+    desc: Validate offline eval v1 tasks and fixtures
+    cmds:
+      - go run ./eval/cmd/eval validate --root eval
+
+  eval:oracle:
+    desc: Check the canonical fixture against its hand-authored oracle
+    cmds:
+      - go run ./eval/cmd/eval oracle --root eval
+
+  eval:smoke:
+    desc: Run the deterministic offline eval smoke path with temporary output
+    cmds:
+      - sh -c 'tmp=$(mktemp -d); trap "rm -rf $tmp" EXIT; go run ./eval/cmd/eval smoke --root eval --out "$tmp"'
+
+  eval:report:
+    desc: Render a validated report to persistent eval/out/report.md
+    cmds:
+      - sh -c 'tmp=$(mktemp -d); trap "rm -rf $tmp" EXIT; go run ./eval/cmd/eval smoke --root eval --out "$tmp/records"; go run ./eval/cmd/eval report --records "$tmp/records" --out eval/out'
+
   check:
     desc: Run the full local verification suite
     cmds:

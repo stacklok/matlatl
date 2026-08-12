@@ -6,6 +6,10 @@ testdata/
 **/testdata/
 internal/infrastructure/emit/testdata/
 
+# The offline evaluation harness has private gold, generated fixtures, and
+# task-package instructions that must not enter this repository's dogfood graph.
+eval/
+
 # The demo corpus (demo/corpus/) is a deliberately broken/orphaned sample used
 # to show off matlatl's findings on stage; exclude the whole demo/ tree so the
 # repo's own strict doc-gate sees only the real docs.

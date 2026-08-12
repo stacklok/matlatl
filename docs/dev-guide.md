@@ -27,6 +27,7 @@ internal/
     mcpserver/           the MCP server (mark3labs/mcp-go, quarantined here)
   platform/              version, exit codes
 docs/                    architecture, ADRs, user/dev guides, schemas
+eval/                    offline Go-only evaluation scaffold (mock; no model/network)
 testdata/                fixture corpora + golden artifacts
 ```
 
@@ -73,7 +74,18 @@ $ task test-integration   # golden + integration (-tags=integration)
 $ task cover              # coverage (includes integration-tagged code)
 $ task lint               # golangci-lint
 $ task check              # fmt + vet + lint + test (run before pushing)
+$ task eval:validate      # validate offline eval v1 tasks and fixtures
+$ task eval:oracle        # run real pipeline and check hand-authored oracle
+$ task eval:smoke         # mock-agent smoke with temporary append-only output
+$ task eval:report        # smoke + deterministic report in temporary output
 ```
+
+The `eval/` scaffold is standard-library-only at its own command/harness layer,
+runs without credentials or network/model tools, and is excluded from dogfood.
+It currently validates mechanics only: Stage A, Inspect/Claude, Nimbus, and paid
+or model-backed execution remain unbuilt. See `eval/README.md` for commands and
+layout. Its agent-visible package allowlist contains only instruction and corpus;
+that cooperative data boundary is not hostile-process sandboxing.
 
 ### The checks every change must pass
 

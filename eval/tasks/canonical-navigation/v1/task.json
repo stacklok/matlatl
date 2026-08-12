@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "kind": "navigation",
+  "id": "canonical-navigation",
+  "version": "v1",
+  "instruction": "You are given a corpus of markdown documentation. Search the provided corpus and answer: which single file documents the fact whose unique marker is [[flange-sprocket]]? Answer with the repo-relative path of that file and nothing else.",
+  "corpusRef": "canonical-graph/v1",
+  "answerFormat": "path",
+  "goldRef": "canonical-navigation/v1"
+}

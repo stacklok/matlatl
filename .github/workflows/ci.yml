@@ -82,6 +82,25 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  eval-offline:
+    name: eval scaffold (offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+      # Go-only scaffold: no credentials, network calls, model SDKs, or agent tools.
+      # All generated records and reports stay in runner-temporary directories.
+      - name: Validate, oracle, smoke, and report
+        run: |
+          go test -race -count=1 ./eval/...
+          go run ./eval/cmd/eval validate --root eval
+          go run ./eval/cmd/eval oracle --root eval
+          go run ./eval/cmd/eval smoke --root eval --out "${{ runner.temp }}/eval-records"
+          go run ./eval/cmd/eval report --records "${{ runner.temp }}/eval-records" --out "${{ runner.temp }}/eval-report"
+
   lint:
     name: lint
     runs-on: ubuntu-latest

@@ -18,3 +18,4 @@ coverage.*
 
 # matlatl's own generated output
 /out/
+/eval/out/

@@ -5,12 +5,17 @@ matlatl: orphan-intentional
 
 # Agent-outcome evaluation harness (design)
 
-> Status: **proposed design for [#17](https://github.com/stacklok/matlatl/issues/17), not yet run.**
-> This is the design note; no harness code exists yet. It settles the decisions
-> #17 leaves open (task set, corpora, conditions, agent harness, metrics, home,
-> decision rules) with rationale and alternatives. The pre-outcome contract
-> skeleton lives in [eval-preregistration.md](eval-preregistration.md); the
-> hermetic calibration corpus is specified in
+> Status: **design for [#17](https://github.com/stacklok/matlatl/issues/17); not yet run.**
+> The Go-only offline scaffold from issue #32 now exists under
+> `eval/README.md`: strict v1 manifests, a deterministic mock,
+> private exact-path scoring, one canonical graph oracle, append-only records,
+> and deterministic reporting. It makes no model or network calls. **Stage A,
+> Inspect/Claude integration (issue #36), real-corpus runs, and the synthetic
+> Nimbus calibration corpus remain unbuilt.** This note still describes those
+> future stages; scaffold availability does not make the outcome study complete.
+> The pre-outcome contract skeleton lives in
+> [eval-preregistration.md](eval-preregistration.md); the future hermetic
+> calibration corpus is specified in
 > [nimbus-eval-corpus.md](nimbus-eval-corpus.md); and the sibling correctness,
 > signal-quality, and focused one-surface workstream is specified in
 > [heuristic-evaluation.md](heuristic-evaluation.md). That workstream does not
