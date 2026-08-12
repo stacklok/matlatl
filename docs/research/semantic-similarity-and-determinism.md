@@ -189,22 +189,33 @@ plain TF-IDF tier *above* an LSA tier in priority.
 There is no universal cosine threshold that means "these should link." The
 research could not surface a quantified, transferable cutoff, precision/recall
 curve, or false-positive-control recipe for heading-level document similarity.
-The implication for matlatl is concrete:
+The implication for matlatl is concrete. The binding evaluation treatment —
+hidden-link eligibility, applicable baselines, development/holdout separation,
+blind false-positive review, uncertainty, and threshold tuning — is specified in
+[heuristic-evaluation.md](heuristic-evaluation.md):
 
-- **Derive the threshold empirically on the dogfood corpus**, and expose it as a
-  tunable knob (mirroring the config-only `linkSuggestionMinShared` floor in
-  [ADR 0013](../adr/0013-topology-link-prediction.md)), with a conservative
-  default chosen for precision.
+- **Tune on development data only.** Derive candidate thresholds on a frozen
+  development split and expose the selected value as a tunable knob (mirroring
+  the config-only `linkSuggestionMinShared` floor in
+  [ADR 0013](../adr/0013-topology-link-prediction.md)). Freeze the candidate
+  universe, threshold, K values, and scoring manifest before opening holdout
+  labels; never retune from held-out errors.
 - **Default to precision over recall.** The failure mode that destroys trust is
   drowning the user in weak "these are vaguely similar" suggestions. Cap the
   output (as `MaxSuggestedLinks` already does), rank by similarity DESC, and
-  surface only a short top-N — matlatl's house style for the existing
-  experimental signals.
-- **Evaluate by link recovery.** The standard offline evaluation for
-  related-document detection is to hide a fraction of real links and measure how
-  many the method recovers (the "see also" / link-recovery experiment shape).
-  matlatl's own repo plus a handful of public docs corpora are a reasonable test
-  bed.
+  surface only a short top-N. Compare against the registered random,
+  alphabetical, degree, common-neighbour, and topology-only baselines wherever
+  applicable rather than treating the current predictor as the sole baseline.
+- **Evaluate by link recovery, but preserve the proxy caveat.** Hide only links
+  that satisfy the frozen eligibility rules and measure recovery on development
+  and then holdout data. Existing links can be historical accidents and absent
+  links are not true negatives, so recovery alone cannot establish should-link
+  quality.
+- **Review false positives and actionability.** Pair recovery with blind
+  multi-reviewer labels for hidden positives, high-ranked unlinked pairs, and
+  sampled low-ranked controls. Retain uncertainty and adjudication, and report
+  noise/actionability alongside Precision@K, Recall@K, MRR, and nDCG. Tune only
+  on development data; score the sealed holdout once under the frozen contract.
 
 ---
 

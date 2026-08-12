@@ -11,7 +11,11 @@ matlatl: orphan-intentional
 > any measured run** and frozen before the first one; after freeze, deviations
 > are logged in `eval/results.md`, not edited here. Every quantitative
 > threshold below is marked **PENDING MAINTAINER FREEZE** until the maintainer
-> signs the freeze checklist (§12).
+> signs the freeze checklist (§12). **Scope: this contract governs Stage A
+> only.** Correctness, noise, and focused one-surface heuristic experiments use
+> the separate freeze contracts in
+> [heuristic-evaluation.md](heuristic-evaluation.md); they cannot enter RQ1–RQ4
+> or trigger Stage B without an explicit amendment to this contract.
 >
 > **Terminology discipline.** This contract bans the bare words *material* and
 > *signal*. Every effect statement must name its metric, direction, threshold,
@@ -291,6 +295,8 @@ contract is frozen; the first measured run may then start.**
       gold, and mutation hashes recorded in §10.
 - [ ] Arms, pointer text, and native-context normalization verified byte-identical
       where required (§2).
+- [ ] No unregistered heuristic arms or endpoints enter Stage A; no heuristic
+      result can trigger Stage B absent an explicit amendment.
 - [ ] Randomization seed and blocked assignment computed and recorded (§4).
 - [ ] Per-shape run limits frozen (§5).
 - [ ] Rubric frozen; judge model pinned; frozen stratified audit-subset size

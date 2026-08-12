@@ -11,7 +11,10 @@ matlatl: orphan-intentional
 > decision rules) with rationale and alternatives. The pre-outcome contract
 > skeleton lives in [eval-preregistration.md](eval-preregistration.md); the
 > hermetic calibration corpus is specified in
-> [nimbus-eval-corpus.md](nimbus-eval-corpus.md).
+> [nimbus-eval-corpus.md](nimbus-eval-corpus.md); and the sibling correctness,
+> signal-quality, and focused one-surface workstream is specified in
+> [heuristic-evaluation.md](heuristic-evaluation.md). That workstream does not
+> change Stage A or make #17 completion depend on every heuristic experiment.
 >
 > **Amended 2026-08 (methodology review).** Corrects the literature framing
 > (§0), re-specifies Stage A as four pointer-normalized arms (§3), pins the
@@ -336,10 +339,14 @@ not the individual run, is the inferential unit (§5.3).
   [semantic-similarity-and-determinism.md](semantic-similarity-and-determinism.md)
   lives in `eval/link-recovery/` as a **deterministic, agent-free, token-free**
   offline eval (hide real links, measure recovery — validates `suggested-link`,
-  [ADR 0013](../adr/0013-topology-link-prediction.md)). It shares corpora and
+  [ADR 0013](../adr/0013-topology-link-prediction.md)). The broader correctness,
+  signal-quality, and focused one-surface contract is
+  [heuristic-evaluation.md](heuristic-evaluation.md). It shares corpora and
   tooling but is a *different claim* (offline signal quality, not agent
   outcome), so it stays out of the agent-outcome endpoints and out of the
-  pre-registration's decision rules. It can run first as a cheap warm-up.
+  pre-registration's decision rules. It can run first as a cheap warm-up. The
+  heuristic workstream does not make #17 completion depend on completing every
+  heuristic experiment.
 - **"Done" for #17:** one credible directional result on 2 real corpora (+ the
   matlatl smoke corpus), Stage A only, with a `results.md` verdict feeding the
   #25 roadmap. **Not** a permanent CI benchmark.

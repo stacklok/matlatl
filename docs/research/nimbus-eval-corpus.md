@@ -8,11 +8,12 @@ matlatl: orphan-intentional
 > Status: **specification, not yet built.** Nimbus is a future, separate
 > 40–60-document synthetic corpus for the agent-outcome harness
 > ([eval-harness-design.md](eval-harness-design.md),
-> [eval-preregistration.md](eval-preregistration.md), issue
-> [#17](https://github.com/stacklok/matlatl/issues/17)). It **calibrates
-> mechanics and internal validity** — it proves the harness detects effects it
-> plants and stays flat where it plants none. It **cannot establish external
-> validity**: nothing measured on Nimbus generalizes to real documentation.
+> [eval-preregistration.md](eval-preregistration.md), and the sibling
+> [heuristic-evaluation.md](heuristic-evaluation.md), issue
+> [#17](https://github.com/stacklok/matlatl/issues/17)). It supports
+> correctness fixtures, seeded mutations, and harness mechanics only — it
+> checks whether the harness detects differences planted by construction and
+> stays flat where it plants none. It **cannot establish external validity**: nothing measured on Nimbus generalizes to real documentation.
 > The frozen real corpora remain the outcome set; matlatl itself is smoke only.
 >
 > **Provenance — Nimbus is not `demo/corpus/nimbus-docs`.** The nine-doc demo
@@ -69,17 +70,18 @@ and alongside the real-corpus runs:
   - **a controlled weak or disconnected component** where useful, so
     `hopsFromRoot = -1` (unreachable) and reachability-indeterminate cases
     exist by construction and are enumerable,
-  - **known hubs and authorities** (high in-/out-degree docs), so
-    PageRank/HITS ranking and `critical-docs` output can be checked against
-    constructed expectations,
-  - **a known number of articulation points and bridges** (verifiable against
-    matlatl's own critical-path output),
+  - **known hubs and authorities** (high in-/out-degree docs), so PageRank and
+    HITS rankings can be checked against constructed expectations,
+  - **a known number of articulation points and bridges**, derived from the
+    construction manifest and checked by hand or an independent graph oracle,
+    so `critical-docs` can be checked independently of the ranking expectations
+    above — never copy either expectation from prior matlatl output,
   - **a deliberate minority of orphans, under-linked docs, and dead ends**
     (known, enumerable, and distinct from the demo corpus's accidental
     breakage),
-  - **similar vocabulary among both linked and unlinked doc pairs**, so the
-    `suggested-link` lexical-scent and topology signals are tested against
-    both true-positive and look-alike-negative pairs,
+  - **similar vocabulary among both linked and unlinked doc pairs**, so future
+    lexical baselines and the shipped topology-only `suggested-link` predictor
+    can be compared on true-positive and look-alike-negative pairs,
   - **grep-easy unique facts**: rare, distinctive strings planted in exactly
     one doc each, retrievable with a single `grep` — the control-shape
     substrate (§7),
@@ -97,6 +99,10 @@ and alongside the real-corpus runs:
   by a seeded, checked-in generator; regenerating from the same seed is
   byte-identical. Hand-written content is simply frozen. Either way, the
   corpus's bytes are reproducible from the repo.
+- **Independent expectations.** Every expected graph value comes from the
+  construction manifest, hand enumeration, or a frozen independent oracle.
+  Prior or current matlatl output is never used as matlatl's own oracle;
+  comparing it with the expectation is the test.
 
 ## 4. Task shapes
 
@@ -124,7 +130,12 @@ function of the mutation seed and is logged in the run record:
 - **staleness-inject:** rewrite a section reference to a renamed heading → a
   known broken-anchor finding.
 - **nav-degrade:** remove a hub doc's outbound links → a known navigability
-  regression (measurable in compactness/stratum).
+  change (measurable in compactness/stratum).
+- **redundant-path-add/remove (future):** add or remove an alternate route while
+  preserving endpoints → known articulation, bridge, and shortest-path deltas.
+- **hidden-link (future):** remove an eligible real edge while retaining its
+  source/target labels in the private manifest → a known link-recovery positive;
+  look-alike unlinked pairs remain explicit negative/uncertain controls.
 
 Because the mutations are enumerated, the harness's expected findings are
 computable *before* any run: that is what makes "did the harness detect what
@@ -145,27 +156,31 @@ we planted?" a deterministic question.
 
 Every harness surface and every task shape has at least one representative
 Nimbus task whose expected calibration behavior is known by construction. The
-matrix below is the coverage contract: at freeze, each row exists as at least
-one task, and the expected behavior column is what the harness *must* show for
-calibration to pass.
+matrix below is a **mechanics and harness-sensitivity contract**, not evidence
+that a surface is useful on real documentation. Any directional difference is
+created deliberately by the task construction; detecting it shows only that the
+harness can detect its planted treatment. At freeze, each row exists as at least
+one task, and the expected behavior column is what the harness must show for
+that calibration check to pass.
 
-| Treatment / surface | Representative task (feature) | Expected relevant arm | Scorer | Expected calibration behavior |
+| Treatment / surface | Representative task (feature) | Expected relevant arm | Scorer | Planted mechanics / sensitivity check |
 | --- | --- | --- | --- | --- |
-| **`llms.txt`** (catalog + backlinks) | find-the-doc navigation to a mid-depth doc ("which file documents X?") | `+all` | exact repo-relative path | `+all` > `baseline` success on navigation tasks; no success change on grep controls |
-| **`trails.json`** (reading-order trails) | comprehension task whose answer requires synthesizing facts distributed across adjacent trail docs | `+trails` (vs `pointer-only`) | LLM-judge vs gold (strict protocol) | `+trails` ≥ `pointer-only` on synthesis tasks; token cost on single-fact tasks does not fall (over-reading is measurable if it occurs) |
-| **Pointer-only instruction** | any navigation or comprehension task | `pointer-only` (vs `baseline`) | per shape | approximately flat success vs `baseline`: the pointer text alone is not an active ingredient; a material `pointer-only` effect invalidates the Nimbus calibration of every pointer-carrying arm |
-| **MCP `what-links-to` / `path-between`** | navigation task whose gold path crosses a cycle/SCC or a disconnected component (`hopsFromRoot = -1` doc) | `+all` | exact repo-relative path | `+all` resolves cross-component and in-cycle questions correctly; no attempt classifies as `mcp-failure` under a healthy `serve` |
-| **MCP `get-section`** | section-targeted QA: answer is inside one named heading's section of a long doc | `+all` | LLM-judge vs gold | `+all` answers section questions with fewer tokens than full-doc reading; success flat or better vs `baseline` |
-| **MCP `corpus-summary`** | corpus-level orientation question ("which docs are the most load-bearing here?") | `+all` | LLM-judge vs gold (gold = constructed hubs/articulation points) | `+all` names the constructed hubs/articulation points; `baseline` guesses or over-reads |
-| **MCP `suggest-links`** | doc-maintenance adjacent: choose the doc pair topology predicts (the planted `suggested-link` case) | `+all` | programmatic vs the constructed `suggested-link` pair | `+all` identifies the planted pair; the look-alike unlinked pair with similar vocabulary is a known false-positive risk and is scored separately |
-| **MCP `critical-docs`** | "which docs are articulation points / bridges?" | `+all` | exact set match vs constructed topology | `+all` matches the constructed articulation points/bridges exactly |
-| **findings / `fix-prompt`** | doc-maintenance tasks over the §5 mutations (link-break, orphan-create, staleness-inject, nav-degrade) | `+all` (and any arm carrying findings) | programmatic: targeted finding resolved, `matlatl check` exit 0, no collateral findings | mutation tasks are resolved in the findings-carrying arms; the unmutated reserved break sites (§3) are repaired only when targeted, never as collateral |
-| **Direct grep (control)** | grep-favorable tasks over the planted unique facts | none — control | exact string match | **grep controls do not benefit from artifacts**: success flat across all arms; any token-cost rise in artifact arms on these tasks is the planted generated-context harm signature and must be visible as such |
+| **`llms.txt`** (catalog + backlinks) | find-the-doc navigation to a mid-depth doc ("which file documents X?") | `+all` | exact repo-relative path | A deliberately artifact-addressable navigation task makes `+all` > `baseline`; a grep control with no planted artifact advantage stays flat. |
+| **`trails.json`** (reading-order trails) | comprehension task whose answer requires synthesizing facts distributed across adjacent trail docs | `+trails` (vs `pointer-only`) | LLM-judge vs gold (strict protocol) | A task constructed around the trail makes `+trails` ≥ `pointer-only`; the instrumentation also records any over-reading on single-fact tasks. |
+| **Pointer-only instruction** | any navigation or comprehension task | `pointer-only` (vs `baseline`) | per shape | A task with no planted pointer advantage stays approximately flat; a pointer effect invalidates calibration of pointer-carrying arms. |
+| **MCP `what-links-to` / `path-between`** | navigation tasks whose gold path crosses a cycle/SCC, plus a disconnected pair whose gold result is “no path” | `+all` | exact path or exact no-path result | The planted reachable path and unreachable pair are returned correctly, and a healthy `serve` produces no `mcp-failure`. |
+| **MCP `get-section`** | anchor-resolution task: identify the title, level, and section node for a known `doc#slug` | `+all` | exact structured metadata | A task constructed for section lookup exercises the tool and token instrumentation without claiming that `get-section` returns the section body. |
+| **MCP `corpus-summary`** | corpus-level orientation question ("which docs are the most load-bearing here?") | `+all` | LLM-judge vs gold (gold = constructed hubs/articulation points) | The arm can recover the independently constructed hubs/articulation points through the surface. |
+| **MCP `suggest-links`** | doc-maintenance adjacent: choose the doc pair topology predicts (the planted `suggested-link` case) | `+all` | programmatic vs the constructed `suggested-link` pair | The planted pair is exposed and the look-alike unlinked pair is scored separately to exercise false-positive accounting. |
+| **MCP `critical-docs`** | "which docs are articulation points / bridges?" | `+all` | exact set match vs constructed topology | The surface exactly matches the independently constructed articulation-point/bridge sets. |
+| **findings / `fix-prompt`** | doc-maintenance tasks over the §5 mutations (link-break, orphan-create, staleness-inject, nav-degrade) | separate focused `+findings` or `+fix-prompt` condition, outside Stage A | programmatic: targeted finding resolved, `matlatl check` exit 0, no collateral findings | A planted mutation is resolved when its finding or fix prompt is supplied; reserved break sites (§3) change only when targeted. This row calibrates the future focused condition, not `+all`. |
+| **Direct grep (control)** | grep-favorable tasks over the planted unique facts | none — control | exact string match | With no planted artifact advantage, success stays flat; instrumentation must expose any added token cost in artifact arms. |
 
-The **expected relevant arm** column names the arm in which the surface is
-present and should help; surfaces absent from an arm (e.g. MCP tools in
-`+trails`, trails in `pointer-only`) must show no corresponding effect there —
-that flatness is itself a calibration check.
+The **expected relevant arm** column names where the surface is present; it does
+not predict real-world benefit. Surfaces absent from an arm (e.g. MCP tools in
+`+trails`, trails in `pointer-only`) must show no planted surface-specific
+response there — that flatness is a mechanics check. Passing any row establishes
+harness sensitivity only, never signal quality or external usefulness.
 
 Coverage is verified at freeze time by running `matlatl emit` on the base
 corpus and diffing the findings against the constructed-expectation manifest,
@@ -205,7 +220,9 @@ least one task, and every task maps to exactly one row.
 
 - [ ] 40–60 documents written; register reviewed as natural by one reviewer.
 - [ ] Base adjacency list frozen; topology properties (depth, articulation
-      points, bridges, density) verified against `matlatl emit` output.
+      points, bridges, density) derived from the construction manifest and
+      verified by hand or an independent oracle, then compared with `matlatl
+      emit` output.
 - [ ] Generator (if any) checked in; regeneration from seed verified
       byte-identical.
 - [ ] Mutation functions implemented and enumerated; expected-findings
