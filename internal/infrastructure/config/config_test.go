@@ -391,6 +391,46 @@ func TestLoad_OKFNotFlaggedUnknown(t *testing.T) {
 	}
 }
 
+// --- ADR 0024: respectGitignore ---
+
+func TestLoad_RespectGitignore(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\nrespectGitignore: true\n")))
+	if err != nil {
+		t.Fatalf("valid respectGitignore should load, got %v", err)
+	}
+	if file.RespectGitignore == nil || *file.RespectGitignore != true {
+		t.Errorf("respectGitignore = %v, want pointer to true", file.RespectGitignore)
+	}
+}
+
+func TestLoad_RespectGitignoreAbsentIsNil(t *testing.T) {
+	file, _, err := Load(rootWithBytes(t, []byte("version: 1\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if file.RespectGitignore != nil {
+		t.Errorf("absent respectGitignore should be nil, got %v", *file.RespectGitignore)
+	}
+}
+
+func TestLoad_RespectGitignoreWrongType(t *testing.T) {
+	if _, _, err := Load(rootWithBytes(t, []byte("respectGitignore: \"yes\"\n"))); err == nil {
+		t.Fatal("non-boolean respectGitignore should be a HARD error")
+	}
+}
+
+func TestLoad_RespectGitignoreNotFlaggedUnknown(t *testing.T) {
+	_, notices, err := Load(rootWithBytes(t, []byte("respectGitignore: true\n")))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for _, n := range notices {
+		if strings.Contains(n.Detail, "respectGitignore") {
+			t.Errorf("respectGitignore flagged as unknown key: %q", n.Detail)
+		}
+	}
+}
+
 func TestLoad_StructureFindingsSeverity(t *testing.T) {
 	for _, v := range []string{"info", "warning"} {
 		file, _, err := Load(rootWithBytes(t, []byte("structureFindingsSeverity: "+v+"\n")))

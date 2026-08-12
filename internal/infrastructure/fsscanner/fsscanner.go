@@ -106,6 +106,12 @@ type Config struct {
 	// OutputDir, when non-empty, is excluded from the walk (so a re-scan does
 	// not ingest its own artifacts).
 	OutputDir string
+	// RespectGitignore unions the repo's effective git-ignore set (tracked and
+	// nested .gitignore rules, .git/info/exclude, global excludes) with
+	// .matlatlignore so git-ignored working files stay out of the corpus
+	// (ADR 0024). Off by default; a no-op (with a notice) when the root is not
+	// a git work tree or git is unavailable.
+	RespectGitignore bool
 }
 
 // Scanner discovers markdown files under a root.
@@ -149,14 +155,27 @@ func (s *Scanner) Scan(ctx context.Context, root string) (application.ScanResult
 		return application.ScanResult{}, fmt.Errorf("fsscanner: root %q is not a directory", root)
 	}
 
-	matcher := s.loadIgnore(realRoot)
-
 	var (
 		files    []application.ScannedFile
 		notices  []application.Notice
 		absOut   string
 		exceeded bool
 	)
+
+	// ADR 0024: opt-in union with the repo's git-ignore set. The collected
+	// paths become literal ignore lines; .matlatlignore lines are appended
+	// AFTER them so the committed, repo-owned file stays the final word under
+	// gitignore last-match-wins semantics (its '!' can re-include a path git
+	// ignores; git's set can never re-include a path .matlatlignore excludes).
+	var gitLines []string
+	if s.cfg.RespectGitignore {
+		paths, notice := collectGitIgnored(ctx, realRoot)
+		if notice != nil {
+			notices = append(notices, *notice)
+		}
+		gitLines = gitIgnoreLines(paths)
+	}
+	matcher := s.loadIgnore(realRoot, gitLines)
 	if s.cfg.OutputDir != "" {
 		if abs, aerr := filepath.Abs(s.cfg.OutputDir); aerr == nil {
 			// Canonicalize so a symlinked output dir is still recognized and
@@ -316,9 +335,13 @@ func (s *Scanner) Scan(ctx context.Context, root string) (application.ScanResult
 // errStopWalk is a sentinel used to halt WalkDir at the file-count cap.
 var errStopWalk = errors.New("fsscanner: max files reached")
 
-// loadIgnore compiles root/.matlatlignore if present, returning nil when
-// absent, unreadable, or oversized (none of these are an error — a repo without
-// a usable ignore file simply has no ignore rules).
+// loadIgnore compiles the effective ignore matcher: the git-derived literal
+// lines (ADR 0024; empty when --respect-gitignore is off or collection failed)
+// followed by root/.matlatlignore's lines. Ordering is the union semantics:
+// gitignore last-match-wins means the committed .matlatlignore is the FINAL
+// word — its '!' can re-include a path git ignores, while the git set can never
+// re-include a path .matlatlignore excludes. It returns nil when neither source
+// yields rules (a repo without ignore rules simply has no ignore matcher).
 //
 // Security (ADR 0003): the ignore file is read BEFORE the WalkDir loop, so
 // neither the per-file MaxFileSizeBytes guard (invariant 3) nor the walk's
@@ -338,26 +361,40 @@ var errStopWalk = errors.New("fsscanner: max files reached")
 // the dependency's source claims negation is unimplemented; it is implemented in
 // MatchesPathHow as of the pinned version, and the test guards against a
 // regression if the dep is ever swapped.)
-func (s *Scanner) loadIgnore(realRoot string) *ignore.GitIgnore {
+func (s *Scanner) loadIgnore(realRoot string, gitLines []string) *ignore.GitIgnore {
 	p := filepath.Join(realRoot, ignoreFileName)
 	fi, err := os.Lstat(p)
 	if err != nil || !fi.Mode().IsRegular() {
-		// missing / symlink / not a regular file: no ignore rules. Lstat (not
+		// missing / symlink / not a regular file: no file rules. Lstat (not
 		// Stat) means a symlink reports its own mode (ModeSymlink, not regular),
 		// so it falls into this branch and is not followed (ADR 0003 invariant 1).
-		return nil
+		if len(gitLines) == 0 {
+			return nil
+		}
+		return ignore.CompileIgnoreLines(gitLines...)
 	}
 	if fi.Size() > maxIgnoreBytes {
-		return nil // oversized: skip gracefully rather than read it into memory.
+		// oversized: skip the file gracefully rather than read it into memory;
+		// the git-derived lines still apply.
+		if len(gitLines) == 0 {
+			return nil
+		}
+		return ignore.CompileIgnoreLines(gitLines...)
 	}
 	b, err := os.ReadFile(p) //nolint:gosec // size-capped above (ADR 0003 invariant 3)
 	if err != nil {
-		return nil
+		if len(gitLines) == 0 {
+			return nil
+		}
+		return ignore.CompileIgnoreLines(gitLines...)
 	}
 	lines := strings.Split(string(b), "\n")
 	for i, ln := range lines {
 		lines[i] = strings.TrimSuffix(ln, "\r")
 	}
+	// git lines FIRST, file lines LAST (last match wins → .matlatlignore is the
+	// final word, ADR 0024).
+	lines = append(gitLines, lines...)
 	return ignore.CompileIgnoreLines(lines...)
 }
 

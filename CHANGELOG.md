@@ -8,6 +8,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`--respect-gitignore` / `.matlatl.yml respectGitignore` ([ADR 0024](docs/adr/0024-respect-gitignore.md)).**
+  An opt-in flag (or config key; effective = flag OR config) that excludes
+  **git-ignored files** from the corpus: matlatl asks git itself for the
+  effective ignore set (tracked and nested `.gitignore` rules,
+  `.git/info/exclude`, global excludes) and unions it with `.matlatlignore`, so
+  local-only working files (`HANDOFF.md`, `CLAUDE.local.md`, scratch notes) are
+  not scanned and a local `check --strict` matches a clean CI checkout. The
+  committed `.matlatlignore` stays the final word (its `!` can re-include a
+  path git ignores). No-op with one `gitignore` notice on a non-git root;
+  enabling it can only shrink the corpus, never grow it. Off by default; no
+  schema or artifact-shape change.
+
 - **OKF v0.1 conformance mode ([ADR 0023](docs/adr/0023-okf-conformance-mode.md)).**
   An opt-in `--okf` flag (and `.matlatl.yml okf: true` key) checks a repo against
   Google's [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog)

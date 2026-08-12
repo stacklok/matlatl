@@ -58,6 +58,11 @@ const (
 	// the presence of a `.git` entry inside it; ADR 0017). The scan root's own
 	// `.git` is exempt, so this fires only for nested working trees below the root.
 	NoticeSkippedNestedRepo
+	// NoticeGitignore reports a tolerated observation from collecting the repo's
+	// git-ignore set under --respect-gitignore (ADR 0024): git missing, the root
+	// not being a git work tree, or a git failure. The feature fail-opens (the
+	// scan proceeds with .matlatlignore only), so this never fails the run.
+	NoticeGitignore
 )
 
 // String returns a short identifier for the notice kind.
@@ -79,6 +84,8 @@ func (k NoticeKind) String() string {
 		return "config"
 	case NoticeSkippedNestedRepo:
 		return "skipped-nested-repo"
+	case NoticeGitignore:
+		return "gitignore"
 	default:
 		return "unknown"
 	}

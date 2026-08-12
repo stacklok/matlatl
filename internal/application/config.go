@@ -98,6 +98,13 @@ type Config struct {
 	// the health gate (broken links etc.) is unchanged — the verdict is reported
 	// separately and never relaxes it (superset gate).
 	OKF bool
+	// RespectGitignore unions the repo's effective git-ignore set (tracked and
+	// nested .gitignore rules, .git/info/exclude, global excludes) with
+	// .matlatlignore so git-ignored working files stay out of the corpus
+	// (ADR 0024). Off by default; the effective value is the
+	// `--respect-gitignore` flag OR `.matlatl.yml respectGitignore`. A no-op
+	// (with a notice) when the scan root is not a git work tree.
+	RespectGitignore bool
 }
 
 // DefaultConfig returns a Config with sane defaults: scan the current

@@ -474,6 +474,37 @@ normal repo never skips itself. To scan a submodule, point matlatl **directly at
 it** — it then becomes the (exempt) root
 ([ADR 0017](adr/0017-nested-repo-scan-boundary.md)).
 
+### Excluding git-ignored files (`--respect-gitignore`)
+
+matlatl scans the **working tree**, so local-only, gitignored markdown —
+`HANDOFF.md`, `CLAUDE.local.md`, agent scratch notes — normally lands in the
+corpus and is flagged as orphans, which makes a local `check --strict` disagree
+with a clean CI checkout and bakes phantom orphan counts into a regenerated
+`llms.txt`. Opt out with the flag or the config key (effective = flag OR
+config):
+
+```console
+matlatl check . --strict --respect-gitignore
+```
+
+```yaml
+# .matlatl.yml
+version: 1
+respectGitignore: true
+```
+
+matlatl then asks **git itself** for the effective ignore set — tracked and
+nested `.gitignore` rules, `.git/info/exclude`, and your global excludes — and
+unions it with `.matlatlignore`, so nested negations and precedence match
+`git check-ignore` exactly. The committed `.matlatlignore` stays the **final
+word**: its `!` can re-include a path git ignores (so CI, which lacks your
+local gitignore, still sees the file), while the git set can never re-include a
+path `.matlatlignore` excludes. On a root that is not a git work tree (or when
+git is unavailable) the feature is a no-op with one `gitignore` notice — the
+scan falls back to `.matlatlignore` only. Off by default; enabling it can only
+shrink the corpus, never grow it
+([ADR 0024](adr/0024-respect-gitignore.md)).
+
 ## Declaring extra roots (`.matlatl.yml`)
 
 For roots you want **committed and durable** — not retyped on every command line
