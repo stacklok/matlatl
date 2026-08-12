@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.0.8] - 2026-08-12
+
 ### Added
 
 - **`--respect-gitignore` / `.matlatl.yml respectGitignore` ([ADR 0024](docs/adr/0024-respect-gitignore.md)).**
@@ -259,5 +261,6 @@ Initial release. Feature-complete across phases P0–P6.
 - **Concurrency** — bounded fan-out parsing with a deterministic single-threaded
   merge (byte-identical output at any worker count).
 
-[Unreleased]: https://github.com/stacklok/matlatl/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/stacklok/matlatl/compare/v0.0.8...HEAD
+[v0.0.8]: https://github.com/stacklok/matlatl/compare/v0.0.7...v0.0.8
 [0.1.0]: https://github.com/stacklok/matlatl/releases/tag/v0.1.0
