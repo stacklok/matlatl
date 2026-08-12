@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "family": "knowledge-gap",
+  "cases": [
+    {"id":"eligible-wcc-only","graph":{"documents":["A.md","B.md","C.md","D.md","lonely.md"],"edges":[["A.md","B.md"],["D.md","C.md"]]},"minComponentSize":2,"want":[["A.md","C.md"]],"truncated":false},
+    {"id":"lexicographic-tied-representatives","graph":{"documents":["A.md","B.md","C.md","D.md","E.md","F.md"],"edges":[["A.md","B.md"],["C.md","D.md"],["E.md","F.md"]]},"minComponentSize":2,"want":[["A.md","C.md"],["A.md","E.md"],["C.md","E.md"]],"truncated":false},
+    {"id":"minimum-size-boundary","graph":{"documents":["A.md","B.md","C.md","D.md","E.md","F.md","G.md","H.md"],"edges":[["A.md","B.md"],["B.md","C.md"],["D.md","E.md"],["E.md","F.md"],["G.md","H.md"]]},"minComponentSize":3,"want":[["A.md","D.md"]],"truncated":false},
+    {"id":"zero-option-floors-at-two","graph":{"documents":["A.md","B.md","C.md","D.md","solo.md"],"edges":[["A.md","B.md"],["C.md","D.md"]]},"minComponentSize":0,"want":[["A.md","C.md"]],"truncated":false}
+  ]
+}

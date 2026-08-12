@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "family": "information-scent",
+  "numericTolerance": 0.000001,
+  "cases": [
+    {
+      "id": "boundary-below",
+      "documents": [{"path":"A.md","title":"Source","headings":[]},{"path":"B.md","title":"alpha zeta","headings":[]}],
+      "links": [{"source":"A.md","target":"B.md","section":"","line":2,"anchor":"ALPHA, beta beta and gamma delta epsilon"}],
+      "want": [{"source":"A.md","target":"B.md","line":2,"anchor":"ALPHA, beta beta and gamma delta epsilon","score":0.16666666666666666,"suggestion":"alpha zeta"}],
+      "tokenProof": [{"text":"ALPHA, beta beta and gamma delta epsilon","tokens":["alpha","beta","delta","epsilon","gamma"]},{"text":"alpha zeta","tokens":["alpha","zeta"]}]
+    },
+    {
+      "id": "boundary-exact",
+      "documents": [{"path":"A.md","title":"Source","headings":[]},{"path":"B.md","title":"alpha","headings":[]}],
+      "links": [{"source":"A.md","target":"B.md","section":"","line":2,"anchor":"alpha beta gamma delta epsilon"}],
+      "want": [],
+      "tokenProof": [{"text":"alpha beta gamma delta epsilon","tokens":["alpha","beta","delta","epsilon","gamma"]},{"text":"alpha","tokens":["alpha"]}]
+    },
+    {
+      "id": "code-exemption",
+      "documents": [{"path":"A.md","title":"Source","headings":[]},{"path":"B.md","title":"Configuration Reference","headings":[]}],
+      "links": [{"source":"A.md","target":"B.md","section":"","line":3,"anchor":"`SomeStruct`"}],
+      "want": [],
+      "tokenProof": []
+    },
+    {
+      "id": "path-like-anchor",
+      "documents": [{"path":"README.md","title":"Home","headings":[]},{"path":"adr/0002-choice.md","title":"Second Choice Record","headings":[]}],
+      "links": [{"source":"README.md","target":"adr/0002-choice.md","section":"","line":4,"anchor":"adr/0002-choice.md"}],
+      "want": [{"source":"README.md","target":"adr/0002-choice.md","line":4,"anchor":"adr/0002-choice.md","score":0.16666666666666666,"suggestion":"Second Choice Record"}],
+      "tokenProof": [{"text":"adr/0002-choice.md","tokens":["0002","adr","choice","md"]},{"text":"Second Choice Record","tokens":["choice","record","second"]}]
+    },
+    {
+      "id": "phrase-normalization",
+      "documents": [{"path":"A.md","title":"Source","headings":[]},{"path":"B.md","title":"Click Here Migration","headings":[]}],
+      "links": [{"source":"A.md","target":"B.md","section":"","line":5,"anchor":"  CLICK   HERE  "}],
+      "want": [{"source":"A.md","target":"B.md","line":5,"anchor":"  CLICK   HERE  ","score":0,"suggestion":"Click Here Migration"}],
+      "tokenProof": []
+    },
+    {
+      "id": "section-sign-strip",
+      "documents": [{"path":"A.md","title":"Source","headings":[]},{"path":"guide.md","title":"Guide","headings":[["Deployment Topics","deployment-topics"]]}],
+      "links": [{"source":"A.md","target":"guide.md","section":"","line":6,"anchor":"guide.md § Deployment Topics"}],
+      "want": [],
+      "tokenProof": [{"text":"Deployment Topics","tokens":["deployment","topics"]}]
+    },
+    {
+      "id": "section-target",
+      "documents": [{"path":"A.md","title":"Source","headings":[]},{"path":"guide.md","title":"Operations Guide","headings":[["Install Steps","install-steps"],["Configuration","configuration"]]}],
+      "links": [{"source":"A.md","target":"guide.md","section":"install-steps","line":7,"anchor":"Configuration"}],
+      "want": [{"source":"A.md","target":"guide.md","line":7,"anchor":"Configuration","score":0,"suggestion":"Install Steps"}],
+      "tokenProof": [{"text":"Configuration","tokens":["configuration"]},{"text":"Install Steps","tokens":["install","steps"]}]
+    },
+    {
+      "id": "source-line-tie-order",
+      "documents": [{"path":"A.md","title":"Source","headings":[]},{"path":"B.md","title":"Beta Manual","headings":[]},{"path":"C.md","title":"Gamma Manual","headings":[]}],
+      "links": [{"source":"A.md","target":"C.md","section":"","line":9,"anchor":"here"},{"source":"A.md","target":"B.md","section":"","line":9,"anchor":"here"}],
+      "want": [{"source":"A.md","target":"B.md","line":9,"anchor":"here","score":0,"suggestion":"Beta Manual"},{"source":"A.md","target":"C.md","line":9,"anchor":"here","score":0,"suggestion":"Gamma Manual"}],
+      "tokenProof": []
+    },
+    {
+      "id": "stable-id-exemption",
+      "documents": [{"path":"README.md","title":"Home","headings":[]},{"path":"adr/0010-scaffolding.md","title":"Agent Scaffolding","headings":[]}],
+      "links": [{"source":"README.md","target":"adr/0010-scaffolding.md","section":"","line":10,"anchor":"ADR 0010"}],
+      "want": [],
+      "tokenProof": [{"text":"ADR 0010","tokens":["0010","adr"]}]
+    },
+    {
+      "id": "stopwords-and-dedup",
+      "documents": [{"path":"A.md","title":"Source","headings":[]},{"path":"B.md","title":"The Installation Guide","headings":[]}],
+      "links": [{"source":"A.md","target":"B.md","section":"","line":11,"anchor":"installation and guide guide"}],
+      "want": [],
+      "tokenProof": [{"text":"The Installation Guide","tokens":["guide","installation"]},{"text":"installation and guide guide","tokens":["guide","installation"]}]
+    }
+  ]
+}

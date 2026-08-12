@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "family": "artifact-determinism",
+  "fixture": "fixtures/correctness-surfaces/v1",
+  "artifacts": ["findings.json","graph.json","index.md","llms.txt","trails.json"],
+  "sentinels": {
+    "graphDocument": "target.md",
+    "findingId": "dead-end:target.md",
+    "trailRoot": "target.md",
+    "indexText": "| `target.md` | Target | README.md, docs/a.md, docs/z.md |",
+    "llmsText": "[Target](target.md): Target (linked from: README.md, docs/a.md, docs/z.md)"
+  },
+  "creationOrders": ["forward","reverse"],
+  "runsPerOrder": 3
+}

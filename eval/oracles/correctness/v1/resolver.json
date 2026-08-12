@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "family": "direct-resolver",
+  "catalog": {
+    "documents": ["README.md","docs/guide.md","docs/source.md","docs/sub/page.md","notes/a/topic.md","notes/b/topic.md","with-index/README.md","with-index/item.md","without-index/item.md"],
+    "headings": {"README.md":["intro","intro-1"],"docs/guide.md":["setup"]},
+    "aliases": {"home":["README.md"],"shared":["README.md","docs/guide.md"]},
+    "assets": ["assets/logo.png","existing-dir"]
+  },
+  "cases": [
+    {"id":"alias-ambiguous-wikilink","origin":"docs/source.md","target":"shared","type":"wikilink","want":{"health":"ambiguous","kind":"none","candidates":["README.md","docs/guide.md"],"assetCalls":[]}},
+    {"id":"alias-wikilink","origin":"docs/source.md","target":"home","type":"wikilink","want":{"health":"valid","kind":"document","document":"README.md","assetCalls":[]}},
+    {"id":"ambiguous-wikilink","origin":"docs/source.md","target":"topic","type":"wikilink","want":{"health":"ambiguous","kind":"none","candidates":["notes/a/topic.md","notes/b/topic.md"],"assetCalls":[]}},
+    {"id":"directory-index","origin":"README.md","target":"with-index/","type":"relative-link","want":{"health":"valid","kind":"directory","document":"with-index/README.md","directory":"with-index","children":["with-index/README.md","with-index/item.md"],"assetCalls":[]}},
+    {"id":"directory-no-index","origin":"README.md","target":"without-index/","type":"relative-link","want":{"health":"valid","kind":"directory","directory":"without-index","children":["without-index/item.md"],"assetCalls":[]}},
+    {"id":"double-slash","origin":"docs/sub/page.md","target":"//host/x","type":"frontmatter-related","want":{"health":"broken","kind":"none","assetCalls":["docs/sub/host/x"]}},
+    {"id":"duplicate-slug","origin":"README.md","fragment":"intro-1","type":"anchor","want":{"health":"valid","kind":"section","document":"README.md","anchor":"intro-1","assetCalls":[]}},
+    {"id":"exact-wikilink","origin":"docs/source.md","target":"docs/guide.md","type":"wikilink","policy":"exact","want":{"health":"valid","kind":"document","document":"docs/guide.md","assetCalls":[]}},
+    {"id":"external","origin":"README.md","target":"https://example.com/x","type":"external","want":{"health":"external","kind":"external","assetCalls":[]}},
+    {"id":"fragment-stale","origin":"README.md","fragment":"missing","type":"anchor","want":{"health":"broken-anchor","kind":"section","document":"README.md","assetCalls":[]}},
+    {"id":"fragment-valid","origin":"README.md","fragment":"intro","type":"anchor","want":{"health":"valid","kind":"section","document":"README.md","anchor":"intro","assetCalls":[]}},
+    {"id":"malformed-empty","origin":"README.md","type":"relative-link","want":{"health":"broken","kind":"none","assetCalls":[]}},
+    {"id":"non-note-asset","origin":"README.md","target":"assets/logo.png","type":"image-embed","want":{"health":"non-note","kind":"asset","document":"assets/logo.png","assetCalls":["assets/logo.png"]}},
+    {"id":"non-note-directory","origin":"README.md","target":"existing-dir","type":"relative-link","want":{"health":"non-note","kind":"asset","document":"existing-dir","assetCalls":["existing-dir"]}},
+    {"id":"percent-literal","origin":"docs/source.md","target":"/..%2F..","type":"relative-link","want":{"health":"broken","kind":"none","assetCalls":["..%2F.."]}},
+    {"id":"relative","origin":"docs/source.md","target":"guide.md","type":"relative-link","want":{"health":"valid","kind":"document","document":"docs/guide.md","assetCalls":[]}},
+    {"id":"relative-escape","origin":"docs/source.md","target":"../../secret","type":"relative-link","want":{"health":"broken","kind":"none","assetCalls":[]}},
+    {"id":"root-absolute","origin":"docs/source.md","target":"/README.md","type":"relative-link","want":{"health":"valid","kind":"document","document":"README.md","assetCalls":[]}},
+    {"id":"root-absolute-escape","origin":"docs/source.md","target":"/../secret","type":"relative-link","want":{"health":"broken","kind":"none","assetCalls":[]}},
+    {"id":"stale-anchor-cross-document","origin":"README.md","target":"docs/guide.md","fragment":"gone","type":"relative-link","want":{"health":"broken-anchor","kind":"section","document":"docs/guide.md","assetCalls":[]}},
+    {"id":"stale-markdown","origin":"README.md","target":"missing.md","type":"relative-link","want":{"health":"broken","kind":"none","assetCalls":[]}},
+    {"id":"unknown-type","origin":"README.md","target":"docs/guide.md","type":"unknown","want":{"health":"unresolved","kind":"none","assetCalls":[]}},
+    {"id":"wikilink-escape","origin":"README.md","target":"../../secret","type":"wikilink","want":{"health":"broken","kind":"none","assetCalls":[]}},
+    {"id":"wikilink-longest-suffix","origin":"README.md","target":"a/topic","type":"wikilink","want":{"health":"valid","kind":"document","document":"notes/a/topic.md","assetCalls":[]}}
+  ]
+}

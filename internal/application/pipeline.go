@@ -141,6 +141,10 @@ type Result struct {
 	// the metrics/report do not carry. It is read-only; emitters must not mutate
 	// it (ADR 0004). nil for an empty/failed run.
 	Corpus *corpus.Corpus
+	// ResolvedReferences is the parser-to-resolver output in deterministic corpus
+	// and source order. It is exposed as a narrow analysis seam for integration
+	// tooling; callers must treat it as immutable.
+	ResolvedReferences []reference.Reference
 	// BrokenEdges are the unresolved navigational references (origin → raw
 	// target) extracted at resolution time. The frozen graph keeps only Valid
 	// edges, so the P4 diagram emitters read this to render red placeholder
@@ -337,11 +341,12 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 		OKFMissingTypeCount:           report.CountByKind(analysis.OKFMissingType),
 		OKFReservedFileStructureCount: report.CountByKind(analysis.OKFReservedFileStructure),
 
-		Report:      report,
-		Metrics:     metrics,
-		Corpus:      c,
-		BrokenEdges: brokenEdges,
-		Notices:     scan.Notices,
+		Report:             report,
+		Metrics:            metrics,
+		Corpus:             c,
+		ResolvedReferences: refs,
+		BrokenEdges:        brokenEdges,
+		Notices:            scan.Notices,
 	}
 	return platform.ExitOK, res, nil
 }

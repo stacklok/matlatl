@@ -5,7 +5,11 @@ matlatl: orphan-intentional
 
 # Heuristic evaluation: correctness, signal quality, and agent outcomes
 
-> Status: **approved design extension for [#17](https://github.com/stacklok/matlatl/issues/17), not yet run.** This workstream is a sibling to the Stage A
+> Status: **Level 1 deterministic correctness is implemented by issue
+> [#34](https://github.com/stacklok/matlatl/issues/34); see the complete oracle
+> and acceptance inventory in the [eval README](https://github.com/stacklok/matlatl/blob/main/eval/README.md). Levels 2
+> (signal quality/noise) and 3 (focused agent outcomes) remain unchanged design
+> work and have not been run.** This workstream is a sibling to the Stage A
 > agent-outcome evaluation in
 > [eval-harness-design.md](eval-harness-design.md), not a replacement or an
 > expansion of its arms, endpoints, thresholds, or completion criteria. Nimbus
@@ -23,7 +27,8 @@ work. Evaluate those claims separately:
 1. **Deterministic correctness:** does the resolver, graph operation, metric, or
    emitted surface exactly implement its documented contract on independently
    specified input? This level uses canonical fixtures, hand-enumerated or
-   independently computed oracles, invariants, and seeded reversible mutations.
+   independently computed oracles, invariants, and registered reversible
+   mutations.
 2. **Signal quality and noise:** on labelled real documentation, does a finding,
    ranking, or recommendation identify something reviewers judge relevant and
    actionable without overwhelming them? This level uses hidden-link recovery,
@@ -55,13 +60,15 @@ points, and bridges. Identity and graph expectations follow
 [ADR 0008](../adr/0008-directory-links.md), and
 [ADR 0022](../adr/0022-root-absolute-links.md).
 
-Apply seeded, reversible mutations to immutable copies: hide or restore one
+Apply registered, reversible mutations to immutable copies: hide or restore one
 link; break a path or anchor; remove the sole inbound or outbound edge; add a
 redundant path; move a document beyond the far-from-root boundary; split or
 join a component; weaken an anchor; and repair exactly one targeted finding.
-The manifest records fixture bytes, seed, mutation, inverse, and expected delta.
-Mutations must preserve root containment and the resource/security constraints
-of [ADR 0003](../adr/0003-security-model.md).
+For an exact registered mutation, the manifest freezes the fixture bytes, exact
+operation, inverse, and expected delta. Only a future sampled/generated mutation
+set records a seed, and that seed must actually drive selection. Mutations must
+preserve root containment and the resource/security constraints of
+[ADR 0003](../adr/0003-security-model.md).
 
 Expected values come from construction, hand enumeration, or an independent
 reference implementation with its algorithm and version frozen. **Never use a
@@ -189,7 +196,8 @@ Freeze and publish, before scoring:
 
 - repository URL and commit SHA; license; file-content manifest and corpus role;
 - matlatl SHA/config and artifact hashes; fixture/oracle implementation and
-  version; mutation seeds, inverses, and hashes;
+  version; exact mutation operations, inverses, expected deltas, and fixture
+  hashes; selection-driving seeds only for sampled/generated mutation sets;
 - candidate universe, eligibility/exclusion rules, split assignment, sampling
   weights, labels, reviewer protocol, blinding, adjudication, and uncertainty;
 - every baseline, threshold candidate, K, metric, numeric tolerance, random seed,
@@ -206,6 +214,12 @@ review labels and append-only run records. A correction creates a new version,
 not a silent overwrite.
 
 ## 6. Implementation sequence
+
+**Progress:** step 1 (Level 1) is implemented by issue
+[#34](https://github.com/stacklok/matlatl/issues/34) and is reproducible through
+[`eval oracle`](https://github.com/stacklok/matlatl/blob/main/eval/README.md#correctness-oracle-v1-contract). Steps 2–8
+are unchanged and remain unimplemented; no labels, held-out scoring, model
+calls, signal-quality verdicts, or agent-outcome claims were produced.
 
 1. Freeze canonical graphs, resolver cases, mutation schema, and independent
    oracles; make every shipped mechanism pass the correctness gate.
@@ -229,7 +243,9 @@ not a silent overwrite.
 - [ ] Binding ADR versions and shipped inventory verified; future/unshipped
       mechanisms remain gated.
 - [ ] Canonical fixture bytes, construction manifests, independent oracles,
-      numeric tolerances, mutation seeds/inverses, and expected deltas frozen.
+      numeric tolerances, exact mutation operations/inverses, expected deltas,
+      and fixture hashes frozen; any sampled/generated mutation-set seed drives
+      its selection.
 - [ ] Security/root-containment cases included; generated outputs are not used
       as their own oracle.
 - [ ] Candidate universe, hidden-link eligibility, exclusions, applicable

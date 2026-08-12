@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "family": "emitted-trails",
+  "cases": [
+    {"id":"cycle-scc","graph":{"documents":["A.md","B.md","C.md"],"edges":[["A.md","B.md"],["B.md","C.md"],["C.md","A.md"]]},"want":[{"root":"A.md","order":["A.md","B.md","C.md"]}]},
+    {"id":"diamond-dag","graph":{"documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","B.md"],["A.md","C.md"],["B.md","D.md"],["C.md","D.md"]]},"want":[{"root":"D.md","order":["A.md","B.md","C.md","D.md"]}]},
+    {"id":"disconnected-dags","graph":{"documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","B.md"],["C.md","D.md"]]},"want":[{"root":"B.md","order":["A.md","B.md"]},{"root":"D.md","order":["C.md","D.md"]}]},
+    {"id":"symmetric-frontier-ties","graph":{"documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","C.md"],["A.md","D.md"],["B.md","C.md"],["B.md","D.md"]]},"want":[{"root":"C.md","order":["A.md","B.md","C.md","D.md"]}]}
+  ]
+}

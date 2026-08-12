@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "family": "suggested-link",
+  "numericTolerance": 0.000001,
+  "defaultMinShared": 2,
+  "defaultMaxFanout": 256,
+  "maxResults": 1000,
+  "cases": [
+    {
+      "id":"already-linked-exclusion",
+      "graph":{"documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","B.md"],["A.md","C.md"],["A.md","D.md"],["B.md","C.md"],["B.md","D.md"]]},
+      "minShared":2,"maxFanout":0,
+      "want":[{"a":"C.md","b":"D.md","shared":2,"coupling":0,"coCitation":2,"adamicAdar":1.8204784532536746}],
+      "truncated":false,"hubsSkipped":false
+    },
+    {
+      "id":"coupling-cocitation-adamic-adar",
+      "graph":{"documents":["A.md","B.md","C.md","D.md","E.md"],"edges":[["A.md","C.md"],["A.md","D.md"],["B.md","C.md"],["B.md","D.md"],["E.md","A.md"],["E.md","B.md"]]},
+      "minShared":2,"maxFanout":0,
+      "want":[
+        {"a":"A.md","b":"B.md","shared":3,"coupling":2,"coCitation":1,"adamicAdar":4.328085122666891},
+        {"a":"C.md","b":"D.md","shared":2,"coupling":0,"coCitation":2,"adamicAdar":1.8204784532536746},
+        {"a":"C.md","b":"E.md","shared":2,"coupling":0,"coCitation":0,"adamicAdar":1.8204784532536746},
+        {"a":"D.md","b":"E.md","shared":2,"coupling":0,"coCitation":0,"adamicAdar":1.8204784532536746}
+      ],
+      "truncated":false,"hubsSkipped":false
+    },
+    {
+      "id":"fanout-at-boundary-and-ties",
+      "graph":{"documents":["A.md","B.md","C.md","H.md"],"edges":[["A.md","H.md"],["B.md","H.md"],["C.md","H.md"]]},
+      "minShared":1,"maxFanout":3,
+      "want":[
+        {"a":"A.md","b":"B.md","shared":1,"coupling":1,"coCitation":0,"adamicAdar":0.9102392266268373},
+        {"a":"A.md","b":"C.md","shared":1,"coupling":1,"coCitation":0,"adamicAdar":0.9102392266268373},
+        {"a":"B.md","b":"C.md","shared":1,"coupling":1,"coCitation":0,"adamicAdar":0.9102392266268373}
+      ],
+      "truncated":false,"hubsSkipped":false
+    },
+    {
+      "id":"fanout-over-boundary-skipped",
+      "graph":{"documents":["A.md","B.md","C.md","H.md"],"edges":[["A.md","H.md"],["B.md","H.md"],["C.md","H.md"]]},
+      "minShared":1,"maxFanout":2,"want":[],"truncated":true,"hubsSkipped":true
+    },
+    {
+      "id":"ineligible-no-shared-neighbours",
+      "graph":{"documents":["A.md","B.md","C.md"],"edges":[["A.md","B.md"]]},
+      "minShared":1,"maxFanout":0,"want":[],"truncated":false,"hubsSkipped":false
+    },
+    {
+      "id":"minimum-shared-at-boundary",
+      "graph":{"documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","C.md"],["A.md","D.md"],["B.md","C.md"],["B.md","D.md"]]},
+      "minShared":2,"maxFanout":0,
+      "want":[
+        {"a":"A.md","b":"B.md","shared":2,"coupling":2,"coCitation":0,"adamicAdar":2.8853900817779268},
+        {"a":"C.md","b":"D.md","shared":2,"coupling":0,"coCitation":2,"adamicAdar":2.8853900817779268}
+      ],
+      "truncated":false,"hubsSkipped":false
+    },
+    {
+      "id":"minimum-shared-below-boundary",
+      "graph":{"documents":["A.md","B.md","C.md"],"edges":[["A.md","C.md"],["B.md","C.md"]]},
+      "minShared":2,"maxFanout":0,"want":[],"truncated":false,"hubsSkipped":false
+    }
+  ]
+}

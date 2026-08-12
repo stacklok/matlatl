@@ -12,12 +12,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/stacklok/matlatl/eval/internal/correctness"
 	"github.com/stacklok/matlatl/eval/internal/evalfs"
 	"github.com/stacklok/matlatl/eval/internal/harness"
 	"github.com/stacklok/matlatl/eval/internal/manifest"
 	"github.com/stacklok/matlatl/eval/internal/oracle"
 	reportmd "github.com/stacklok/matlatl/eval/internal/report"
 )
+
+var canonicalCheck = (oracle.Canonical{}).Check
 
 func main() {
 	if err := run(context.Background(), os.Args[1:], os.Stdout); err != nil {
@@ -101,10 +104,18 @@ func oracleCommand(ctx context.Context, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := (oracle.Canonical{}).Check(graph); err != nil {
+	if err := canonicalCheck(graph); err != nil {
 		return err
 	}
-	_, err = io.WriteString(stdout, oracle.Summary())
+	counts, err := correctness.Run(ctx, root)
+	if err != nil {
+		return err
+	}
+	counts.CanonicalNavigation = 1
+	if _, err := io.WriteString(stdout, oracle.Summary()); err != nil {
+		return err
+	}
+	_, err = io.WriteString(stdout, counts.Summary())
 	return err
 }
 
@@ -136,7 +147,7 @@ func smokeCommand(ctx context.Context, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := (oracle.Canonical{}).Check(graph); err != nil {
+	if err := canonicalCheck(graph); err != nil {
 		return err
 	}
 	record, err := harness.Run(ctx, harness.RunOptions{

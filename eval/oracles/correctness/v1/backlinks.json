@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "family": "emitted-backlinks",
+  "fixture": "fixtures/correctness-surfaces/v1",
+  "authoredReferences": 8,
+  "documents": [
+    {"path":"README.md","backlinks":[]},
+    {"path":"docs/a.md","backlinks":["README.md"]},
+    {"path":"docs/z.md","backlinks":["README.md"]},
+    {"path":"target.md","backlinks":["README.md","docs/a.md","docs/z.md"]}
+  ]
+}

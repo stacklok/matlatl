@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,7 +35,16 @@ func TestCommandsOffline(t *testing.T) {
 	if err := run(context.Background(), []string{"oracle", "--root", root}, &output); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), "documents=3 edges=3") {
+	if !strings.Contains(output.String(), "documents=3 edges=3") ||
+		!strings.Contains(output.String(), "correctness-oracle/v1: families=11 cases=97") ||
+		!strings.Contains(output.String(), "canonical-navigation cases=1") ||
+		!strings.Contains(output.String(), "information-scent cases=10") ||
+		!strings.Contains(output.String(), "knowledge-gap cases=4") ||
+		!strings.Contains(output.String(), "suggested-link cases=7") ||
+		!strings.Contains(output.String(), "reversible-mutation cases=8") ||
+		!strings.Contains(output.String(), "emitted-backlinks cases=4") ||
+		!strings.Contains(output.String(), "emitted-trails cases=4") ||
+		!strings.Contains(output.String(), "artifact-determinism cases=1") {
 		t.Fatalf("oracle output = %q", output.String())
 	}
 
@@ -63,6 +73,18 @@ func TestCommandsOffline(t *testing.T) {
 	}
 	if !strings.Contains(string(report), "pass: 1") || !strings.Contains(string(report), "docs/operate.md") {
 		t.Fatalf("report = %s", report)
+	}
+}
+
+func TestOracleCommandPropagatesCanonicalFailure(t *testing.T) {
+	want := errors.New("canonical failure")
+	original := canonicalCheck
+	canonicalCheck = func([]byte) error { return want }
+	t.Cleanup(func() { canonicalCheck = original })
+
+	err := run(context.Background(), []string{"oracle", "--root", commandEvalRoot(t)}, &bytes.Buffer{})
+	if !errors.Is(err, want) {
+		t.Fatalf("oracle error = %v, want %v", err, want)
 	}
 }
 

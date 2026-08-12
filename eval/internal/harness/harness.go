@@ -15,6 +15,9 @@ import (
 	"github.com/stacklok/matlatl/internal/domain/identity"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/index"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/llmstxt"
+	"github.com/stacklok/matlatl/internal/infrastructure/emit/trails"
 	"github.com/stacklok/matlatl/internal/infrastructure/fsscanner"
 	"github.com/stacklok/matlatl/internal/infrastructure/mdparser"
 )
@@ -161,10 +164,20 @@ func cleanAnswer(answer string) string {
 	return filepath.ToSlash(clean)
 }
 
-// EmitGraph runs the real scan, parse, pipeline, and graph emitter path.
-func EmitGraph(ctx context.Context, corpusRoot string) ([]byte, error) {
+// PipelineAnalysis is the narrow eval inspection seam over a real pipeline run.
+// It deliberately reuses the application result and emitter view rather than
+// mirroring either model in eval.
+type PipelineAnalysis struct {
+	Result application.Result
+	View   emit.View
+}
+
+// AnalyzePipeline runs the real scanner, parser, resolver, graph builder, and
+// findings analysis. Strict changes only pipeline behavior supported by Config.
+func AnalyzePipeline(ctx context.Context, corpusRoot string, strict bool) (PipelineAnalysis, error) {
 	cfg := application.DefaultConfig()
 	cfg.RootPath = corpusRoot
+	cfg.Strict = strict
 	pipeline := application.NewPipeline(
 		cfg,
 		fsscanner.New(fsscanner.Config{}),
@@ -173,9 +186,46 @@ func EmitGraph(ctx context.Context, corpusRoot string) ([]byte, error) {
 	)
 	_, result, err := pipeline.Run(ctx)
 	if err != nil {
+		return PipelineAnalysis{}, err
+	}
+	return PipelineAnalysis{Result: result, View: emit.BuildView(result)}, nil
+}
+
+// EmitArtifacts runs the production pipeline and the five deterministic Phase D
+// emitters. The map keys are stable artifact names; callers compare values by key.
+func EmitArtifacts(ctx context.Context, corpusRoot string) (map[string][]byte, error) {
+	analysis, err := AnalyzePipeline(ctx, corpusRoot, false)
+	if err != nil {
 		return nil, err
 	}
-	return graphjson.JSON(emit.BuildView(result))
+	graph, err := graphjson.JSON(analysis.View)
+	if err != nil {
+		return nil, err
+	}
+	findings, err := emit.FindingsJSON(analysis.Result.Report, emit.OKFVerdictFromResult(analysis.Result))
+	if err != nil {
+		return nil, err
+	}
+	trailBytes, err := trails.JSON(analysis.View)
+	if err != nil {
+		return nil, err
+	}
+	return map[string][]byte{
+		graphjson.GraphJSONName: graph,
+		emit.FindingsJSONName:   findings,
+		trails.TrailsJSONName:   trailBytes,
+		index.IndexMarkdownName: index.Markdown(analysis.View),
+		llmstxt.LLMSTxtName:     llmstxt.LLMSTxt(analysis.View, llmstxt.Options{}),
+	}, nil
+}
+
+// EmitGraph runs the real scan, parse, pipeline, and graph emitter path.
+func EmitGraph(ctx context.Context, corpusRoot string) ([]byte, error) {
+	artifacts, err := EmitArtifacts(ctx, corpusRoot)
+	if err != nil {
+		return nil, err
+	}
+	return artifacts[graphjson.GraphJSONName], nil
 }
 
 // RunOptions describes one offline attempt.

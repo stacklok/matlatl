@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "family": "canonical-graph",
+  "numericTolerance": 0.000001,
+  "farFromRootThreshold": 2,
+  "cases": [
+    {"id":"acyclic-no-root","documents":["A.md","B.md"],"edges":[["A.md","B.md"]],"roots":[]},
+    {"id":"cycle","documents":["A.md","B.md","C.md"],"edges":[["A.md","B.md"],["B.md","C.md"],["C.md","A.md"]],"roots":["A.md"]},
+    {"id":"diamond-dag","documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","B.md"],["A.md","C.md"],["B.md","D.md"],["C.md","D.md"]],"roots":["A.md"]},
+    {"id":"disconnected-pairs","documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","B.md"],["C.md","D.md"]],"roots":["A.md"]},
+    {"id":"empty","documents":[],"edges":[],"roots":[]},
+    {"id":"multi-root-shortest-distance","documents":["A.md","B.md","C.md","D.md","E.md"],"edges":[["A.md","C.md"],["B.md","D.md"],["C.md","D.md"],["D.md","E.md"]],"roots":["A.md","B.md"]},
+    {"id":"out-star","documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","B.md"],["A.md","C.md"],["A.md","D.md"]],"roots":["A.md"]},
+    {"id":"path","documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","B.md"],["B.md","C.md"],["C.md","D.md"]],"roots":["A.md"]},
+    {"id":"redundant-bridge-articulation","documents":["A.md","B.md","C.md","D.md","E.md"],"edges":[["A.md","B.md"],["B.md","C.md"],["C.md","A.md"],["C.md","D.md"],["D.md","E.md"],["E.md","C.md"]],"roots":["A.md"]},
+    {"id":"scc-bow-tie","documents":["A.md","B.md","C.md","D.md","E.md","F.md","G.md"],"edges":[["A.md","B.md"],["B.md","C.md"],["C.md","B.md"],["C.md","D.md"],["E.md","B.md"],["E.md","F.md"],["G.md","F.md"]],"roots":["A.md"]},
+    {"id":"singleton-root","documents":["README.md"],"edges":[],"roots":["README.md"]},
+    {"id":"symmetric-ties","documents":["A.md","B.md","C.md","D.md"],"edges":[["A.md","C.md"],["A.md","D.md"],["B.md","C.md"],["B.md","D.md"]],"roots":["A.md","B.md"]}
+  ]
+}
