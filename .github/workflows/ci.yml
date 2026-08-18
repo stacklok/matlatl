@@ -144,7 +144,7 @@ jobs:
       - name: Adversarial black-box verifier acceptance
         env:
           MATLATL_OCI_RUNTIME: ${{ matrix.runtime }}
-        run: go test -tags=ociintegration -count=1 -run TestBlackBoxVerifierOCI -v ./eval/internal/nimbus
+        run: go test -timeout=18m -tags=ociintegration -count=1 -run TestBlackBoxVerifierOCI -v ./eval/internal/nimbus
       - name: Adversarial scratch-container acceptance
         env:
           MATLATL_OCI_RUNTIME: ${{ matrix.runtime }}

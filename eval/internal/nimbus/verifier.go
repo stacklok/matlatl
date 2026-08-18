@@ -109,10 +109,13 @@ func Verify(ctx context.Context, s *Suite, runtime string) ([]VerificationResult
 	taskResults := make([][]VerificationResult, len(s.Tasks))
 	taskErrors := make([]error, len(s.Tasks))
 	var wg sync.WaitGroup
+	concurrency := make(chan struct{}, 2)
 	for i, task := range s.Tasks {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			concurrency <- struct{}{}
+			defer func() { <-concurrency }()
 			taskResults[i], taskErrors[i] = verifyTask(verifyCtx, exe, s, task)
 			if taskErrors[i] != nil {
 				cancel()
