@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -143,6 +144,9 @@ func verifyTask(ctx context.Context, exe string, s *Suite, task Task) ([]Verific
 		if err == nil {
 			err = ApplyCase(workspace, pc)
 		}
+		if err == nil {
+			err = makeCandidateReadable(workspace)
+		}
 		var output string
 		if err == nil {
 			output, err = verifyCase(ctx, exe, s, task.ID, workspace, base)
@@ -169,6 +173,24 @@ func verifyTask(ctx context.Context, exe string, s *Suite, task Task) ([]Verific
 		}
 	}
 	return results, nil
+}
+
+func makeCandidateReadable(workspace string) (retErr error) {
+	root, err := os.OpenRoot(workspace)
+	if err != nil {
+		return err
+	}
+	defer func() { retErr = errors.Join(retErr, root.Close()) }()
+	return fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		mode := fs.FileMode(0o644)
+		if entry.IsDir() {
+			mode = 0o755
+		}
+		return root.Chmod(name, mode)
+	})
 }
 
 func verifyCase(ctx context.Context, exe string, s *Suite, taskID, workspace, base string) (output string, retErr error) {
