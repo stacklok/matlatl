@@ -66,6 +66,9 @@ func TestVerifierOutputIsNotWritable(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(workspace, "relay", "output_isolation_test.go"), []byte(testSource), 0o600); err != nil {
 			t.Fatal(err)
 		}
+		if err := makeCandidateReadable(workspace); err != nil {
+			t.Fatal(err)
+		}
 		if output, err := verifyCase(context.Background(), runtime, s, "batch-ceiling", workspace, base); err != nil {
 			t.Fatalf("isolated public check failed: %v: %s", err, output)
 		}
