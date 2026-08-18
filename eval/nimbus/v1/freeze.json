@@ -878,7 +878,7 @@
       },
       {
         "name": "github.com/stacklok/matlatl/eval/cmd/eval-supervisor",
-        "sha256": "76ee1039c126d84134c528a3853b142d2d919d1a94c08c34c00d6e2780bdcf04"
+        "sha256": "84d3066fc15c5806ba48527e6b23d7b2a10ab2fb14ad9f98e0c7f0a8acb3a0b4"
       },
       {
         "name": "github.com/stacklok/matlatl/eval/cmd/fake-opencode",
@@ -1536,7 +1536,7 @@
     "staticBinaries": [
       {
         "name": "eval-supervisor",
-        "sha256": "b2cd55a2d028639c6a41d4ded1e75af8606475365e574aa738f9d66443c43f8b"
+        "sha256": "e493dbcfb5923e2dee37d1a1598f656022dc3f12e461de4c12d861f4b4ea1a5d"
       },
       {
         "name": "fake-opencode",

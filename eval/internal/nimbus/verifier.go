@@ -312,9 +312,9 @@ func containerSetupFailure(err error) bool {
 }
 
 func lockedContainerArgs(label, memory, cpus, pids string, tmpExec bool) []string {
-	tmpOptions := "rw,nosuid,nodev,noexec,size=536870912"
+	tmpOptions := "rw,nosuid,nodev,noexec,size=536870912,mode=1777"
 	if tmpExec {
-		tmpOptions = "rw,nosuid,nodev,exec,size=536870912"
+		tmpOptions = "rw,nosuid,nodev,exec,size=536870912,mode=1777"
 	}
 	return []string{"--pull=never", "--network=none", "--read-only", "--pids-limit=" + pids, "--cpus=" + cpus, "--memory=" + memory, "--memory-swap=" + memory,
 		"--cap-drop=ALL", "--security-opt=no-new-privileges", "--ulimit", "nofile=256:256", "--ulimit", "core=0:0", "--ulimit", "fsize=67108864:67108864",

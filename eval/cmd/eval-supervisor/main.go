@@ -257,7 +257,7 @@ func validateTmpfsMount(path, description string) error {
 		return fmt.Errorf("%s has excessive tmpfs capacity: blocks=%d blockSize=%d", description, stat.Blocks, stat.Bsize)
 	}
 	bytes := stat.Blocks * blockSize
-	if stat.Type != tmpfsMagic || bytes > 16<<20 || stat.Files > 2048 {
+	if statfsType(stat.Type) != tmpfsMagic || bytes > 16<<20 || stat.Files > 2048 {
 		return fmt.Errorf("%s is not a byte-and-inode-bounded tmpfs: type=%x bytes=%d inodes=%d", description, stat.Type, bytes, stat.Files)
 	}
 	return nil
