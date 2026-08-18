@@ -44,10 +44,12 @@ jobs:
       - name: Build
         run: go build ./...
 
-      # One race-enabled run with coverage + integration tag. -shuffle=on surfaces
-      # test-ordering coupling; -count=1 defeats the test cache so green == ran.
-      - name: Test (race, shuffle, coverage, integration)
-        run: go test -race -shuffle=on -count=1 -tags=integration -covermode=atomic -coverprofile=coverage.out ./...
+      # One race-enabled product run with coverage + integration tag. Eval packages
+      # have their own offline and OCI jobs below; keeping them out of the product
+      # coverage denominator prevents harness growth from weakening the 83% gate.
+      # -shuffle=on surfaces test-ordering coupling; -count=1 defeats the test cache.
+      - name: Product test (race, shuffle, coverage, integration)
+        run: go test -race -shuffle=on -count=1 -tags=integration -covermode=atomic -coverprofile=coverage.out ./cmd/... ./internal/...
 
       # Exact APSP analysis is O(V·(V+E)); race instrumentation makes the 5k
       # corpus take several minutes. Keep the full allocation guard explicit and
