@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$here/../../.." && pwd)
+export MATLATL_AGENT_ARM=baseline
+export MATLATL_SCHEDULED_RUN_ID=smevals-canonical-navigation
+export MATLATL_ATTEMPT_ID=smevals-canonical-navigation-baseline-1
+export MATLATL_EVAL_ROOT="$repo/eval"
+cd "$repo"
+exec go run ./eval/cmd/smevals-adapter run

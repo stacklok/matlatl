@@ -30,6 +30,11 @@ tasks:
     cmds:
       - go test {{.GOFLAGS}} -race -count=1 {{.PKG}}
 
+  test-performance:
+    desc: Run the full-scale 5k-document memory guard without race instrumentation
+    cmds:
+      - go test {{.GOFLAGS}} -tags=performance -count=1 -run '^TestPipeline_5kDocs_MemoryCeiling$' -v ./internal/application
+
   test-integration:
     desc: Run integration / golden tests
     cmds:
@@ -99,6 +104,61 @@ tasks:
     desc: Render a validated report to persistent eval/out/report.md
     cmds:
       - sh -c 'tmp=$(mktemp -d); trap "rm -rf $tmp" EXIT; go run ./eval/cmd/eval smoke --root eval --out "$tmp/records"; go run ./eval/cmd/eval report --records "$tmp/records" --out eval/out'
+
+  eval:nimbus-validate:
+    desc: Validate strict Nimbus calibration manifests and fixtures
+    cmds:
+      - go run ./eval/cmd/eval nimbus validate --root eval/nimbus/v1
+
+  eval:nimbus-freeze-check:
+    desc: Verify the canonical Nimbus byte/hash inventory
+    cmds:
+      - go run ./eval/cmd/eval nimbus freeze --root eval/nimbus/v1
+
+  eval:nimbus-verify:
+    desc: Pull the pinned verifier and score all Nimbus patch fixtures in locked containers
+    preconditions:
+      - sh: test "$(uname -s)" = Linux
+        msg: "eval:nimbus-verify requires Linux"
+      - sh: command -v "${MATLATL_OCI_RUNTIME:-}" >/dev/null 2>&1
+        msg: "set MATLATL_OCI_RUNTIME=docker|podman and install/start that executable"
+    cmds:
+      - go run ./eval/cmd/eval nimbus verify --root eval/nimbus/v1 --runtime "${MATLATL_OCI_RUNTIME:?set MATLATL_OCI_RUNTIME to docker or podman}" --prepare
+
+  eval:nimbus-probe:
+    desc: Run OCI-free deterministic Nimbus topology, access, transport, and telemetry probes
+    cmds:
+      - go run ./eval/cmd/eval nimbus probe --root eval/nimbus/v1
+
+  eval:nimbus-oci-integration:
+    desc: Run Nimbus verifier/isolation acceptance with Docker or rootless Podman
+    preconditions:
+      - sh: test "$(uname -s)" = Linux
+        msg: "eval:nimbus-oci-integration requires Linux"
+    cmds:
+      - go test -tags=ociintegration -count=1 -run TestBlackBoxVerifierOCI -v ./eval/internal/nimbus
+      - go test -tags=ociintegration -count=1 -run 'TestOCIIsolationEndToEnd' -v ./eval/internal/agentoutcome
+
+  eval:agent-spike:
+    desc: Run offline isolated-executor unit tests with a fake OCI seam
+    cmds:
+      - go test -race -count=1 ./eval/...
+
+  eval:oci-integration:
+    desc: Build the scratch fake image and run adversarial OCI isolation acceptance
+    preconditions:
+      - sh: test "$(uname -s)" = Linux
+        msg: "eval:oci-integration requires Linux; OCI isolation is not supported on this platform"
+    cmds:
+      - go test -tags=ociintegration -count=1 -run TestOCIIsolationEndToEnd -v ./eval/internal/agentoutcome
+
+  eval:smevals-smoke:
+    desc: Run opt-in external smevals smoke through the isolated scratch image (network required for smevals only)
+    preconditions:
+      - sh: command -v uv >/dev/null && command -v uvx >/dev/null
+        msg: "eval:smevals-smoke requires uv and uvx"
+    cmds:
+      - sh -c 'set -eu; tmp=$(mktemp -d); built=$(go run ./eval/cmd/smevals-adapter image "$PWD"); runtime=${built%% *}; rest=${built#* }; image=${rest%% *}; tag=${rest#* }; cleanup() { status=$?; "$runtime" image rm --force "$tag" >/dev/null 2>&1 || status=1; if "$runtime" image inspect "$tag" >/dev/null 2>&1; then status=1; fi; rm -rf "$tmp"; exit "$status"; }; trap cleanup EXIT; MATLATL_OCI_RUNTIME="$runtime" MATLATL_OCI_IMAGE="$image" uvx --from "git+https://github.com/prime-radiant-inc/smevals.git@0c28dc6298eb0e6c3b47e296e82a6972a01d76d0" smevals run eval/agent-outcome -c baseline -m test/offline-fake -g --runs-dir "$tmp"; MATLATL_OCI_RUNTIME="$runtime" MATLATL_OCI_IMAGE="$image" uvx --from "git+https://github.com/prime-radiant-inc/smevals.git@0c28dc6298eb0e6c3b47e296e82a6972a01d76d0" smevals run eval/agent-outcome -c all -m test/offline-fake -g --runs-dir "$tmp"'
 
   check:
     desc: Run the full local verification suite

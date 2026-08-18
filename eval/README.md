@@ -1,11 +1,19 @@
 # Offline evaluation scaffold
 
-`eval/` is the Go-only, standard-library command scaffold for evaluation issue
-[#32](https://github.com/stacklok/matlatl/issues/32). Level 1 deterministic
-correctness from issue [#34](https://github.com/stacklok/matlatl/issues/34) is
-implemented by the oracle inventory below. It makes no network or model calls
-and needs no credentials. Inspect AI and Claude integration are not implemented
-here; they remain issue #36.
+`eval/` contains the completed Go-only Level 1 correctness oracle and the
+completed Milestone 1 isolated fake executor. The human arm labels remain
+`baseline` and `+all`; their machine/config IDs are `baseline` and `all`.
+Milestone 1 is plumbing evidence, not an outcome study: it makes no provider
+calls and its explicit billing hook is `not-applicable`.
+
+Every fake attempt runs in a fresh Docker/Podman container built offline from
+`FROM scratch`. The image contains only statically linked `supervisor` and
+`fake-opencode` binaries. The repository, eval tree, private gold, home,
+runtime socket, and credentials are never mounted. Container/image policy
+values are implementation defaults and remain **unfrozen for measured runs**.
+Nimbus, zero-cache/provider telemetry, qualification, real-corpus coding tasks,
+a frozen schedule and retries, paid execution, and outcome claims remain
+unimplemented.
 
 ## Commands
 
@@ -19,21 +27,166 @@ go run ./eval/cmd/eval report --records /tmp/matlatl-eval-records --out /tmp/mat
 ```
 
 Equivalent Taskfile entries are `eval:validate`, `eval:oracle`, `eval:smoke`,
-and `eval:report`. Smoke records are temporary; `eval:report` leaves the
+and `eval:report`. `eval:agent-spike` runs OCI-independent unit tests with a
+fake runtime seam. `eval:oci-integration` is the explicit Linux Docker/Podman
+acceptance test and fails clearly when no supported local runtime is available.
+`eval:smevals-smoke` builds the isolated image and runs the pinned external
+smevals commit `0c28dc6298eb0e6c3b47e296e82a6972a01d76d0`; only fetching smevals
+requires network. Smoke records are temporary; `eval:report` leaves the
 inspectable derived report at `eval/out/report.md` (git-ignored).
 
 `validate` strictly decodes v1 manifests and checks task packages. With
 `--records`, it also verifies hashes, matching result/trajectory identities,
 contiguous trajectory events, duplicate attempts, and retry-parent rules. The v1
-retry policy is fixed in the manifest package: only `environment-failure`,
-`mcp-failure`, `provider-failure`, and `evaluator-failure` may be parents of a
-retry; tasks cannot override that taxonomy.
+retry policy is fixed in the offline v1 spike manifest package: only
+`environment-failure`, `mcp-failure`, `provider-failure`, and `evaluator-failure`
+may be parents of a spike retry; tasks cannot override that taxonomy. This is not
+the measured-study policy: once its first model request is sent, all such failures
+remain unsuccessful assigned-arm outcomes without retry or exclusion.
 `oracle` first runs the canonical fixture through matlatl's real scanner,
 parser, pipeline, and graph JSON emitter, then executes the separate correctness
 contract described below. `smoke` runs the deterministic mock agent,
 uses the private exact-path scorer, and creates one trajectory and result using
 exclusive append-only writes. `report` validates records before rendering
 byte-stable Markdown; with no `--records`, it renders an empty report.
+
+## Milestone 1 isolated fake executor
+
+`agent-outcome/` preserves the smevals Eval/Task/Config/Grader and private
+exact-path checker contract. The host creates one normalized canonical base,
+deep-copies it for an attempt, and verifies the bytes and modes of every common
+file. `baseline` has no pre-existing matlatl treatment. Machine arm `all` adds
+exactly generated root `llms.txt`, root `trails.json`, the frozen availability
+notice in prompt and preparation metadata, and remote streamable-HTTP MCP.
+
+The host accepts only `auto`, `docker`, or `podman` (`auto` prefers Podman;
+CI explicitly uses Docker), resolves the built image to its immutable local
+`sha256:` ID, and runs it with `--pull=never`. A fresh offline build context
+contains only Containerfile plus two static Go binaries; `FROM scratch` has no
+base-image dependency. There is no host subprocess fallback.
+
+The static supervisor is PID 1. For `all`, it starts the production
+`mcpserver.ServeListener` on container loopback, writes only this OpenCode MCP
+entry, launches static fake OpenCode in `/workspace`, then stops MCP:
+
+```json
+{"type":"remote","url":"http://127.0.0.1:<port>/mcp","enabled":true,"oauth":false}
+```
+
+The fake uses the official `github.com/modelcontextprotocol/go-sdk/mcp`
+streamable-HTTP client to initialize, assert the exact seven-tool inventory, and
+call `corpus-summary`, including canonical fixture content. No
+stdio/local/command MCP configuration exists. The production server dependency
+is unchanged. The container has no network namespace connectivity, but its
+loopback remains available for MCP.
+
+Control NDJSON is bounded and validates attempt identity. Fake OpenCode owns a
+dedicated inherited pipe and emits exactly one `first-model-request` signal
+immediately before simulated provider/model/MCP use. Only then does the
+supervisor forward exposure; it writes authoritative captured events exclusively
+after child exit and emits terminal last. `execution.json` records stable
+scheduled-run and attempt IDs, optional retry parent, arm, exposure, terminal
+class, runtime and immutable image ID, common-file parity, and billing
+reconciliation identity (correlation ID equals attempt ID; method
+`not-applicable`). This is separate from and does not change the Level 1
+manifest schema.
+
+Conclusive pre-exposure failures make the runner nonzero. Once exposure is
+recorded, provider, MCP, runtime, evaluator, timeout, and protocol failures are
+gradeable assigned-arm failures: the runner exits zero and the checker fails.
+There is deliberately no retry scheduler. The container uses a read-only root,
+no network or IPC, no-new-privileges, bounded PID/CPU/memory/swap, and
+file-descriptor/core/per-file-size limits. PID 1 receives only the CHOWN,
+DAC_OVERRIDE, SETUID, and SETGID capabilities needed to prepare and enter the
+child identity; the child capability probe is required to remain empty. The only agent input bind is a
+fresh snapshot mounted read-only at `/input`; `/workspace` is a runtime tmpfs
+with hard `size` and `nr_inodes` limits. PID 1 runs as container root, copies and
+chowns the snapshot, then launches the agent with a distinct unprivileged
+UID/GID. A bounded noexec `/tmp` contains child diagnostics. The child cannot
+access or receive `/capture`; only the supervisor can copy allowlisted bounded
+regular diagnostics, the exposure marker, and a verified bounded final-workspace
+archive/manifest to that fresh host bind. Host `evalfs` guards reject symlinks,
+special files, excess files, and excess bytes before reconstructing the final
+workspace. The size monitor remains defense in depth over the hard tmpfs limits.
+
+Every run records a random container cleanup name/nonce independently of stable
+scheduled-run and attempt IDs, the exact run label, image ID, and protected
+cidfile. The name must be absent before start. Cleanup normally uses the
+validated cidfile ID; if the file is missing or malformed after a possible
+start, fallback removal by unique name requires an exact label and image match.
+An unverified container is never removed, and absence is verified before capture
+is read. The generated image tag is caller-owned: Docker uses `buildx build
+--load` when buildx is available and portable `docker build` otherwise; Podman
+uses `podman build`. Integration removes the generated image and verifies it is
+no longer inspectable; CI label cleanup is defense in depth.
+
+The image host build requires the repository's declared Go toolchain and modules
+to be pre-populated locally. Compilation sets `GOTOOLCHAIN=local`, `GOPROXY=off`,
+and `-mod=readonly`; the portable Docker/Podman build has `--network=none` and a
+three-file context. `MATLATL_OCI_IMAGE`, `MATLATL_SCHEDULED_RUN_ID`, and
+`MATLATL_ATTEMPT_ID` are required; `MATLATL_OCI_RUNTIME` defaults to `auto`,
+`MATLATL_AGENT_TIMEOUT_MS` defaults to 30000 (range 1–300000), and
+`MATLATL_RETRY_PARENT` is optional. The spike accepts only
+`canonical-navigation`. CI has mandatory Docker and rootless Podman lanes; both
+run the same tagged acceptance and fail closed when the runtime cannot honor the
+isolation flags. The explicit OCI Task fails on non-Linux rather than reporting
+a skipped green.
+
+The adversarial tagged test verifies host-gold and host-temp denial, rootfs write
+denial, host-network denial, treatment parity, real loopback MCP, cleanup,
+post-exposure provider semantics, and final image contents.
+
+Milestone 2 Nimbus is now implemented under `eval/nimbus/v1/`: the separate
+Cirrus Relay corpus, four disposable coding strata, reversible mutations, host-
+private black-box case data and adversarial patch fixtures, strict synthetic
+telemetry/qualification contracts, mechanical topology/access/transport probes,
+and canonical schema-v1 freeze. Verification has three isolated containers. The
+normal-check container mounts only candidate source read-only and runs the frozen
+public checks with bounded resources and no output mount. The build container
+mounts candidate source and the trusted expectation-free adapter separately and
+read-only; it builds exactly that adapter without running candidate tests or init
+code. Candidate `cmd/nimbus-adapter` paths are rejected as reserved. Its only
+output is a labeled verifier-owned tmpfs volume with hard byte and inode limits,
+kept mounted until the third container executes the static adapter with the volume
+read-only and without source or hidden cases. The host sends sequence-bound
+requests and retains all expected results. Every container uses a unique labeled
+name and cidfile; the output volume is likewise uniquely labeled. Ownership is
+verified before cleanup, and absence is checked after success, error, timeout, or
+cancellation. The executed Nimbus probe is only a deterministic mechanical
+check of preparation, loopback MCP access, transport, and synthetic event
+reconciliation; production-runner telemetry ingestion and live model
+qualification are not implemented and remain Milestone 3. The verifier uses
+`--pull=never` after preparation in locked Docker or rootless Podman containers.
+Filesystem access counts are deterministic event-derived synthetic operations,
+not kernel-level arbitrary-shell open counts. Runtime image IDs are recorded
+separately; no portable cross-runtime digest is claimed. The offline order is
+`nimbus validate`, `nimbus freeze`, then `nimbus probe`; none pulls an OCI image.
+The network/OCI path is `nimbus verify --runtime docker|podman --prepare`, followed
+by the tagged integration task.
+
+Safe refreezing is deliberate: finish and review every code/fixture change, prepare
+the pinned verifier image in both Docker and rootless Podman, run `nimbus
+inspect-images --out /secure/audited-runtime-images.json`, inspect that file's image
+IDs/platforms, then run `nimbus freeze --write --runtime-image-file
+/secure/audited-runtime-images.json`. Finally run freeze and probe twice from clean
+build caches and review the complete `freeze.json` diff. Never type image IDs into
+the freeze command.
+
+Still deferred to Milestone 3 are the second human review signature (all task
+manifests honestly say `reviewStatus: pending`), candidate list and qualification
+thresholds, live provider/cache proof, billing reconciliation, retry scheduling,
+ITT aggregation, real-corpus coding tasks, paid runs, and actual model selection.
+Nimbus reports no directional arm statistic and supports no treatment-effect or
+external-validity claim.
+
+Measured attempts additionally require an eligible frame and frozen selection
+procedure in exactly two repositories; task-family clustering for shared
+constraint/subsystem/mutation/verifier lineage; mutually exclusive precedence-
+reviewed strata; explicit zero-cache qualification; post-exposure intention-to-
+treat failure/cache accounting; externally reconciled family-mean billed spend
+per scheduled attempt with conservative cost caps; and joint success/cost power
+simulation. Their sole confirmatory statistic is pooled frozen-benchmark success;
+cost, corpus, and stratum results are secondary/descriptive.
 
 ## Layout and privacy boundary
 
@@ -42,7 +195,10 @@ byte-stable Markdown; with no `--records`, it renders an empty report.
 - `gold/`: private exact answers; never included in an agent package.
 - `oracles/correctness/v1/`: the strict, separately versioned correctness inputs
   and expectations; this is not part of the task/result/trajectory manifest.
-- `internal/`: filesystem guards, manifest validation, harness, oracle, report.
+- `agent-outcome/`: preserved smevals fixture and thin POSIX runner/checker wrappers.
+- `cmd/eval-supervisor`, `cmd/fake-opencode`: static scratch-image processes.
+- `internal/`: filesystem guards, manifests, harness, oracle, report, OCI adapter,
+  and fake implementation.
 - `out/`: local generated records (git-ignored).
 
 An agent-visible package contains exactly two fields: the instruction and the
@@ -50,9 +206,12 @@ corpus files. Gold, scorer code, and oracle data stay outside it. Tests place a
 sentinel in private gold and verify it cannot appear in the package, and reject
 a task that tries to name gold as its corpus.
 
-This allowlist is **not hostile-process sandboxing**. It is a cooperative,
-in-process data boundary for the offline mock. Process/container isolation is
-work for the future real-agent runner.
+The package allowlist and OCI boundary serve different purposes. Package
+construction prevents accidental gold inclusion; the fresh-container boundary
+prevents the fake process from reading arbitrary host paths. Only a fresh
+read-only input snapshot and supervisor-only capture directory are host-mounted;
+the writable workspace is a byte- and inode-bounded container tmpfs. The host
+checker reads private gold only after verified container shutdown.
 
 All filesystem paths are root-relative and containment checked; existing
 symlink components are rejected. Enumeration accepts only regular files and is
@@ -241,7 +400,8 @@ records, and persisted result/trajectory files are append-only.
    pinned expected hashes after reviewing that change.
 4. Extend only the real seams: `Agent` returns an `AgentOutcome`, `Scorer` owns
    private gold, and `Canonical.Check` remains concrete. The package allowlist is
-   not process sandboxing, and provider/Inspect behavior belongs to issue #36.
+   not process sandboxing. The smevals/OpenCode adapter is intentionally a
+   boundary spike, not a production runner or retry scheduler.
 
 ## Canonical fixture
 

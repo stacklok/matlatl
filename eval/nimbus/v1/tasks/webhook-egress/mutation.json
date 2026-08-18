@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "taskId": "webhook-egress",
+  "path": "relay/webhook.go",
+  "old": "if ip != nil && (ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {",
+  "new": "if ip != nil && !devAllowHTTP && (ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {",
+  "baseCorpusTreeSha256": "6b9e1d07d149adc35c0b813ede0ed9aeee59e6958d3d3ad1489a0b5300bc8e39",
+  "baseFileSha256": "78d86576b775707dc0ae20d5c1e166527c65865ebcc175c0f71a90992442e70f",
+  "mutatedCorpusTreeSha256": "975d7128e6971e5a07e297438071820d25d598ca1218de2ec890ef0b4e6574b8",
+  "mutatedFileSha256": "cda0d41d4edb1958d77be04d676c9809d5e5ccc4118dacbf318d216973dea916",
+  "expectedLocalDelta": 17
+}

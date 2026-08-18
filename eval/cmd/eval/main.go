@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"github.com/stacklok/matlatl/eval/internal/evalfs"
 	"github.com/stacklok/matlatl/eval/internal/harness"
 	"github.com/stacklok/matlatl/eval/internal/manifest"
+	"github.com/stacklok/matlatl/eval/internal/nimbus"
 	"github.com/stacklok/matlatl/eval/internal/oracle"
 	reportmd "github.com/stacklok/matlatl/eval/internal/report"
 )
@@ -31,7 +33,7 @@ func main() {
 
 func run(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: eval <validate|oracle|smoke|report> [flags]")
+		return errors.New("usage: eval <validate|oracle|smoke|report|nimbus> [flags]")
 	}
 	switch args[0] {
 	case "validate":
@@ -42,9 +44,152 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 		return smokeCommand(ctx, args[1:], stdout)
 	case "report":
 		return reportCommand(args[1:], stdout)
+	case "nimbus":
+		return nimbusCommand(ctx, args[1:], stdout)
 	default:
 		return fmt.Errorf("unknown subcommand %q", args[0])
 	}
+}
+
+func nimbusCommand(ctx context.Context, args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return errors.New("usage: eval nimbus <validate|freeze|inspect-images|verify|probe> [flags]")
+	}
+	const notice = "; calibration-only; second human review pending; not outcome evidence\n"
+	subcommand := args[0]
+	flags := flag.NewFlagSet("nimbus "+subcommand, flag.ContinueOnError)
+	rootArg := flags.String("root", "eval/nimbus/v1", "Nimbus v1 root")
+	var runtimeArg *string
+	var prepare, write *bool
+	var imageFile, outputFile *string
+	switch subcommand {
+	case "validate", "probe":
+	case "inspect-images":
+		outputFile = flags.String("out", "", "write audited Docker/Podman image identities to this new file")
+	case "freeze":
+		write = flags.Bool("write", false, "rewrite freeze.json after audited runtime image inspection")
+		imageFile = flags.String("runtime-image-file", "", "audited JSON array of runtime image inspections")
+	case "verify":
+		runtimeArg = flags.String("runtime", "", "OCI runtime: docker or podman")
+		prepare = flags.Bool("prepare", false, "pull the pinned verifier image before verification")
+	default:
+		return fmt.Errorf("unknown Nimbus subcommand %q", subcommand)
+	}
+	if err := flags.Parse(args[1:]); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("nimbus %s: unexpected arguments %v", subcommand, flags.Args())
+	}
+	suite, err := nimbus.Load(*rootArg)
+	if err != nil {
+		return err
+	}
+	switch subcommand {
+	case "validate":
+		_, err = fmt.Fprintf(stdout, "validated %d Nimbus v1 task(s)%s", len(suite.Tasks), notice)
+	case "inspect-images":
+		if *outputFile == "" {
+			return errors.New("nimbus inspect-images requires --out; prepare both Docker and Podman verifier images first")
+		}
+		var images []nimbus.RuntimeImage
+		for _, runtime := range []string{"docker", "podman"} {
+			image, inspectErr := nimbus.InspectVerifier(ctx, runtime)
+			if inspectErr != nil {
+				return inspectErr
+			}
+			images = append(images, image)
+		}
+		data, marshalErr := json.MarshalIndent(images, "", "  ")
+		if marshalErr != nil {
+			return marshalErr
+		}
+		data = append(data, '\n')
+		file, openErr := openExclusive(*outputFile, 0o600)
+		if openErr != nil {
+			return openErr
+		}
+		if _, err = file.Write(data); err == nil {
+			err = file.Close()
+		} else {
+			_ = file.Close()
+		}
+		if err == nil {
+			_, err = fmt.Fprint(stdout, "wrote audited Nimbus runtime image file", notice)
+		}
+	case "freeze":
+		if *write {
+			if *imageFile == "" {
+				return errors.New("nimbus freeze --write requires --runtime-image-file from audited `nimbus inspect-images`; never supply arbitrary IDs")
+			}
+			data, readErr := readFile(*imageFile)
+			if readErr != nil {
+				return readErr
+			}
+			var images []nimbus.RuntimeImage
+			if jsonErr := json.Unmarshal(data, &images); jsonErr != nil {
+				return jsonErr
+			}
+			if err = nimbus.WriteFreeze(suite, images); err == nil {
+				_, err = fmt.Fprint(stdout, "wrote Nimbus freeze.json", notice)
+			}
+		} else if err = nimbus.CheckFreeze(suite); err == nil {
+			_, err = fmt.Fprint(stdout, "Nimbus freeze.json matches", notice)
+		}
+	case "verify":
+		if *runtimeArg == "" {
+			return errors.New("nimbus verify requires --runtime docker|podman; install/start the runtime and use --prepare")
+		}
+		if *prepare {
+			if _, err = nimbus.PrepareVerifier(ctx, *runtimeArg); err != nil {
+				return err
+			}
+		}
+		var results []nimbus.VerificationResult
+		if results, err = nimbus.Verify(ctx, suite, *runtimeArg); err == nil {
+			_, err = fmt.Fprintf(stdout, "verified %d Nimbus patch cases in isolated %s containers%s", len(results), *runtimeArg, notice)
+		}
+	case "probe":
+		var result string
+		if result, err = nimbus.Probe(ctx, suite); err == nil {
+			_, err = fmt.Fprint(stdout, strings.TrimSuffix(result, "\n"), notice)
+		}
+	}
+	return err
+}
+
+func readFile(path string) ([]byte, error) {
+	base := filepath.Base(path)
+	if base == "." || base == string(filepath.Separator) || !filepath.IsLocal(base) {
+		return nil, fmt.Errorf("unsafe input path %q", path)
+	}
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	data, readErr := root.ReadFile(base)
+	return data, errors.Join(readErr, root.Close())
+}
+
+func openExclusive(path string, mode os.FileMode) (*os.File, error) {
+	base := filepath.Base(path)
+	if base == "." || base == string(filepath.Separator) || !filepath.IsLocal(base) {
+		return nil, fmt.Errorf("unsafe output path %q", path)
+	}
+	dir := filepath.Dir(path)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	file, openErr := root.OpenFile(base, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	closeErr := root.Close()
+	if openErr != nil || closeErr != nil {
+		if file != nil {
+			_ = file.Close()
+		}
+		return nil, errors.Join(openErr, closeErr)
+	}
+	return file, nil
 }
 
 func validateCommand(args []string, stdout io.Writer) error {

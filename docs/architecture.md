@@ -124,25 +124,28 @@ cmd/matlatl → internal/application → internal/domain
 ## 4a. Performance (P6 benchmark)
 
 `BenchmarkPipeline_5kDocs` measures a full scan→analyze over ~5,000 synthetic
-cross-linked docs (~27k references). On a 12-core arm64 machine:
+cross-linked docs (~27k references), comparing one parser worker with the default
+fan-out. Use `-benchtime=1x`: the exact navigability and betweenness analyses run
+streaming BFS from every document, so total analysis time is `O(V·(V+E))` even
+though they retain only `O(V+E)` graph state and `O(V+E)` transient BFS state.
+The benchmark reports wall-time, total allocation, and allocation count without
+weakening or sampling those exact analyses.
 
-| workers           | wall-time / op | total alloc / op | allocs / op |
-| ----------------- | -------------- | ---------------- | ----------- |
-| 1 (single-thread) | ~280 ms        | ~249 MB          | ~1.43 M     |
-| auto (GOMAXPROCS) | ~235 ms        | ~249 MB          | ~1.43 M     |
+`TestPipeline_5kDocs_MemoryCeiling` separately asserts that the full run stays
+under a deliberately generous 1 GiB total-allocation ceiling. It uses the
+`performance` build tag and runs without race instrumentation via
+`task test-performance`; CI runs that explicit full-scale guard on Linux. The
+ordinary race-enabled suite runs the same full-pipeline assertion at 500
+documents. This split preserves race coverage and catches gross allocation
+regressions while avoiding the race detector's several-minute amplification of
+the intentional all-sources graph work.
 
-Peak resident heap for the run is ~32 MiB (`TestPipeline_5kDocs_MemoryCeiling`,
-asserted under a 1 GiB total-allocation ceiling) — the model is **linear**
-(O(V+E)), not the feared in-memory-everything blow-up. Wall-time is `O(V+E)`:
-5k docs analyze in ~0.24 s end-to-end (`time matlatl <5k-dir>`).
-
-**Recommendation.** Fan-out parsing yields a **modest ~15–20%** wall-time
-improvement at 5k docs (parsing is a minority of the total, and the
-single-threaded merge + analysis dominate); allocation/memory is unchanged
-(merge is sequential). The win grows with corpus size and parse cost, and there
-is **no determinism or memory cost**, so concurrency is **ON by default**
-(`ParseWorkers: 0` → `GOMAXPROCS`). `ParseWorkers: 1` forces the sequential path
-for debugging or pathological small corpora.
+The original P6 parsing measurements showed a modest benefit from bounded
+fan-out with no determinism or memory cost, so concurrency remains **ON by
+default** (`ParseWorkers: 0` → `GOMAXPROCS`). `ParseWorkers: 1` forces the
+sequential parse path for debugging. On large corpora, the exact single-threaded
+graph analyses now dominate total runtime; parser fan-out does not change their
+complexity.
 
 ## 4b. Opt-in external link checking (`--check-external`)
 

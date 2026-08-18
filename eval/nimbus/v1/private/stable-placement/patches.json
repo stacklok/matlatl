@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "taskId": "stable-placement",
+  "cases": [
+    {"name":"correct","expectPass":true,"replacements":[{"path":"relay/placement.go","old":"score := binary.BigEndian.Uint64(h.Sum(nil)) % uint64(len(nodes))","new":"score := binary.BigEndian.Uint64(h.Sum(nil))"}]},
+    {"name":"alternative","expectPass":true,"replacements":[{"path":"relay/placement.go","old":"score := binary.BigEndian.Uint64(h.Sum(nil)) % uint64(len(nodes))","new":"score := binary.BigEndian.Uint64(append([]byte(nil), h.Sum(nil)...))"}]},
+    {"name":"plausible-wrong","expectPass":false,"replacements":[{"path":"relay/placement.go","old":"score := binary.BigEndian.Uint64(h.Sum(nil)) % uint64(len(nodes))","new":"score := binary.BigEndian.Uint64(h.Sum(nil)) % 1024"}]},
+    {"name":"mutated","expectPass":false,"replacements":[{"path":"relay/placement.go","old":"func PlaceTenant(tenant string, nodes []string) string {","new":"func PlaceTenant(tenant string, nodes []string) string { // mutated fixture"}]},
+    {"name":"init-exit","expectPass":false,"replacements":[{"path":"relay/placement.go","old":"package relay","new":"package relay\n\nimport \"os\"\n\nfunc init() { os.Exit(0) }"}]},
+    {"name":"testmain-bypass","expectPass":false,"replacements":[{"path":"relay/relay_test.go","old":"import \"testing\"","new":"import (\n  \"os\"\n  \"testing\"\n)\n\nfunc TestMain(m *testing.M) { os.Exit(0) }"}]},
+    {"name":"hidden-embed","expectPass":false,"replacements":[{"path":"relay/placement.go","old":"package relay","new":"package relay\n\nimport _ \"embed\"\n\n//go:embed hidden_test.go\nvar hiddenBytes []byte"}]},
+    {"name":"protocol-cheat","expectPass":false,"replacements":[{"path":"relay/placement.go","old":"package relay","new":"package relay\n\nimport \"os\"\n\nfunc init() { _, _ = os.Stdout.Write([]byte(\"{}\\n\")) }"}]},
+    {"name":"timeout","expectPass":false,"replacements":[{"path":"relay/placement.go","old":"package relay","new":"package relay\n\nfunc init() { select {} }"}]},
+    {"name":"output-flood","expectPass":false,"replacements":[{"path":"relay/placement.go","old":"package relay","new":"package relay\n\nfunc init() { for { println(\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\") } }"}]}
+  ]
+}

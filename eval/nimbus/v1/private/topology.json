@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "roots": ["README.md"],
+  "requiredEdges": [
+    ["README.md","docs/overview.md"],
+    ["docs/overview.md","docs/architecture.md"],
+    ["docs/architecture.md","docs/control-plane.md"],
+    ["docs/control-plane.md","docs/scheduler.md"],
+    ["docs/scheduler.md","docs/placement-design.md"],
+    ["docs/deployment.md","docs/health.md"],
+    ["docs/health.md","docs/draining.md"],
+    ["docs/draining.md","docs/deployment.md"]
+  ],
+  "placementMinimumAuthoredHops": 5,
+  "unreachable": ["docs/internals/queue-incident.md","docs/internals/queue-timeline.md"],
+  "requiredNonemptySurfaces": ["llms.txt","trails.json"],
+  "notes": "Hand-enumerated from authored links; not copied from matlatl output."
+}

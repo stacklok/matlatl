@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "filesystemEvents": [
+    {"operation":"open","path":"llms.txt"},
+    {"operation":"open","path":"llms.txt"},
+    {"operation":"open","path":"trails.json"}
+  ],
+  "toolEvents": [
+    {"tool":"corpus-summary","arguments":"{}","response":"summary"},
+    {"tool":"critical-docs","arguments":"{}","response":"critical"},
+    {"tool":"get-section","arguments":"{\"path\":\"docs/draining.md\",\"section\":\"Pod lifecycle contract\"}","response":"section"},
+    {"tool":"list-orphans","arguments":"{}","response":"orphans"},
+    {"tool":"path-between","arguments":"{\"from\":\"README.md\",\"to\":\"docs/placement-design.md\"}","response":"path"},
+    {"tool":"suggest-links","arguments":"{}","response":"suggestions"},
+    {"tool":"what-links-to","arguments":"{\"path\":\"docs/draining.md\"}","response":"backlinks"}
+  ],
+  "claimBoundary": "Filesystem counters are deterministic event-derived OpenCode/tool operations, not kernel-level arbitrary-shell open counts."
+}

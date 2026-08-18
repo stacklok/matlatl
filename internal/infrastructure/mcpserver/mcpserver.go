@@ -30,6 +30,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -96,28 +97,31 @@ func NewServer(a *Analysis) *server.MCPServer {
 	return s
 }
 
-// Serve builds the analysis over rootPath and serves the MCP tools over
-// streamable HTTP on addr (host:port), at the EndpointPath ("/mcp"), until the
-// context is canceled. On cancellation it drains in-flight requests within
-// shutdownTimeout. It is the entry point `matlatl serve` calls.
-func Serve(ctx context.Context, rootPath, addr string) error {
+func handler(ctx context.Context, rootPath string) (http.Handler, error) {
 	a, err := BuildAnalysis(ctx, rootPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	httpSrv := server.NewStreamableHTTPServer(NewServer(a),
+	stream := server.NewStreamableHTTPServer(NewServer(a),
 		server.WithEndpointPath(EndpointPath),
 	)
+	mux := http.NewServeMux()
+	mux.Handle(EndpointPath, stream)
+	return mux, nil
+}
 
-	// Start blocks on ListenAndServe; run it in a goroutine so we can react to
-	// context cancellation with a graceful shutdown.
+// ServeListener serves MCP on an already-owned listener until ctx is canceled.
+// Ownership of listener transfers to this function.
+func ServeListener(ctx context.Context, rootPath string, listener net.Listener) error {
+	httpHandler, err := handler(ctx, rootPath)
+	if err != nil {
+		_ = listener.Close()
+		return err
+	}
+	httpSrv := &http.Server{Handler: httpHandler, ReadHeaderTimeout: 5 * time.Second}
 	errCh := make(chan error, 1)
 	go func() {
-		if serveErr := httpSrv.Start(addr); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-			errCh <- serveErr
-			return
-		}
-		errCh <- nil
+		errCh <- httpSrv.Serve(listener)
 	}()
 
 	select {
@@ -125,15 +129,33 @@ func Serve(ctx context.Context, rootPath, addr string) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			_ = httpSrv.Close()
+			<-errCh
 			return fmt.Errorf("mcpserver: graceful shutdown: %w", err)
 		}
+		serveErr := <-errCh
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			return fmt.Errorf("mcpserver: serve streamable http on %s: %w", listener.Addr(), serveErr)
+		}
 		return nil
-	case err := <-errCh:
-		if err != nil {
-			return fmt.Errorf("mcpserver: serve streamable http on %s: %w", addr, err)
+	case serveErr := <-errCh:
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			return fmt.Errorf("mcpserver: serve streamable http on %s: %w", listener.Addr(), serveErr)
 		}
 		return nil
 	}
+}
+
+// Serve builds the analysis over rootPath and serves the MCP tools over
+// streamable HTTP on addr (host:port), at the EndpointPath ("/mcp"), until the
+// context is canceled. On cancellation it drains in-flight requests within
+// shutdownTimeout. It is the entry point `matlatl serve` calls.
+func Serve(ctx context.Context, rootPath, addr string) error {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("mcpserver: listen on %s: %w", addr, err)
+	}
+	return ServeListener(ctx, rootPath, listener)
 }
 
 // Tools returns the read-only tool set bound to this analysis. Exposed so tests

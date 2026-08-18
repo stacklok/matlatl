@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "taskId": "graceful-drain-health",
+  "path": "relay/lifecycle.go",
+  "old": "func (l *Lifecycle) Live() bool  { return true }",
+  "new": "func (l *Lifecycle) Live() bool  { return l.Ready() }",
+  "baseCorpusTreeSha256": "6b9e1d07d149adc35c0b813ede0ed9aeee59e6958d3d3ad1489a0b5300bc8e39",
+  "baseFileSha256": "b6478dfad180ba7fda9b123610355ba90a6cf536a5f15503e58ce1d2009f3cd3",
+  "mutatedCorpusTreeSha256": "4991c901b2bcfc839985476d0a98791c44d452199a862148643b7bd40bbe6d13",
+  "mutatedFileSha256": "fa0052e84fc36095daa4d515a396212edf2c3b763030fd7fa569ec4ec0b38d94",
+  "expectedLocalDelta": 5
+}

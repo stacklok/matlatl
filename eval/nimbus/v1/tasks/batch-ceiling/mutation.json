@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "taskId": "batch-ceiling",
+  "path": "relay/batch.go",
+  "old": "const BatchCeiling = 256",
+  "new": "const BatchCeiling = 1000",
+  "baseCorpusTreeSha256": "6b9e1d07d149adc35c0b813ede0ed9aeee59e6958d3d3ad1489a0b5300bc8e39",
+  "baseFileSha256": "0be9c1d65ad0ba3de1394e0cba9508a9840ba2db35c64f3ddfc391e8f2af9ef6",
+  "mutatedCorpusTreeSha256": "eb054c5cdf9f5b1113f129028f6c8c6596f756f0d1a826acec4c03cc1d7cae65",
+  "mutatedFileSha256": "d1a4b9f525a0b4f5a86339bdcc61a9ac7621e14f0d5f45cdf4a76aa8a1ecdd0b",
+  "expectedLocalDelta": 1
+}

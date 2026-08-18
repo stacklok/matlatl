@@ -9,12 +9,15 @@ matlatl: orphan-intentional
 > [#34](https://github.com/stacklok/matlatl/issues/34); see the complete oracle
 > and acceptance inventory in the [eval README](https://github.com/stacklok/matlatl/blob/main/eval/README.md). Levels 2
 > (signal quality/noise) and 3 (focused agent outcomes) remain unchanged design
-> work and have not been run.** This workstream is a sibling to the Stage A
-> agent-outcome evaluation in
+> work and have not been run.** This workstream is a sibling to the two-arm #17
+> coding-change evaluation in
 > [eval-harness-design.md](eval-harness-design.md), not a replacement or an
-> expansion of its arms, endpoints, thresholds, or completion criteria. Nimbus
-> supplies only controlled mechanics and correctness cases; real corpora supply
-> usefulness evidence.
+> expansion of its arms, endpoints, thresholds, or completion criteria. #17's
+> headline evidence requires code edits and deterministic private verification;
+> navigation/QA/doc-repair work here remains calibration or a focused study.
+> The completed Level 1 work and the separate #33 signal-quality/link-recovery
+> work do not complete #17. Nimbus supplies only instrumentation, isolation, scorer, qualification,
+> and correctness cases; real corpora supply usefulness evidence.
 >
 > Marked `orphan-intentional` so matlatl does not flag its own research note.
 
@@ -157,7 +160,9 @@ Use three corpus roles:
    evidence.
 3. **Pinned real repositories:** empirical usefulness and focused outcomes.
    Include adopted and un-adopted corpora where feasible; report that status and
-   domain/size/topology strata.
+   domain/size/topology strata. Adoption status is descriptive only: it cannot
+   identify the causal effect of healthy documentation. That requires a separate
+   controlled healthy/degraded-documentation experiment, outside #17.
 
 Split real examples by repository, or by a frozen grouped split that prevents
 near-duplicate documents and mutations of the same source from crossing

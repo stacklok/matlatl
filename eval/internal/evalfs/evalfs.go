@@ -233,6 +233,26 @@ func TreeHash(absRoot string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
+// Chmod changes a root-confined existing file or directory's permissions.
+func Chmod(absRoot, rel string, mode fs.FileMode) error {
+	name, err := localName(rel)
+	if err != nil {
+		return err
+	}
+	root, _, err := openRoot(absRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	if err := rejectSymlinks(root, name, false); err != nil {
+		return err
+	}
+	if err := root.Chmod(name, mode); err != nil {
+		return fmt.Errorf("evalfs: chmod %q: %w", rel, err)
+	}
+	return nil
+}
+
 // WriteExclusive creates a root-confined file and refuses overwrite.
 func WriteExclusive(absRoot, rel string, content []byte) error {
 	name, err := localName(rel)

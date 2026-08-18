@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo=$(CDPATH= cd -- "$here/../../.." && pwd)
+export MATLATL_EVAL_ROOT="$repo/eval"
+cd "$repo"
+exec go run ./eval/cmd/smevals-adapter check

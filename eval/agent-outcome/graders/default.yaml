@@ -1,0 +1,6 @@
+name: default
+checks:
+  - checker: ../checkers/exact-path
+    required: true
+scoring:
+  pass_threshold: 1.0

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "graceful-drain-health",
+  "family": "pod-lifecycle",
+  "primaryStratum": "single-document-constraint",
+  "instruction": "Correct the lifecycle behavior while a Cirrus Relay pod drains.",
+  "classification": {"rule":"single-document-constraint"},
+  "requiredDocs": [{"path":"docs/draining.md","anchor":"pod-lifecycle-contract"}],
+  "normalChecks": ["go test ./..."],
+  "reviewStatus": "pending",
+  "disposableQualificationOnly": true
+}

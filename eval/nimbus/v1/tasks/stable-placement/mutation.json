@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "taskId": "stable-placement",
+  "path": "relay/placement.go",
+  "old": "score := binary.BigEndian.Uint64(h.Sum(nil))",
+  "new": "score := binary.BigEndian.Uint64(h.Sum(nil)) % uint64(len(nodes))",
+  "baseCorpusTreeSha256": "6b9e1d07d149adc35c0b813ede0ed9aeee59e6958d3d3ad1489a0b5300bc8e39",
+  "baseFileSha256": "47e618f40d3ca5ba560ae4d29e084d6511b794a0bf5f24fb4ab1312c2d57e7de",
+  "mutatedCorpusTreeSha256": "63adced5dc2865138c1ae8ee027ef0cfb510382346e9ac490655d1d077e58660",
+  "mutatedFileSha256": "321ba3f16ea1dbd01a24551663a8f938b0f9dc27c4f5308e607e6ab1684ef24b",
+  "expectedLocalDelta": 21
+}

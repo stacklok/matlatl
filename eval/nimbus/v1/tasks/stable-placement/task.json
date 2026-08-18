@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "stable-placement",
+  "family": "tenant-placement",
+  "primaryStratum": "navigation-heavy-coding",
+  "instruction": "Restore stable tenant placement when membership ordering or membership changes.",
+  "classification": {"rule":"navigation-heavy-coding","unnamedTarget":"docs/placement-design.md","frozenAuthoredHops":5,"frozenIntermediates":["docs/overview.md","docs/architecture.md","docs/control-plane.md","docs/scheduler.md"]},
+  "requiredDocs": [{"path":"docs/placement-design.md","anchor":"algorithm-contract"}],
+  "normalChecks": ["go test ./..."],
+  "reviewStatus": "pending",
+  "disposableQualificationOnly": true
+}

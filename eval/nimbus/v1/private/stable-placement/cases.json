@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "taskId": "stable-placement",
+  "cases": [
+    {"operation":"placement","input":{"tenant":"acme","nodes":["ord-1","ord-2","ord-3"]},"expected":{"node":"ord-1"}},
+    {"operation":"placement","input":{"tenant":"bravo","nodes":["ord-1","ord-2","ord-3"]},"expected":{"node":"ord-1"}},
+    {"operation":"placement","input":{"tenant":"cirrus","nodes":["ord-1","ord-2","ord-3"]},"expected":{"node":"ord-2"}},
+    {"operation":"placement","input":{"tenant":"delta","nodes":["ord-1","ord-2","ord-3"]},"expected":{"node":"ord-2"}},
+    {"operation":"placement","input":{"tenant":"acme","nodes":["ord-3","ord-2","ord-1"]},"expected":{"node":"ord-1"}},
+    {"operation":"placement","input":{"tenant":"bravo","nodes":["ord-1","ord-2","ord-3","ord-4"]},"expected":{"node":"ord-4"}}
+  ]
+}

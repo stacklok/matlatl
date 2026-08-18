@@ -1,0 +1,112 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+
+	"example.test/cirrus-relay/relay"
+)
+
+type request struct {
+	Sequence  uint64          `json:"sequence"`
+	Challenge string          `json:"challenge"`
+	Operation string          `json:"operation"`
+	Input     json.RawMessage `json:"input"`
+}
+
+type response struct {
+	Sequence  uint64 `json:"sequence"`
+	Challenge string `json:"challenge"`
+	Result    any    `json:"result"`
+}
+
+type batchInput struct {
+	Size int `json:"size"`
+}
+
+type webhookInput struct {
+	URL          string `json:"url"`
+	DevAllowHTTP bool   `json:"devAllowHTTP"`
+}
+
+type placementInput struct {
+	Tenant string   `json:"tenant"`
+	Nodes  []string `json:"nodes"`
+}
+
+type lifecycleInput struct {
+	Actions []string `json:"actions"`
+}
+
+func main() {
+	decoder := json.NewDecoder(io.LimitReader(os.Stdin, 64<<10))
+	encoder := json.NewEncoder(os.Stdout)
+	for {
+		var req request
+		if err := decoder.Decode(&req); err != nil {
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			os.Exit(2)
+		}
+		result, err := invoke(req)
+		if err != nil || encoder.Encode(response{Sequence: req.Sequence, Challenge: req.Challenge, Result: result}) != nil {
+			os.Exit(2)
+		}
+	}
+}
+
+func invoke(req request) (any, error) {
+	switch req.Operation {
+	case "batch":
+		var in batchInput
+		if err := json.Unmarshal(req.Input, &in); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"accepted": relay.AdmitBatch(in.Size) == nil}, nil
+	case "webhook":
+		var in webhookInput
+		if err := json.Unmarshal(req.Input, &in); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"accepted": relay.ValidateWebhook(in.URL, in.DevAllowHTTP) == nil}, nil
+	case "placement":
+		var in placementInput
+		if err := json.Unmarshal(req.Input, &in); err != nil {
+			return nil, err
+		}
+		return map[string]string{"node": relay.PlaceTenant(in.Tenant, in.Nodes)}, nil
+	case "lifecycle":
+		var in lifecycleInput
+		if err := json.Unmarshal(req.Input, &in); err != nil {
+			return nil, err
+		}
+		var lifecycle relay.Lifecycle
+		values := make([]any, 0, len(in.Actions))
+		for _, action := range in.Actions {
+			switch action {
+			case "begin":
+				values = append(values, lifecycle.BeginSession())
+			case "end":
+				lifecycle.EndSession()
+				values = append(values, lifecycle.Active())
+			case "drain":
+				lifecycle.Drain()
+				values = append(values, true)
+			case "ready":
+				values = append(values, lifecycle.Ready())
+			case "live":
+				values = append(values, lifecycle.Live())
+			case "active":
+				values = append(values, lifecycle.Active())
+			default:
+				return nil, errors.New("unknown lifecycle action")
+			}
+		}
+		return map[string]any{"values": values}, nil
+	default:
+		return nil, errors.New("unknown operation")
+	}
+}

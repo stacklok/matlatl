@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "webhook-egress",
+  "family": "webhook-security",
+  "primaryStratum": "cross-document-synthesis",
+  "instruction": "Fix webhook URL validation so production and development behavior follows all documented egress constraints.",
+  "classification": {"rule":"cross-document-synthesis"},
+  "requiredDocs": [{"path":"docs/webhook-security.md","anchor":"destination-policy"},{"path":"docs/delivery.md","anchor":"delivery"}],
+  "normalChecks": ["go test ./..."],
+  "reviewStatus": "pending",
+  "disposableQualificationOnly": true
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "taskId": "batch-ceiling",
+  "cases": [
+    {"operation":"batch","input":{"size":1},"expected":{"accepted":true}},
+    {"operation":"batch","input":{"size":255},"expected":{"accepted":true}},
+    {"operation":"batch","input":{"size":256},"expected":{"accepted":true}},
+    {"operation":"batch","input":{"size":-1},"expected":{"accepted":false}},
+    {"operation":"batch","input":{"size":0},"expected":{"accepted":false}},
+    {"operation":"batch","input":{"size":257},"expected":{"accepted":false}},
+    {"operation":"batch","input":{"size":1000},"expected":{"accepted":false}}
+  ]
+}

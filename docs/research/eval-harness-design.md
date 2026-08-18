@@ -1,393 +1,330 @@
 ---
-title: "Agent-outcome evaluation harness: do matlatl's artifacts help agents?"
+title: "Agent-outcome evaluation harness: matlatl's marginal effect on coding agents"
 matlatl: orphan-intentional
 ---
 
 # Agent-outcome evaluation harness (design)
 
-> Status: **design for [#17](https://github.com/stacklok/matlatl/issues/17); not yet run.**
-> The Go-only offline scaffold from issue #32 now exists under
-> `eval/README.md`: strict v1 manifests, a deterministic mock,
-> private exact-path scoring, one canonical graph oracle, append-only records,
-> and deterministic reporting. It makes no model or network calls. **Stage A,
-> Inspect/Claude integration (issue #36), real-corpus runs, and the synthetic
-> Nimbus calibration corpus remain unbuilt.** This note still describes those
-> future stages; scaffold availability does not make the outcome study complete.
-> The pre-outcome contract skeleton lives in
-> [eval-preregistration.md](eval-preregistration.md); the future hermetic
-> calibration corpus is specified in
-> [nimbus-eval-corpus.md](nimbus-eval-corpus.md); and the sibling correctness,
-> signal-quality, and focused one-surface workstream is specified in
-> [heuristic-evaluation.md](heuristic-evaluation.md). That workstream does not
-> change Stage A or make #17 completion depend on every heuristic experiment.
->
-> **Amended 2026-08 (methodology review).** Corrects the literature framing
-> (§0), re-specifies Stage A as four pointer-normalized arms (§3), pins the
-> execution + replay discipline (§4), replaces the success/cost/statistics
-> sections with cache-aware, success-normalized, task-level-inference versions
-> (§5), and splits the pre-registration out into its own document (§7). The
-> link-recovery eval stays separate (§6).
->
-> Marked `orphan-intentional` so matlatl doesn't flag its own research note.
+> Status: **amended design for [#17](https://github.com/stacklok/matlatl/issues/17); not yet run.**
+> `eval/` contains completed Level 1 correctness and completed Milestone 1
+> isolated fake execution, not a paid or causal result. The executor uses a fresh
+> locked-down two-binary scratch container and real loopback streamable-HTTP MCP;
+> its container/image policy values are still unfrozen for measured runs. The
+> still-unfrozen execution contract is [eval-preregistration.md](eval-preregistration.md). Nimbus is
+> specified in [nimbus-eval-corpus.md](nimbus-eval-corpus.md). Correctness and
+> #33 signal-quality work remain separate in
+> [heuristic-evaluation.md](heuristic-evaluation.md).
 
-## 0. The question, and why the null hypothesis is live
+## 1. Claim and boundary
 
-Every agent-facing claim matlatl makes — that `llms.txt`, reading-order trails,
-backlinks, and the `serve` MCP tools make a repo more legible to agents — is
-currently **unvalidated**. The 2026 evidence is **mixed**, which makes the null
-hypothesis a real possibility rather than a strawman. The three load-bearing
-sources, stated separately because they measure different things:
+### Experiment A: #17
 
-- **[arXiv:2601.20404](https://arxiv.org/abs/2601.20404)** — an
-  observational efficiency study covering 124 pull requests across 10
-  repositories. It reports comparable task completion with lower median
-  runtime and output-token use when repository context files were present.
-  This is field evidence about observed efficiency, not a controlled estimate
-  of the files' causal effect.
-- **[arXiv:2602.11988](https://arxiv.org/abs/2602.11988)** — a controlled
-  evaluation of repository context files. Generated context generally did not
-  improve task success and raised inference cost by more than 20%; the study
-  distinguishes generated context from developer-written instructions. Its
-  controlled result is unfavorable to assuming generated artifacts help by
-  default, but it does not erase the separate observational result above.
-- **[Is Grep All You Need? (arXiv:2605.15184)](https://arxiv.org/abs/2605.15184)**
-  — scoped to **retrieval and harness behavior**: coding agents discover
-  primarily via grep-style direct corpus interaction rather than link-following.
-  It says nothing about context files directly; its bearing here is that the
-  reader-experience framing behind the structure heuristics is not safe to
-  assume.
+The headline question is:
 
-matlatl's emitted artifacts are generated context, so the unfavorable controlled
-result applies to them prima facie. The
-harness must answer: **do matlatl's artifacts and findings-driven fixes improve
-agent task outcomes (success rate, tokens, tool calls) — or are they neutral or
-harmful?** Both a positive and a negative result are wins: either matlatl
-becomes the first tool in this space with agent-outcome evidence, or we learn
-which artifacts to cut before investing further ([#25](https://github.com/stacklok/matlatl/issues/25)
-governing principle: *validate before building*).
+> On the frozen two-repository benchmark of coding-change tasks whose correct
+> implementation depends on repository documentation, what is matlatl's marginal
+> effect on hidden-verifier success and finite scheduled-attempt cost?
 
-## 1. Task set
+This is an artifact-access intervention. It compares the same repository,
+documentation, task, agent, and limits with and without matlatl's generated
+agent-facing bundle. Its finite-benchmark estimand supports claims only about the
+frozen eligible and selected task families in those two repositories, not all
+real coding tasks or repositories; external validity is limited.
 
-### The shapes, and why they discriminate
+### Experiment B: documentation health
 
-Four task shapes, chosen so each stresses a different artifact and so the null/
-harm hypothesis is *detectable*:
+A separate later experiment may ask whether healthy documentation itself
+causally helps coding agents. That requires controlled healthy/degraded
+documentation interventions while task and code remain fixed. Adopted versus
+unadopted repositories are confounded observational groups, not causal evidence
+for Experiment B. Adoption status may be reported as corpus context only.
 
-| Shape | Example | Scoring | What it tests |
-| --- | --- | --- | --- |
-| **Find-the-doc navigation** | "Which file documents the exit-code contract?" | exact repo-relative path match (deterministic) | llms.txt catalog, trails, MCP `what-links-to`/`path-between` — the artifacts' strongest claim |
-| **Repo-comprehension QA** | "What determines a document's identity, and why?" | LLM-judge vs gold answer (§5.1 safeguards) | general context assembly; where over-reading (the generated-context cost-rise signature) would show |
-| **Doc-maintenance (fix-prompt)** | inject a broken link / stale § ref / orphan; "fix the doc findings" | programmatic: targeted finding resolved, `matlatl check` exit 0, no collateral findings | the fix-prompt + findings loop ([ADR 0009](../adr/0009-fix-prompt-acting-agents.md)/[0020](../adr/0020-fix-prompt-scope.md)) |
-| **Grep-favorable control** | a fact trivially found by one `grep` | exact-match | *sentinel*: artifacts should give **no** benefit here; if they add tokens without success, that is the generated-context harm signature |
+Level 1 correctness, #33 signal quality/link recovery, and focused one-surface
+studies answer other questions. None is a substitute endpoint or completion
+criterion for #17.
 
-The control shape is the key methodological move: it is the internal check that
-a measured "win" on the other shapes is real navigation value and not judge
-noise, and it is where a token-cost regression is cleanest to read.
+## 2. Measured tasks
 
-### Count, and an honest power statement
+Every headline task must:
 
-Target **~25 tasks per corpus**, balanced ~6–7 per shape. Combined with the
-four Stage A arms (§3), ≥4 repetitions (§5.2), and 2–3 corpora, this is up to
-~1,200 runs — tractable, but **powered only for medium-to-large effects**. A
-small success delta would need substantially more tasks; this harness cannot
-and does not claim to detect one. Its honest endpoints are: *rule out large
-harm* and *detect a large win*. A null result means "no effect at or above the
-pre-registered detection floor," not "proven equivalent." State this in the
-results, do not launder it.
+1. require source-code or configuration-code edits, not only an answer or a
+   documentation edit;
+2. have deterministic private verification using hidden tests plus the
+   repository's normal checks;
+3. depend on one or more documented behavioral, security, configuration, or
+   architecture constraints;
+4. keep verifier code, gold patches, and hidden expectations outside the agent
+   sandbox; and
+5. be reviewed to ensure that the documented constraint is necessary to the
+   intended correct implementation.
 
-### Ground truth without contamination
+The task set to freeze uses exactly one primary retrieval stratum per task. Apply
+these objective rules in precedence order:
 
-- **The task author must not read the artifacts under test.** Authors write
-  tasks and gold answers from the raw source docs/code only. A second reviewer
-  verifies each gold answer against source.
-- **Maintenance tasks need no human gold** — ground truth is the programmatic
-  `matlatl check` result, immune to contamination.
-- **Freeze tasks + gold answers before the first measured run** (see the
-  [pre-registration](eval-preregistration.md) freeze checklist).
-- Gold answers and the scoring rubric **never enter the agent sandbox** (§4).
-
-## 2. Corpora
-
-Sizes measured locally (markdown files, fixtures/vendor excluded): matlatl **34
-real docs**, atrium **478**, toolhive **238**, mecatl **198**, minder **159**.
-
-| Corpus | Role | Rationale |
+| Precedence | Stratum | Requirement |
 | --- | --- | --- |
-| **matlatl itself** | smoke / dev-loop | 34 docs, compactness 0.27, ~1.9 clicks apart — too shallow for navigation signal, but zero-friction for harness development. **Not** a primary-signal corpus. |
-| **One adopted Stacklok repo** (atrium or mecatl) | primary | Already curated *using* matlatl → real, human-tuned nav surfaces; we control it and can inspect ground truth. |
-| **One un-adopted repo** (toolhive or minder) | primary | Large real docs *not* yet matlatl-tuned — tests the artifact on a raw corpus. |
+| 1 | **Grep-friendly coding control** | The frozen direct-search test finds the decisive constraint within the frozen query/result burden |
+| 2 | **Cross-document synthesis** | If not grep-friendly, verifier correctness requires constraints from at least two documents |
+| 3 | **Navigation-heavy coding** | If neither above, the task meets the frozen objective retrieval-burden criteria |
+| 4 | **Single-document constraint** | Every remaining eligible task whose decisive rule is in one document |
 
-**The frozen real corpora are the outcome set.** External validity — "do the
-artifacts help on real documentation?" — can only be established on the pinned
-real repositories above. The synthetic **Nimbus** corpus
-([nimbus-eval-corpus.md](nimbus-eval-corpus.md)) is a *separate, future*
-artifact: a hermetic 40–60-document calibration corpus that validates harness
-mechanics and internal validity (does the instrumentation move when it should,
-and stay flat when it should?). It **cannot** establish external validity and
-feeds no agent-outcome endpoint. Note also that Nimbus is **not**
-`demo/corpus/nimbus-docs` — the demo seed is a deliberately-broken stage prop,
-not a calibration instrument (see the spec's provenance section).
+Freeze the direct-search queries, result/burden thresholds, navigation-burden
+criteria, and required-document evidence. A reviewer independent of task
+selection confirms each assignment before scheduling. Exploratory multilabel
+descriptors may describe tasks, but cannot drive confirmatory subgroup selection.
 
-**The adoption confound (call it out loudly).** An adopted repo's `llms.txt`
-may reflect *human curation done with matlatl's help*, not the raw generated
-artifact — the generated-vs-developer-written distinction tested by
-2602.11988 is directly relevant.
+Before selecting tasks, freeze the complete eligible-task sampling frame in each
+repository and a reproducible selection procedure. Define independent **task
+families** before scheduling: tasks sharing any documented constraint,
+subsystem/change, mutation, or verifier lineage are in the same family. Multiple
+tasks may be retained per family, but the family is scheduled and bootstrapped as
+one inferential cluster.
 
-**DECIDED (maintainer, 2026-07-19; retained in the 2026-08 review): regenerate
-all artifacts fresh (un-curated) on every corpus.** The eval measures the pure
-generated artifact, not the curation story. Committed artifacts in adopted
-repos are ignored; the harness runs the pinned matlatl version against each
-pinned corpus SHA and injects only that output. Residual caveat to state in results: an adopted
-repo's underlying *link structure* was still improved by matlatl-driven
-maintenance, so adopted vs un-adopted remains a useful secondary lens on
-structure (not on artifact curation), and keeping one of each in the corpus set
-preserves that reading for free.
+Old find-the-document, comprehension QA, and documentation-repair tasks may be
+used for calibration or separately preregistered focused studies. They do not
+enter the headline sample. No headline score uses a model judge.
 
-**Selection criteria:** substantial `docs/` with real link density; permissive
-license (atrium/toolhive/minder carry LICENSE files; mecatl is internal — fine
-since we control it but not "OSS"); we can inspect ground truth; variety in
-navigability (one flat, one deep). **Pin each corpus by commit SHA** in the
-pre-registration; do not vendor the trees.
+Task authors work from source code and source documentation, never generated
+artifacts. A second reviewer checks eligibility, family assignment, primary
+stratum, hidden verifier, and documented dependency. Frames, selection procedure,
+tasks, families, fixtures, verifiers, and hashes freeze before measured runs.
 
-**Synthetic corpora in general** add value *only* where the ground truth must
-be injected by construction: the offline link-recovery eval (§6) and the Nimbus
-mechanics calibration. They add nothing to agent-outcome external validity —
-real corpora only there.
+## 3. Real corpora
 
-## 3. Conditions
+Use exactly two pinned real repositories. Before observing outcomes, freeze each
+repository's eligible-task frame and selection procedure as well as repository
+URL, commit, license, content manifest, prepared image digest, and selected task-
+family inventory. Matlatl itself may remain a smoke corpus but is not outcome
+evidence unless it is one of the two repositories and independently satisfies
+the frozen eligibility and selection criteria.
 
-Full matrix is 5 arms: baseline · +llms.txt · +trails.json · +MCP (`serve`) ·
-+all. Running it on every corpus × task × repetition is 5× the first bill for a
-question that is, at Stage 1, directional. **Staged design:**
+Committed matlatl artifacts are not treatment. Corpus preparation removes
+pre-existing matlatl `llms.txt`, `trails.json`, generated indexes/manifests, and
+matlatl MCP entries from the normalized base snapshot. Fresh artifacts are made
+from the pinned matlatl version only for `+all`.
 
-- **Stage A (always), four arms:** `baseline` · `+all` · `pointer-only` ·
-  `+trails`.
-  - `baseline` vs `+all` answers the headline question (does the bundle move
-    the needle, either way?).
-  - `pointer-only` is the **control for the pointer confound**: the agent
-    receives the same minimal pointer text used in `+trails`/`+all`, but no
-    generated artifacts. Without this arm, a `+trails` win is uninterpretable —
-    it could be the artifact or merely the instruction to look.
-  - `+trails` is `trails.json` in the checkout **plus that identical pointer
-    text** — the same pointer `pointer-only` and `+all` carry. It is included
-    up front because trails is the most-exposed artifact (a global reading
-    order is over-reading bait for task-conditioned sessions, per #17) and
-    demoting it from the default emit bundle is the cheapest, highest-value
-    pre-registered decision.
-  - **Native context is normalized across arms.** If the runner CLI or the
-    corpus repo supplies native context (e.g. a `CLAUDE.md`/`AGENTS.md` the
-    agent reads by default), the identical native context is present in *every*
-    arm — baseline included. Arms differ **only** in the injected matlatl
-    artifacts and the pointer text; nothing else about the agent's default
-    context may vary. An arm that silently adds or removes native context is an
-    instrumentation bug, not a condition.
-- **Stage B (conditional):** if Stage A shows a detectable effect under the
-  pre-registered threshold (+ or −), add `+llms.txt` and `+MCP` arms to
-  attribute the effect. If Stage A has no detectable effect, stop — "neutral at
-  this detection floor" is a complete, cheap, reportable result.
+Include corpus topology and adoption status descriptively if useful. Do not infer
+that adoption or healthier graph metrics caused an agent outcome; that belongs
+to Experiment B.
 
-## 4. Agent harness
+## 4. Stage A conditions
 
-**Runner: Inspect AI orchestrating pinned Claude Code, headless.** Pin the
-Inspect AI version, Claude Code version, model id/version, and every setting in
-the pre-registration's execution-metadata section. Inspect AI
-([inspect.aisi.org.uk](https://inspect.aisi.org.uk/)), the UK AI Security
-Institute / Meridian Labs evaluation framework, officially supports running
-external agents including Claude Code inside its dataset/solver/scorer and
-sandbox machinery. Claude Code remains the agent under test; Inspect supplies
-the run, limit, log, and scoring envelope. A second agent for generalization is
-**deferred** — noted as future work so a single-agent result is not
-over-generalized.
+The first paid Stage A has exactly two arms. Human label `+all` maps to the
+machine/config identifier `all`; `baseline` maps to `baseline`.
 
-Task packages follow the useful **Harbor-like shape** documented by Harbor
-([harborframework.com/docs/task-format](https://harborframework.com/docs/task-format)):
-an immutable task directory containing an instruction, task metadata, a
-containerized environment, and a separate verifier. This design **does not
-claim Harbor compatibility**: no Harbor schema version, registry, API, or
-tooling is adopted or implied.
-
-**Artifact injection per condition** (minimal and realistic — test the
-artifact, not an instruction about it):
-
-- `baseline`: immutable prepared corpus snapshot at the pinned SHA, plus the
-  normalized native context (§3). No artifacts, no pointer.
-- `pointer-only`: baseline + the minimal pointer text, verbatim identical to
-  the pointer in `+trails` and `+all`.
-- `+trails`: `trails.json` in the checkout + the pointer.
-- `+all`: root `llms.txt` + `trails.json` + MCP configured + the pointer.
-- (Stage B) `+llms.txt`: generated `llms.txt` at repo root, no pointer —
-  adding "use llms.txt" would test the instruction, not the file.
-- (Stage B) `+MCP`: agent configured with the `matlatl serve` endpoint via MCP
-  config; `serve` started per-corpus (read-only, safe).
-
-**Pin the full execution tuple.** Every run record carries the prepared corpus
-identity (repository URL, commit SHA, license, content-manifest hash, and
-package/image digest); task, gold, and mutation hashes; matlatl SHA, config,
-and generated-artifact hashes; Inspect AI and Claude Code versions; exact
-model, provider, and API endpoint; system-prompt, native-context, MCP, and tool
-configuration hashes; decoding settings and all limits; randomization block,
-repetition, seed, and schedule hash; scorer, judge, and rubric hashes; and the
-attempt id plus retry parent. The tuple is filled field-by-field in the
-pre-registration; a run whose record lacks any element is invalid, not
-"approximately reproducible."
-
-**Append-only, replayable trajectories.** Each run writes one immutable record:
-the full event trajectory (every tool call and response), the final answer, the
-runner's token/tool/turn/cost accounting, and the execution tuple. Records are
-append-only — never edited in place; corrections are new records. Given the
-same tuple and seed, a run must be re-executable (replayable) up to model
-nondeterminism.
-
-**Failure taxonomy and bounded retries.** Every attempt ends in exactly one
-class; these names and meanings are identical in the pre-registration:
-
-| Class | Meaning | Retry and scoring treatment |
+| Human label | Machine/config ID | Injected content |
 | --- | --- | --- |
-| `completed` | the agent produced a scoreable answer | scorer records pass/fail; no retry |
-| `agent-timeout` | the agent exceeded the frozen wall-clock limit | task failure; never retry |
-| `budget-exhausted` | the agent exhausted a frozen token, turn, or tool-call budget | task failure; never retry |
-| `agent-protocol-failure` | agent-caused malformed output, invalid tool use, or protocol violation prevented scoring | task failure; never retry |
-| `environment-failure` | prepared image/package or sandbox infrastructure failed | infrastructure failure; bounded fresh retry, at most 3 total attempts |
-| `mcp-failure` | the configured MCP service failed independently of agent behavior | infrastructure failure; bounded fresh retry, at most 3 total attempts |
-| `provider-failure` | model-provider/API service failed or returned no usable response independently of agent behavior | provider failure; bounded fresh retry, at most 3 total attempts |
-| `evaluator-failure` | harness, judge, or scorer failed independently of the answer | evaluator failure; bounded fresh retry, at most 3 total attempts |
-| `invalid-task` | task, gold, rubric, or mutation is discovered to be invalid or ambiguous | stop the affected analysis; issue an explicit amendment and new freeze before rerunning the complete affected schedule — never selectively rerun |
+| `baseline` | `baseline` | Frozen normalized repository plus byte-identical native agent context; all pre-existing matlatl artifacts and MCP configuration removed |
+| `+all` | `all` | Baseline plus freshly generated root `llms.txt`, root `trails.json`, remote streamable-HTTP matlatl MCP, and one frozen availability notice |
 
-A bounded retry is a fresh attempt with a new attempt id and a retry-parent
-link to the failed attempt. After three failed infrastructure/provider/
-evaluator attempts, record `infra-exhausted` and exclude that scheduled run
-from numerator and denominator with the exclusion reported.
+Native repository instructions such as `AGENTS.md`, runner defaults, tools,
+prompts, environment, and limits are normalized and byte-identical across arms.
+The `+all` notice is fixed before measurement, names the three available surfaces,
+and does not mandate their use. Its absence from baseline is part of the bundle
+being tested.
 
-**Contamination avoidance:** each attempt gets a fresh isolated copy made from
-the immutable prepared snapshot/image — never a runtime remote checkout. The
-agent receives only the corpus snapshot + task prompt. Gold answers, rubric,
-and scoring code live in `eval/` and are **never** in the sandbox. When matlatl
-is the corpus, `eval/` is excluded via `.matlatlignore` so it never pollutes
-matlatl's own artifacts or the dogfood gate.
+MCP is configured only as remote streamable HTTP at a loopback `/mcp` endpoint;
+local/stdio transport is forbidden. Each attempt receives a fresh service over
+its immutable corpus copy.
 
-## 5. Metrics + scoring
+`pointer-only`, `+trails`, `+llms`, and `+MCP` are deferred to a separately
+preregistered attribution/default-bundle study. The sole automatic trigger is the
+frozen decision rule applied to Stage A's pooled frozen-benchmark success
+contrast. Cost, corpus, and task-stratum estimates cannot trigger attribution.
+After a null, any default-bundle study requires separate funding and signature. A
+Stage A null stops Stage A and never silently adds arms.
 
-### 5.1 Success (per shape)
+## 5. Model/provider qualification
 
-- **Navigation & grep-control:** exact repo-relative path / string match — no
-  judge.
-- **Comprehension QA:** LLM-judge under a **strict protocol**: a **frozen
-  rubric** (fixed 0/1 or 0–2 criteria, versioned with the task set); the judge
-  sees gold + agent answer but **not** the condition (**blinding**); the judge
-  model differs from the model under test (reduce self-preference). A human
-  audits a frozen subset stratified by corpus and task shape, and agreement is
-  compared with a frozen threshold. **If a corpus/shape stratum falls below the
-  threshold, humans score every answer in that stratum before those full human
-  scores replace the judge results** — the audit subset alone never replaces
-  unaudited results.
-- **Maintenance:** programmatic — targeted finding resolved, `matlatl check`
-  exit 0, no new collateral findings.
+Select the pinned OpenCode model/provider before any candidate sees treatment.
+Qualification uses disposable Nimbus **coding** tasks under baseline only. These
+tasks do not overlap measured real tasks and are discarded from outcomes.
 
-### 5.2 Cost, cache, and repetitions
+Freeze before qualification:
 
-Primary cost metric: **total tokens** (input+output, from the runner JSON) —
-the generated-context harm signature was a cost rise. Also record tool-call count and wall
-time. Two refinements, both pre-registered:
+- candidate model/provider/API list and exact OpenCode version;
+- minimum coding competence on deterministic private verifiers;
+- maximum tool/protocol failure rate;
+- required telemetry fields, including explicit zero cache counters;
+- qualification and projected measured-run budget ceilings;
+- projected-cost calculation; and
+- deterministic tie-break order.
 
-- **Cache-aware accounting.** Record uncached input, cache-read, cache-write,
-  and output tokens per run, and report totals both **including** and
-  **excluding** cache-read tokens. The first reflects all processed context;
-  the second isolates newly billed/processed context under the pinned provider
-  accounting. Which view is primary is frozen in the pre-registration, not
-  chosen after seeing the data.
-- **Success-normalized cost.** For each task-arm, report raw attempt cost and
-  tokens per successful repetition (total tokens ÷ successful repetitions).
-  If the task-arm has zero successes, success-normalized cost is
-  **undefined/infinite and reported explicitly**; it is never dropped or
-  silently excluded to make the arm look efficient. Report raw and
-  success-normalized cost together; decision rules use the pre-registered view.
+Disqualify any candidate failing competence, reliability, telemetry, or budget.
+Among passing candidates choose the lowest projected cost; apply the tie-break
+only on equal projected cost. Never expose `+all`, calculate a treatment delta,
+or select a candidate for responding favorably to matlatl.
 
-**≥4 repetitions per (task, arm)** to average over agent nondeterminism;
-repetitions are **aggregated to a single per-task value per arm** (success rate
-over the task's repetitions; mean tokens) **before any inference** — the task,
-not the individual run, is the inferential unit (§5.3).
+## 6. Execution, isolation, and records
 
-### 5.3 Statistics honest at this n
+External smevals orchestrates pinned OpenCode headlessly. The current checked-in
+fixture proves that boundary with fake OpenCode only. Measured attempts require
+fresh container isolation because a run-local directory alone does not isolate
+private gold or host paths.
 
-- **The task is the inferential unit.** Inference runs on per-task aggregated
-  values (§5.2), never on the pool of raw runs — pooling repetitions would
-  inflate n by the repetition count and fake precision.
-- **Paired task-level contrasts.** Each contrast is the per-task delta between
-  two arms over the same tasks (e.g. `+all` − `baseline` per task), so task
-  difficulty is differenced out. Report effect sizes with **clustered
-  bootstrap** confidence intervals — resample tasks (with their repetitions as
-  the cluster), not individual runs.
-- **Stratify by corpus and by task shape.** A bundle that helps navigation and
-  hurts comprehension must not average out to "neutral"; report each
-  corpus × shape stratum alongside the pooled estimate.
-- Multiple-comparison correction across arms. **Report effect sizes + CIs, not
-  bare p-values.** Re-state the §1 power caveat: this detects large effects and
-  large harm, nothing subtle.
+Each run record pins the complete execution tuple: corpus/image and content
+hashes; task, verifier, gold, and mutation hashes; matlatl SHA/config and artifact
+hashes; smevals/OpenCode/model/provider/API versions; prompt, native-context,
+notice, MCP, and tool configuration hashes; decoding settings and limits;
+schedule, task, repetition, arm order, and seed; scorer hash; and attempt/retry
+identity.
 
-## 6. Home + reproducibility
+Trajectories and results are append-only. Retain every prompt/model event, tool
+call and response, filesystem-access event used for treatment counters, final
+answer, process result, verifier result, and telemetry record. Corrections create
+new records.
 
-- **In-repo `eval/`** (harness, task specs, scoring), excluded from dogfood via
-  a new `.matlatlignore` entry and from emit. Rationale: the eval *is* the
-  tool's central thesis; versioning it with matlatl keeps it discoverable and
-  honest. Alternative — a sibling repo — keeps the main tree lean but loses
-  cohesion; rejected for the first run.
-- **Real corpora are immutable prepared snapshots, not runtime checkouts.** For
-  each corpus the freeze manifest records repository URL, commit SHA, license,
-  content-manifest hash, and task-package/image digest. Preparation may fetch
-  the pinned commit before freeze; measured attempts consume only the verified
-  snapshot/image and run without fetching moving remote state.
-- **Results:** append-only raw per-run JSON (§4) → aggregated `results.json` →
-  a human `eval/results.md` stating the pre-registered endpoints and the
-  verdict.
-- **Link-recovery stays a separate eval.** The link-recovery experiment
-  designed in §5 of
-  [semantic-similarity-and-determinism.md](semantic-similarity-and-determinism.md)
-  lives in `eval/link-recovery/` as a **deterministic, agent-free, token-free**
-  offline eval (hide real links, measure recovery — validates `suggested-link`,
-  [ADR 0013](../adr/0013-topology-link-prediction.md)). The broader correctness,
-  signal-quality, and focused one-surface contract is
-  [heuristic-evaluation.md](heuristic-evaluation.md). It shares corpora and
-  tooling but is a *different claim* (offline signal quality, not agent
-  outcome), so it stays out of the agent-outcome endpoints and out of the
-  pre-registration's decision rules. It can run first as a cheap warm-up. The
-  heuristic workstream does not make #17 completion depend on completing every
-  heuristic experiment.
-- **"Done" for #17:** one credible directional result on 2 real corpora (+ the
-  matlatl smoke corpus), Stage A only, with a `results.md` verdict feeding the
-  #25 roadmap. **Not** a permanent CI benchmark.
+Gold patches, hidden tests, scorer code, and qualification expectations never
+enter the agent sandbox. Attempts consume verified local snapshots and do not
+fetch moving repository state.
 
-## 7. Decision rules and pre-registration
+### Failure and retry policy
 
-The pre-outcome contract is a separate document:
-[eval-preregistration.md](eval-preregistration.md). It freezes, before the
-first measured run: the research questions, the Stage A arms, the corpora SHAs
-and task/gold set, the randomization and repetition scheme, the limits/retries/
-failure taxonomy, the scoring and judge protocol, the task-level analysis plan,
-the cost metrics, the **material-effect thresholds and decision rules**
-(proposed: 10 percentage points success, 20% cost — marked *pending maintainer
-freeze*), the execution metadata tuple, the pilot firewall, and the freeze
-checklist. Deviations after freeze are logged in `results.md`.
+Record whether failure occurs before or after treatment exposure, defined as the
+first model request being sent. Only pre-exposure provisioning, provider, or
+evaluator failures may receive a bounded fresh retry under the frozen ceiling.
+Retries use new sandboxes and attempt IDs linked to the original scheduled run;
+their spend remains assigned to that run.
 
-The decision-rule table itself lives in the pre-registration so this note can
-keep evolving without touching the frozen contract.
+Once exposed, every terminal event—including MCP, runtime/environment, provider,
+tool, telemetry, timeout, protocol, budget, and evaluator failures—is an
+unsuccessful intention-to-treat outcome in the assigned arm and is not retried or
+excluded. An invalid task stops affected analysis and requires amendment,
+refreeze, and rerunning the complete affected schedule; it is not resolved by
+selective replacement. Secondary diagnostic per-protocol views may identify
+mechanically complete attempts, but cannot replace the primary analysis.
 
-## 8. Open questions for the maintainer — ANSWERED (2026-07-19)
+Qualification must prove explicit `cache-read = 0` and `cache-write = 0` counters
+before measurement. Missing or nonzero cache counters after exposure are
+unsuccessful assigned-arm outcomes. Freeze a stop/abort rule for systematic or
+differential cache violations and report every violation; never silently exclude
+them.
 
-1. **Adoption confound** (§2) — **regenerate fresh artifacts everywhere.** The
-   eval measures the pure generated artifact (strict comparison with the controlled generated-context study); adopted
-   vs un-adopted is retained only as a secondary structural lens.
-2. **Single harness vs a second agent** (§4) — **single (pinned Claude Code,
-   headless)** for the first run; a second harness is future work and results
-   are stated as single-agent.
-3. **Power vs cost** (§1/§5.3) — **"rule out large harm, detect a large win" is
-   accepted as done-for-#17.** The directional Stage A design stands; a
-   more-powered design is not funded unless Stage A results argue for it.
+## 7. Zero-cache telemetry and cost
 
-## 9. First-run cost estimate
+Caching is disabled at runner and provider. Qualification must show explicit
+zero counters. Measurement retains cache counters even when missing/nonzero and
+applies the post-exposure outcome and stop/abort rules above. Provider billing is
+externally reconciled against runner events.
 
-Stage A ≈ 4 arms × 3 corpora × ~25 tasks × 4 repetitions ≈ **~1200 agent
-runs**. At an assumed ~80k tokens/run (comprehension tasks dominate; caching
-helps) ≈ **~100M tokens**, roughly **$200–500**. LLM-judge scoring adds a few
-dollars. Stage B, if triggered, is a comparable increment. Dominant cost
-levers: repetitions × tasks × tokens-per-run — tune repetitions down to 3 or
-tasks to ~18 to roughly halve it.
+Record for every scheduled run and attempt:
+
+- uncached input tokens, output tokens, externally reconciled billed cost, and any
+  conservative cost-cap assignment;
+- cache-read and cache-write counters;
+- wall time, turns, and total tool calls;
+- `llms.txt` access count and `trails.json` access count;
+- separate call counts for `what-links-to`, `list-orphans`, `path-between`,
+  `get-section`, `corpus-summary`, `suggest-links`, and `critical-docs`;
+- first-model-request/treatment-exposure status and timestamp; and
+- success/failure, retry, and intention-to-treat class.
+
+The primary finite cost endpoint is task-family mean billed spend per scheduled
+attempt. It includes all assigned attempts, unsuccessful and post-exposure
+failures, and spend from allowed pre-exposure retries. If exact billed cost is
+missing after exposure, assign the frozen per-attempt cost cap conservatively.
+Cost per successful completion is reported only as a descriptive arm-level
+operational metric; it is not an ordinary paired task-family bootstrap endpoint.
+An arm with zero successes remains visibly infinite/undefined.
+
+## 8. Budget and power
+
+No fixed family count or repetition count is assumed. Before freeze, the
+maintainer signs a joint simulation/calculation over feasible `2 × N × r`
+designs, where `N` is independent task families and `r` scheduled repetitions per
+family-arm.
+
+The calculation must:
+
+- jointly simulate the exact pooled family-level success estimand and finite
+billed-spend-per-scheduled-attempt estimand, including their correlation, cost
+variance and tails, family/corpus/stratum heterogeneity, post-exposure failures,
+allowed pre-exposure retry spend, and conservative cost-cap assignments;
+- execute the exact proposed clustering, interval, weighting, and confirmatory
+decision procedures rather than a proxy test;
+- begin design comparison at `r = 2`;
+- reserve explicit budget for qualification and bounded pre-exposure retries;
+- compare power and detection floors under every financially feasible design;
+- favor larger `N` over larger `r` when power is near-equal; and
+- raise and disclose the detectable-effect floor when target power is
+unaffordable rather than pretending the original floor remains supported.
+
+The signed calculation, code/hash, assumptions, chosen `N` and `r`, total run
+ceiling, per-attempt cost cap, total cost ceiling, target power, exact interval and
+decision procedures, and resulting success and finite-cost detection floors are
+freeze artifacts.
+
+## 9. Randomization and analysis
+
+For each task family and repetition, use balanced AB/BA order (`A = baseline`,
+`B = +all`, machine ID `all`). Freeze the seeded assignment so each arm appears
+first equally often within every feasible corpus/primary-stratum block; all tasks
+from one family remain in that family's scheduled cluster and unavoidable
+imbalance is recorded.
+
+Aggregate all tasks and repetitions into one value per family-arm before
+inference. The task family is the inferential unit. The sole confirmatory
+statistic is the pooled frozen-benchmark family-level success contrast:
+
+> `+all − baseline`
+
+Apply the frozen family-clustered bootstrap, resampling families within corpus
+strata and carrying every task, repetition, failure, retry, and cost in each
+sampled family. The primary success estimate and decision interval are
+confirmatory. The finite cost contrast and per-corpus/per-primary-stratum effect
+estimates and intervals are prespecified secondary/descriptive analyses; none can
+trigger attribution. Cost per successful completion is arm-level descriptive
+only and is not bootstrapped as an ordinary paired endpoint.
+
+Also publish all raw arm summaries, failures, retries, cache violations,
+zero-success arms, access counters, and per-MCP-tool counts, plus secondary
+per-protocol diagnostics clearly separated from intention-to-treat results. A
+null means no effect detected at the frozen detection floor, not proof of
+equivalence.
+
+## 10. Nimbus and calibration
+
+Nimbus is instrumentation/isolation/scorer/model-qualification calibration only.
+It must add source code and coding fixtures dependent on documented constraints.
+Its coverage matrix verifies artifact injection and removal, access counters,
+per-tool MCP counters, zero-cache rejection, deterministic hidden scoring, and
+gold/host isolation. It neither needs nor may claim directional arm outcomes.
+Nimbus contributes no treatment-effect estimate and no external-validity claim.
+
+## 11. Reproducibility and completion
+
+Raw records are append-only and feed deterministic aggregate data and a human
+`eval/results.md`. #17 is complete only when the frozen two-arm study has run on
+exactly the two selected repositories and reports the confirmatory pooled success
+result plus finite-cost and registered descriptive results with every assigned
+post-exposure failure. The result estimates this finite benchmark only. Link
+recovery, #33 signal quality, Level 1 correctness, Nimbus, navigation QA, and
+document repair do not count as #17 completion.
+
+## 12. Pending maintainer freeze
+
+The preregistration remains explicitly unfrozen. Before paid measurement the
+maintainer must freeze:
+
+- exactly two repositories, SHAs/images/licenses, eligible-task frames and
+  selection procedure, task families, and whether matlatl qualifies as outcome or
+  smoke only;
+- coding tasks, mutually exclusive precedence-based strata, exploratory
+  descriptors, independent review, hidden verifiers, normal checks, and all
+  hashes;
+- normalized native context, artifact-removal rules, `+all` notice, and remote
+  MCP configuration;
+- model/provider candidates, baseline-only Nimbus qualification thresholds,
+  projected-cost formula, budget, and deterministic tie-break;
+- zero-cache qualification proof, provider configuration, telemetry validation,
+  treatment-exposure boundary, cache stop/abort rule, and conservative cost cap;
+- signed joint simulation and budget/power calculation, selected `N`/`r`, retry
+  reserve, target power, and success/finite-cost detection floors;
+- AB/BA schedule and seed;
+- run limits, bounded pre-exposure retry ceiling, post-exposure
+  intention-to-treat rules, scorer, isolation tests, record schema/version, and
+  complete execution tuple;
+- sole confirmatory pooled-success estimand and trigger; finite-cost and
+  descriptive estimands; family-clustered bootstrap settings; exact interval and
+  decision procedures; and
+- attribution-study trigger language and maintainer signature/date.

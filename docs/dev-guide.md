@@ -27,7 +27,7 @@ internal/
     mcpserver/           the MCP server (mark3labs/mcp-go, quarantined here)
   platform/              version, exit codes
 docs/                    architecture, ADRs, user/dev guides, schemas
-eval/                    offline Go-only evaluation scaffold (mock; no model/network)
+eval/                    offline oracle + smevals/OpenCode boundary spike
 testdata/                fixture corpora + golden artifacts
 ```
 
@@ -70,6 +70,7 @@ testdata/                fixture corpora + golden artifacts
 ```console
 $ task build              # ./bin/matlatl
 $ task test               # unit + smoke, under -race
+$ task test-performance   # full 5k-document memory guard, without -race
 $ task test-integration   # golden + integration (-tags=integration)
 $ task cover              # coverage (includes integration-tagged code)
 $ task lint               # golangci-lint
@@ -77,15 +78,40 @@ $ task check              # fmt + vet + lint + test (run before pushing)
 $ task eval:validate      # validate offline eval v1 tasks and fixtures
 $ task eval:oracle        # run real pipeline and check hand-authored oracle
 $ task eval:smoke         # mock-agent smoke with temporary append-only output
-$ task eval:report        # smoke + deterministic report in temporary output
+$ task eval:report        # smoke in temporary records, write eval/out/report.md
+$ task eval:agent-spike   # OCI-independent fake-runtime unit tests
+$ task eval:oci-integration # explicit local Docker/Podman isolation acceptance
+$ task eval:nimbus-validate     # strict Cirrus Relay task/mutation manifests
+$ task eval:nimbus-freeze-check # canonical sorted hash inventory
+$ task eval:nimbus-probe        # OCI-free synthetic mechanical probes
+$ MATLATL_OCI_RUNTIME=docker task eval:nimbus-verify # private locked verifier
+$ MATLATL_OCI_RUNTIME=podman task eval:nimbus-oci-integration
+$ task eval:smevals-smoke # opt-in pinned smevals over the isolated fake image
 ```
 
-The `eval/` scaffold is standard-library-only at its own command/harness layer,
-runs without credentials or network/model tools, and is excluded from dogfood.
-It currently validates mechanics only: Stage A, Inspect/Claude, Nimbus, and paid
-or model-backed execution remain unbuilt. See `eval/README.md` for commands and
-layout. Its agent-visible package allowlist contains only instruction and corpus;
-that cooperative data boundary is not hostile-process sandboxing.
+The completed Level 1 oracle and Milestone 1 executor under `eval/` make no
+model/provider calls and need no credentials. Ordinary tests use a fake OCI seam;
+the explicit `ociintegration` test builds a two-binary `FROM scratch` image and
+runs adversarial Docker/Podman isolation checks. Fake OpenCode runs only in a
+fresh locked-down container, and `all` uses production matlatl MCP over remote
+streamable HTTP on container loopback. Human labels `baseline` and `+all` map to
+machine/config IDs `baseline` and `all`.
+
+Milestone 2 calibration is implemented under `eval/nimbus/v1` using the separate
+fictional Cirrus Relay repository. It freezes four reversible coding fixtures and
+checks host-private JSON cases through an expectation-free adapter compiled with
+candidate source in a pinned, network-disabled container. Only the static adapter
+binary runs; hidden inputs and expected results remain on the host and are never
+mounted into candidate execution. `nimbus probe` executes a deterministic Nimbus
+mechanical probe of preparation, loopback MCP access, transport, and synthetic
+event reconciliation. It is not production-runner telemetry integration or live
+baseline model qualification: the strict telemetry schema and synthetic
+qualification candidates are calibration contracts only. Filesystem counters
+describe synthetic event-derived operations, not kernel-level arbitrary-shell
+opens. A second human review signature, production OpenCode telemetry ingestion,
+qualification thresholds/candidates, live cache and billing reconciliation,
+retry/ITT machinery, real corpora, paid runs, and model selection remain pending
+Milestone 3. Nimbus makes no directional-arm or treatment-effect claim.
 
 ### The checks every change must pass
 
@@ -128,8 +154,13 @@ go list -deps ./internal/application/... | grep 'infrastructure/emit'
   nested-repo `.git` markers (file + dir; ADR 0017).
 - **Determinism** — concurrent vs single-threaded parse must be byte-identical
   (`TestPipeline_Determinism_AcrossWorkerCounts`).
-- **Benchmark** — `go test -bench BenchmarkPipeline_5kDocs -benchmem -run x ./...`
-  plus a memory-ceiling assertion guards the O(V+E) expectation.
+- **Benchmark / performance** — ordinary race-enabled tests run a 500-document
+  full-pipeline memory smoke guard. Run `task test-performance` for the tagged
+  5,000-document allocation ceiling, and
+  `go test -run '^$' -bench BenchmarkPipeline_5kDocs -benchtime=1x -benchmem
+  ./internal/application` for wall-time/allocation measurements. The 5k test is
+  deliberately non-race because exact APSP analysis is `O(V·(V+E))`; CI runs it
+  explicitly on Linux.
 
 ## Concurrency model
 

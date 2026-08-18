@@ -55,20 +55,19 @@ func BenchmarkPipeline_5kDocs(b *testing.B) {
 	}
 }
 
-// TestPipeline_5kDocs_MemoryCeiling guards the in-memory-everything risk: a full
-// 5k-doc scan→analyze run must complete and stay under a generous heap ceiling.
-// It is a correctness gate (not a precise benchmark): peak HeapAlloc growth over
-// the run is asserted below a ceiling that a linear O(V+E) implementation
-// comfortably meets, so a future super-linear regression (e.g. quadratic edge
-// blow-up) trips it. Skipped in -short.
-func TestPipeline_5kDocs_MemoryCeiling(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping 5k-doc memory test in -short")
-	}
-	const n = 5000
-	// genCorpus writes n docs + the README + a fixed 7-doc deep chain (ADR 0021),
-	// so the corpus has n+8 documents.
-	const wantDocs = n + 1 + genCorpusChainLen
+// TestPipeline_500Docs_MemoryCeiling keeps an ordinary race-enabled smoke guard
+// on the full scan→analyze path. The production analysis includes exact streaming
+// APSP passes with O(V·(V+E)) runtime, so the separately tagged 5k guard is kept
+// out of the ordinary race suite; see TestPipeline_5kDocs_MemoryCeiling.
+func TestPipeline_500Docs_MemoryCeiling(t *testing.T) {
+	const n = 500
+	const ceiling = 128 << 20 // 128 MiB
+	runPipelineMemoryCeiling(t, n, ceiling)
+}
+
+func runPipelineMemoryCeiling(t *testing.T, n int, ceiling uint64) {
+	t.Helper()
+	wantDocs := n + 1 + genCorpusChainLen
 	root := genCorpus(t, n)
 
 	runtime.GC()
@@ -81,17 +80,11 @@ func TestPipeline_5kDocs_MemoryCeiling(t *testing.T) {
 
 	var after runtime.MemStats
 	runtime.ReadMemStats(&after)
-
-	// TotalAlloc is cumulative bytes allocated; the delta is total allocation
-	// over the run. For 5k small docs with ~5 links each a linear pipeline
-	// allocates well under 1 GiB total; a super-linear regression would blow far
-	// past it. This is a coarse ceiling, deliberately generous.
-	const ceiling = 1 << 30 // 1 GiB
 	delta := after.TotalAlloc - before.TotalAlloc
 	if delta > ceiling {
-		t.Fatalf("5k-doc run allocated %d bytes total, exceeds ceiling %d (possible super-linear regression)",
-			delta, ceiling)
+		t.Fatalf("%d-doc run allocated %d bytes total, exceeds ceiling %d (possible super-linear regression)",
+			n, delta, ceiling)
 	}
-	t.Logf("5k-doc run: total alloc %.1f MiB, peak heap %.1f MiB",
-		float64(delta)/(1<<20), float64(after.HeapAlloc)/(1<<20))
+	t.Logf("%d-doc run: total alloc %.1f MiB, retained heap %.1f MiB",
+		n, float64(delta)/(1<<20), float64(after.HeapAlloc)/(1<<20))
 }

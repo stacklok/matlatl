@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "taskId": "graceful-drain-health",
+  "cases": [
+    {"operation":"lifecycle","input":{"actions":["ready","live","begin","begin","active","drain","ready","live","begin","active","end","end","active","live"]},"expected":{"values":[true,true,true,true,2,true,false,true,false,2,1,0,0,true]}}
+  ]
+}

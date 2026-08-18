@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "thresholdsStatus": "unfrozen",
+  "candidateListStatus": "unfrozen",
+  "examples": [
+    {
+      "name": "valid-synthetic-selection",
+      "expectValid": true,
+      "candidate": {
+        "name":"synthetic-a","baselineOnly":true,"competencePassed":true,"protocolReliabilityPpm":1000000,"telemetryComplete":true,"projectedCostMicros":4567,"budgetMicros":5000,"deterministicTieBreak":"synthetic-a","calibrationOnly":true,"treatmentGenerated":false,
+        "telemetry":{"schemaVersion":1,"calibrationOnly":true,"cacheRead":0,"cacheWrite":0,"inputTokens":120,"outputTokens":30,"turns":2,"toolCalls":8,"billedMicros":4567,"wallMillis":900}
+      }
+    },
+    {
+      "name": "missing-baseline-only-invalid",
+      "expectValid": false,
+      "candidate": {
+        "name":"synthetic-b","competencePassed":true,"protocolReliabilityPpm":1000000,"telemetryComplete":true,"projectedCostMicros":1,"budgetMicros":2,"deterministicTieBreak":"synthetic-b","calibrationOnly":true,"treatmentGenerated":false,
+        "telemetry":{"schemaVersion":1,"calibrationOnly":true,"cacheRead":0,"cacheWrite":0,"inputTokens":1,"outputTokens":1,"turns":1,"toolCalls":0,"billedMicros":1,"wallMillis":1}
+      }
+    },
+    {
+      "name": "cache-invalid",
+      "expectValid": false,
+      "candidate": {
+        "name":"synthetic-c","baselineOnly":true,"competencePassed":true,"protocolReliabilityPpm":999999,"telemetryComplete":true,"projectedCostMicros":1,"budgetMicros":2,"deterministicTieBreak":"synthetic-c","calibrationOnly":true,"treatmentGenerated":false,
+        "telemetry":{"schemaVersion":1,"calibrationOnly":true,"cacheRead":1,"cacheWrite":0,"inputTokens":1,"outputTokens":1,"turns":1,"toolCalls":0,"billedMicros":1,"wallMillis":1}
+      }
+    },
+    {
+      "name": "over-budget-invalid",
+      "expectValid": false,
+      "candidate": {
+        "name":"synthetic-d","baselineOnly":true,"competencePassed":true,"protocolReliabilityPpm":1000000,"telemetryComplete":true,"projectedCostMicros":3,"budgetMicros":2,"deterministicTieBreak":"synthetic-d","calibrationOnly":true,"treatmentGenerated":false,
+        "telemetry":{"schemaVersion":1,"calibrationOnly":true,"cacheRead":0,"cacheWrite":0,"inputTokens":1,"outputTokens":1,"turns":1,"toolCalls":0,"billedMicros":1,"wallMillis":1}
+      }
+    }
+  ]
+}

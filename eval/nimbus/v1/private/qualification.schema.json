@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stacklok.com/matlatl/eval/nimbus/qualification-v1.schema.json",
+  "title": "Nimbus synthetic baseline-only qualification candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name","baselineOnly","competencePassed","protocolReliabilityPpm","telemetryComplete","projectedCostMicros","budgetMicros","deterministicTieBreak","calibrationOnly","treatmentGenerated","telemetry"],
+  "properties": {
+    "name":{"type":"string","minLength":1},
+    "baselineOnly":{"const":true},
+    "competencePassed":{"const":true},
+    "protocolReliabilityPpm":{"type":"integer","minimum":0,"maximum":1000000},
+    "telemetryComplete":{"const":true},
+    "projectedCostMicros":{"type":"integer","minimum":0},
+    "budgetMicros":{"type":"integer","minimum":0},
+    "deterministicTieBreak":{"type":"string","minLength":1},
+    "calibrationOnly":{"const":true},
+    "treatmentGenerated":{"const":false},
+    "telemetry":{
+      "type":"object",
+      "additionalProperties":false,
+      "required":["schemaVersion","calibrationOnly","cacheRead","cacheWrite","inputTokens","outputTokens","turns","toolCalls","billedMicros","wallMillis"],
+      "properties":{
+        "schemaVersion":{"const":1},"calibrationOnly":{"const":true},
+        "cacheRead":{"type":"integer","minimum":0,"maximum":0},"cacheWrite":{"type":"integer","minimum":0,"maximum":0},
+        "inputTokens":{"type":"integer","minimum":0},"outputTokens":{"type":"integer","minimum":0},
+        "turns":{"type":"integer","minimum":0},"toolCalls":{"type":"integer","minimum":0},
+        "billedMicros":{"type":"integer","minimum":0},"wallMillis":{"type":"integer","minimum":0}
+      }
+    }
+  }
+}

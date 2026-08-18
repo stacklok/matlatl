@@ -46,6 +46,54 @@ func postInitialize(ctx context.Context, url string) (int, error) {
 	return resp.StatusCode, nil
 }
 
+func TestServeListenerOwnsListenerAndOnlyServesMCP(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := listener.Addr().String()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	root := fixtureRoot(t)
+	go func() { done <- ServeListener(ctx, root, listener) }()
+
+	url := fmt.Sprintf("http://%s%s", addr, EndpointPath)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		reqCtx, requestCancel := context.WithTimeout(context.Background(), time.Second)
+		status, requestErr := postInitialize(reqCtx, url)
+		requestCancel()
+		if requestErr == nil && status == http.StatusOK {
+			break
+		}
+		if time.Now().After(deadline) {
+			cancel()
+			t.Fatalf("MCP endpoint never became ready: status=%d err=%v", status, requestErr)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	resp, err := http.Get(fmt.Sprintf("http://%s/", addr))
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		cancel()
+		t.Fatalf("non-MCP path status = %d, want 404", resp.StatusCode)
+	}
+
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("listener still accepts connections after shutdown")
+	}
+}
+
 // TestServe_StreamableHTTP starts the real Serve over streamable HTTP, completes
 // an initialize handshake against the /mcp endpoint, then cancels the context
 // and asserts Serve returns nil (graceful shutdown drained cleanly).

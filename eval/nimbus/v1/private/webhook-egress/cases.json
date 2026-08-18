@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "taskId": "webhook-egress",
+  "cases": [
+    {"operation":"webhook","input":{"url":"https://203.0.113.10/h","devAllowHTTP":false},"expected":{"accepted":true}},
+    {"operation":"webhook","input":{"url":"http://203.0.113.10/h","devAllowHTTP":true},"expected":{"accepted":true}},
+    {"operation":"webhook","input":{"url":"http://203.0.113.10/h","devAllowHTTP":false},"expected":{"accepted":false}},
+    {"operation":"webhook","input":{"url":"https://127.0.0.1/h","devAllowHTTP":false},"expected":{"accepted":false}},
+    {"operation":"webhook","input":{"url":"http://127.0.0.1/h","devAllowHTTP":true},"expected":{"accepted":false}},
+    {"operation":"webhook","input":{"url":"https://10.1.2.3/h","devAllowHTTP":true},"expected":{"accepted":false}},
+    {"operation":"webhook","input":{"url":"https://169.254.1.1/h","devAllowHTTP":false},"expected":{"accepted":false}},
+    {"operation":"webhook","input":{"url":"https://user@example.com/h","devAllowHTTP":false},"expected":{"accepted":false}},
+    {"operation":"webhook","input":{"url":"//example.com/h","devAllowHTTP":false},"expected":{"accepted":false}}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "batch-ceiling",
+  "family": "batch-admission",
+  "primaryStratum": "grep-friendly-coding-control",
+  "instruction": "Restore the documented Cirrus Relay batch admission ceiling.",
+  "classification": {"rule":"grep-friendly-coding-control","grepLiteral":"CIRRUS_BATCH_CEILING","grepResultPaths":["docs/configuration.md"]},
+  "requiredDocs": [{"path":"docs/configuration.md","anchor":"batch-admission"}],
+  "normalChecks": ["go test ./..."],
+  "reviewStatus": "pending",
+  "disposableQualificationOnly": true
+}

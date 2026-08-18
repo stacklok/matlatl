@@ -19,3 +19,4 @@ coverage.*
 # matlatl's own generated output
 /out/
 /eval/out/
+/eval/agent-outcome/runs/

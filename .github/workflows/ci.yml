@@ -49,7 +49,14 @@ jobs:
       - name: Test (race, shuffle, coverage, integration)
         run: go test -race -shuffle=on -count=1 -tags=integration -covermode=atomic -coverprofile=coverage.out ./...
 
-      # Coverage gating + the benchmark smoke run only need to happen once.
+      # Exact APSP analysis is O(V·(V+E)); race instrumentation makes the 5k
+      # corpus take several minutes. Keep the full allocation guard explicit and
+      # non-race while the ordinary race suite runs its 500-document smoke guard.
+      - name: Full-scale performance guard (5k docs, no race)
+        if: runner.os == 'Linux'
+        run: go test -tags=performance -count=1 -run '^TestPipeline_5kDocs_MemoryCeiling$' -v ./internal/application
+
+      # Coverage gating only needs to happen once.
       - name: Coverage floor + summary
         if: runner.os == 'Linux'
         shell: bash
@@ -66,13 +73,6 @@ jobs:
           awk -v p="$pct" 'BEGIN{ exit (p+0 < 83.0) }' \
             || { echo "::error::coverage ${pct}% is below the 83% floor"; exit 1; }
 
-      - name: Benchmark smoke (O(V·E) / OOM guard)
-        if: runner.os == 'Linux'
-        # -run=^$ disables tests; -benchtime=1x runs the 5k-doc pipeline exactly
-        # once. The real memory ceiling is asserted by TestPipeline_5kDocs_MemoryCeiling
-        # in the normal suite; this catches a super-linear time/alloc regression.
-        run: go test -tags=integration -run '^$' -bench BenchmarkPipeline_5kDocs -benchtime=1x -benchmem ./internal/application/
-
       - name: Upload coverage
         if: runner.os == 'Linux' && always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -84,7 +84,7 @@ jobs:
 
   eval-offline:
     name: eval scaffold (offline)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -98,12 +98,75 @@ jobs:
           go test -race -count=1 ./eval/...
           go run ./eval/cmd/eval validate --root eval
           go run ./eval/cmd/eval oracle --root eval
+          go run ./eval/cmd/eval nimbus validate --root eval/nimbus/v1
+          go run ./eval/cmd/eval nimbus freeze --root eval/nimbus/v1
+          go run ./eval/cmd/eval nimbus probe --root eval/nimbus/v1
           go run ./eval/cmd/eval smoke --root eval --out "${{ runner.temp }}/eval-records"
           go run ./eval/cmd/eval report --records "${{ runner.temp }}/eval-records" --out "${{ runner.temp }}/eval-report"
 
+  eval-oci:
+    name: eval isolated executor (${{ matrix.runtime }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [docker, podman]
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+      - name: Install rootless Podman
+        if: matrix.runtime == 'podman'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+          podman info
+      - name: Runtime environment
+        env:
+          RUNTIME: ${{ matrix.runtime }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNTIME" --version
+          "$RUNTIME" info --format json
+          stat -fc '%T' /sys/fs/cgroup
+      - name: Nimbus mechanical probe
+        env:
+          MATLATL_OCI_RUNTIME: ${{ matrix.runtime }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run ./eval/cmd/eval nimbus probe --root eval/nimbus/v1
+      - name: Adversarial black-box verifier acceptance
+        env:
+          MATLATL_OCI_RUNTIME: ${{ matrix.runtime }}
+        run: go test -tags=ociintegration -count=1 -run TestBlackBoxVerifierOCI -v ./eval/internal/nimbus
+      - name: Adversarial scratch-container acceptance
+        env:
+          MATLATL_OCI_RUNTIME: ${{ matrix.runtime }}
+          MATLATL_SCHEDULED_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}
+        run: go test -tags=ociintegration -count=1 -run TestOCIIsolationEndToEnd -v ./eval/internal/agentoutcome
+      # Defense in depth only: the acceptance test verifies ownership-record cleanup itself.
+      - name: Remove leftover eval containers and images
+        if: always()
+        env:
+          RUNTIME: ${{ matrix.runtime }}
+          RUN_LABEL: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNTIME" ps -aq --filter "label=io.stacklok.matlatl.eval-run=$RUN_LABEL" | xargs -r "$RUNTIME" rm -f
+          "$RUNTIME" ps -aq --filter "label=io.stacklok.matlatl.nimbus-verifier" | xargs -r "$RUNTIME" rm -f
+          "$RUNTIME" volume ls -q --filter "label=io.stacklok.matlatl.nimbus-verifier" | xargs -r "$RUNTIME" volume rm -f
+          "$RUNTIME" image ls -q --filter "label=io.stacklok.matlatl.eval-run=$RUN_LABEL" | sort -u | xargs -r "$RUNTIME" image rm -f
+          test -z "$("$RUNTIME" ps -aq --filter 'label=io.stacklok.matlatl.nimbus-verifier')"
+          test -z "$("$RUNTIME" volume ls -q --filter 'label=io.stacklok.matlatl.nimbus-verifier')"
+
   lint:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -119,7 +182,7 @@ jobs:
 
   verify:
     name: verify (fmt / tidy / architecture)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -167,7 +230,7 @@ jobs:
 
   govulncheck:
     name: govulncheck
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1.0.4
@@ -177,7 +240,7 @@ jobs:
 
   docs:
     name: docs (link-rot gate)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -194,7 +257,7 @@ jobs:
 
   cross-build:
     name: cross-compile (${{ matrix.target.goos }}/${{ matrix.target.goarch }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
