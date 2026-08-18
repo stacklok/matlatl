@@ -220,11 +220,13 @@ func verifyCase(ctx context.Context, exe string, s *Suite, taskID, workspace, ba
 		return "", err
 	}
 	trustedDir := filepath.Join(base, "trusted-adapter")
-	if err := os.Mkdir(trustedDir, 0o700); err != nil {
+	// The adapter contains no hidden expectations; it is made readable solely so
+	// rootful Docker can bind-mount it after all capabilities are dropped.
+	if err := os.Mkdir(trustedDir, 0o755); err != nil { //nolint:gosec // Public protocol adapter, not private verifier data.
 		return "", err
 	}
 	trustedAdapter := filepath.Join(trustedDir, "main.go")
-	if err := os.WriteFile(trustedAdapter, adapter, 0o600); err != nil {
+	if err := os.WriteFile(trustedAdapter, adapter, 0o644); err != nil { //nolint:gosec // Public protocol adapter, not private verifier data.
 		return "", err
 	}
 	nonceBytes := make([]byte, 16)
