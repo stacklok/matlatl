@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stacklok/matlatl/internal/domain/corpus"
+	"github.com/stacklok/matlatl/internal/domain/identity"
 	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
@@ -227,6 +228,77 @@ func TestSlugParity_DuplicateHeadings(t *testing.T) {
 	for i, w := range want {
 		if got := doc.Root.Children[i].Slug; got != w {
 			t.Errorf("duplicate heading %d slug = %q, want %q", i, got, w)
+		}
+	}
+}
+
+func TestSlugParity_InlineCodeUnderscores(t *testing.T) {
+	doc := parse(t, "# `credential_store`\n\n# `credential_store`\n\n# *Emphasized Heading*\n")
+	want := []string{"credential_store", "credential_store-1", "emphasized-heading"}
+	if len(doc.Root.Children) != len(want) {
+		t.Fatalf("got %d headings, want %d", len(doc.Root.Children), len(want))
+	}
+	for i, w := range want {
+		if got := doc.Root.Children[i].Slug; got != w {
+			t.Errorf("heading %d slug = %q, want %q", i, got, w)
+		}
+	}
+}
+
+func TestSlugParity_InlineCodeWithinLink(t *testing.T) {
+	doc := parse(t, "# [`credential_store`](guide.md)\n\n# Configure `credential_store` now\n\n# Café `credential_store`\n")
+	want := []string{"credential_storeguidemd", "configure-credential_store-now", "caf-credential_store"}
+	for i, w := range want {
+		if got := doc.Root.Children[i].Slug; got != w {
+			t.Errorf("heading %d slug = %q, want %q", i, got, w)
+		}
+	}
+}
+
+func TestSlugParity_InlineCodeUsesCorrectedDuplicateNamespace(t *testing.T) {
+	doc := parse(t, "# credential-store\n\n# `credential_store`\n")
+	want := []string{"credential-store", "credential_store"}
+	for i, w := range want {
+		if got := doc.Root.Children[i].Slug; got != w {
+			t.Errorf("heading %d slug = %q, want %q", i, got, w)
+		}
+	}
+}
+
+func TestInlineCodeUnderscoreAnchorsResolve(t *testing.T) {
+	p := New(Config{})
+	parseID := func(id, src string) *corpus.Document {
+		t.Helper()
+		doc, err := p.ParseBytes(context.Background(), identity.DocumentID(id), []byte(src))
+		if err != nil {
+			t.Fatalf("parse %s: %v", id, err)
+		}
+		return doc
+	}
+
+	readme := parseID("README.md", "# Home\n\n## `credential_store`\n\n## `credential_store`\n\n[Local](#credential_store)\n[Duplicate](#credential_store-1)\n[Missing](#missing_anchor)\n")
+	guide := parseID("guide.md", "# Guide\n\n[Cross-document](README.md#credential_store)\n")
+	if len(readme.RawReferences) != 3 || len(guide.RawReferences) != 1 {
+		t.Fatalf("parsed references = README:%+v guide:%+v, want 3 and 1", readme.RawReferences, guide.RawReferences)
+	}
+	c := corpus.NewCorpus()
+	for _, doc := range []*corpus.Document{readme, guide} {
+		if err := c.Add(doc); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	r := reference.NewResolver(c, nil, reference.LongestSuffix)
+	for _, raw := range append(readme.RawReferences, guide.RawReferences...) {
+		got := r.Resolve(raw)
+		if raw.Fragment == "missing_anchor" {
+			if got.Health != reference.BrokenAnchor {
+				t.Errorf("missing anchor health = %s, want broken-anchor", got.Health)
+			}
+			continue
+		}
+		if got.Health != reference.Valid {
+			t.Errorf("resolve %#v health = %s, want valid", raw, got.Health)
 		}
 	}
 }
