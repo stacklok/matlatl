@@ -8,7 +8,8 @@
 //
 // Slug dialect: the parser is configured with parser.WithAutoHeadingID(), whose
 // GitHub-compatible algorithm is the canonical, validated slug dialect of ADR
-// 0006. The slug stored on each Section is exactly goldmark's auto heading id.
+// 0006. Goldmark's generated ID is the baseline; underscores in inline-code
+// heading text are retained because they are literal code characters.
 package mdparser
 
 import (
@@ -375,6 +376,7 @@ func buildSectionTree(root ast.Node, src []byte, lines *lineIndex) *corpus.Secti
 	totalLines := lines.lineCount()
 	docRoot := &corpus.Section{Level: 0, Start: 0, End: len(src), StartLine: 1, EndLine: totalLines}
 	stack := []*corpus.Section{docRoot}
+	usedSlugs := make(map[string]struct{})
 	var ordered []*corpus.Section // pre-order list of real sections
 
 	_ = ast.Walk(root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -386,7 +388,12 @@ func buildSectionTree(root ast.Node, src []byte, lines *lineIndex) *corpus.Secti
 			return ast.WalkContinue, nil
 		}
 		start, end := nodeSpan(h, src)
-		heading, slug := headingPresentation(headingText(h, src), headingSlug(h))
+		automaticSlug, corrected := canonicalHeadingSlug(h, src)
+		heading, slug := headingPresentation(headingText(h, src), automaticSlug)
+		if corrected && slug == automaticSlug {
+			slug = uniqueHeadingSlug(slug, usedSlugs)
+		}
+		usedSlugs[slug] = struct{}{}
 		sec := &corpus.Section{
 			Level:     h.Level,
 			Text:      heading,
@@ -454,7 +461,118 @@ func textOf(n ast.Node, src []byte) []byte {
 	return buf.Bytes()
 }
 
-// headingSlug returns the goldmark auto heading id (ADR 0006 canonical slug).
+// canonicalHeadingSlug returns Goldmark's generated heading-ID base with underscores
+// from inline code spans restored. Goldmark supplies all normalization; duplicate
+// allocation happens later in the corrected canonical-slug namespace.
+func canonicalHeadingSlug(h *ast.Heading, src []byte) (string, bool) {
+	slug := headingSlug(h)
+	codeUnderscores := inlineCodeUnderscores(h, src)
+	if len(codeUnderscores) == 0 {
+		return slug, false
+	}
+
+	baseLen, offsets := autoHeadingUnderscoreOffsets(h, src, codeUnderscores)
+	if baseLen > len(slug) {
+		return slug, false
+	}
+	corrected := []byte(slug[:baseLen])
+	for _, offset := range offsets {
+		if offset >= baseLen || corrected[offset] != '-' {
+			return slug, false
+		}
+		corrected[offset] = '_'
+	}
+	return string(corrected), true
+}
+
+func uniqueHeadingSlug(slug string, used map[string]struct{}) string {
+	if _, exists := used[slug]; !exists {
+		return slug
+	}
+	for suffix := 1; ; suffix++ {
+		candidate := fmt.Sprintf("%s-%d", slug, suffix)
+		if _, exists := used[candidate]; !exists {
+			return candidate
+		}
+	}
+}
+
+// inlineCodeUnderscores reports source offsets of underscores that occur inside
+// inline code spans. The AST keeps the distinction that Goldmark's raw-heading
+// ID generator loses.
+func inlineCodeUnderscores(h *ast.Heading, src []byte) map[int]struct{} {
+	offsets := make(map[int]struct{})
+	_ = ast.Walk(h, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		code, ok := n.(*ast.CodeSpan)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		_ = ast.Walk(code, func(child ast.Node, entering bool) (ast.WalkStatus, error) {
+			if !entering {
+				return ast.WalkContinue, nil
+			}
+			text, ok := child.(*ast.Text)
+			if !ok {
+				return ast.WalkContinue, nil
+			}
+			for i, b := range text.Segment.Value(src) {
+				if b == '_' {
+					offsets[text.Segment.Start+i] = struct{}{}
+				}
+			}
+			return ast.WalkContinue, nil
+		})
+		return ast.WalkSkipChildren, nil
+	})
+	return offsets
+}
+
+// autoHeadingUnderscoreOffsets maps inline-code underscores to their byte offsets
+// in Goldmark's generated base ID. The byte-counting is deliberately limited to
+// Goldmark's documented input-to-output rule; Goldmark still supplies every
+// output byte, including case folding and a possible duplicate suffix.
+func autoHeadingUnderscoreOffsets(h *ast.Heading, src []byte, codeUnderscores map[int]struct{}) (int, []int) {
+	last := h.Lines().Len() - 1
+	if last < 0 {
+		return len("heading"), nil
+	}
+	segment := h.Lines().At(last)
+	raw := segment.Value(src)
+	left, right := 0, len(raw)
+	for left < right && util.IsSpace(raw[left]) {
+		left++
+	}
+	for right > left && util.IsSpace(raw[right-1]) {
+		right--
+	}
+
+	length := 0
+	var offsets []int
+	for i := left; i < right; {
+		byteOffset := i
+		c := raw[i]
+		width := int(util.UTF8Len(c))
+		i += width
+		if width != 1 || (!util.IsAlphaNumeric(c) && !util.IsSpace(c) && c != '-' && c != '_') {
+			continue
+		}
+		if c == '_' {
+			if _, ok := codeUnderscores[segment.Start+byteOffset]; ok {
+				offsets = append(offsets, length)
+			}
+		}
+		length++
+	}
+	if length == 0 {
+		length = len("heading")
+	}
+	return length, offsets
+}
+
+// headingSlug returns the goldmark auto heading id (ADR 0006 canonical baseline).
 func headingSlug(h *ast.Heading) string {
 	if v, ok := h.AttributeString("id"); ok {
 		switch id := v.(type) {

@@ -67,7 +67,9 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
   [ADR 0025](adr/0025-content-roots-and-docusaurus-anchors.md)). A `//host/...` target is a
   protocol-relative URL and is treated as external.
 - **Broken anchors** — `other.md#heading` where that heading doesn't exist. Slugs
-  are GitHub-style (lowercase, spaces→`-`); see [ADR 0006](adr/0006-slug-dialect.md).
+  are GitHub-style (lowercase, spaces→`-`); underscores inside inline-code heading
+  text stay literal (so ``## `credential_store` `` is `#credential_store`). See
+  [ADR 0006](adr/0006-slug-dialect.md).
   Docusaurus `## Title {#id}` and `## Title {/* #id */}` replace the generated
   slug, and block-level literal static `<Heading id="id">` anchors are also
   checked. The opening component must begin a Markdown line (after at most three

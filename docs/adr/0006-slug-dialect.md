@@ -15,8 +15,10 @@ cross-file anchor checks emit false-positive "broken anchor" findings on real re
 
 - The **validated, canonical dialect is goldmark's `parser.WithAutoHeadingID`
   algorithm** (GitHub-compatible: lowercase, spaces→`-`, strip disallowed punctuation,
-  numeric suffix `-1`, `-2`, … on duplicates). This is the slug stored in the
-  `HeadingInventory` and the one anchor resolution checks against.
+  numeric suffix `-1`, `-2`, … on duplicates), with one compatibility correction:
+  underscores inside inline-code heading text are retained as literal code characters.
+  This is the slug stored in the `HeadingInventory` and the one anchor resolution
+  checks against.
 - Other dialects (Obsidian's space-preserving style, raw `name=` anchors) are
   **best-effort** and explicitly documented as such.
 - The slugger is behind a small interface so an alternative dialect can be supplied,
