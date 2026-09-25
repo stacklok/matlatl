@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -88,6 +89,8 @@ func run() (retErr error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	signalCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stopSignals()
 	var mcpDone chan error
 	config := map[string]any{}
 	if arm == "all" {
@@ -114,6 +117,15 @@ func run() (retErr error) {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(configDir, "opencode.json"), configBytes, 0o600); err != nil {
+		return err
+	}
+	if err := os.Chown("/tmp/config", childUID, childGID); err != nil {
+		return err
+	}
+	if err := os.Chown(configDir, childUID, childGID); err != nil {
+		return err
+	}
+	if err := os.Chown(filepath.Join(configDir, "opencode.json"), childUID, childGID); err != nil {
 		return err
 	}
 	prompt, err := os.ReadFile("/input/prompt.txt")
@@ -163,8 +175,13 @@ func run() (retErr error) {
 	defer ticker.Stop()
 	exposed, budgetExceeded := false, false
 	var runErr error
+	signalDone := signalCtx.Done()
 	for waitCh != nil {
 		select {
+		case <-signalDone:
+			signalDone = nil
+			kill()
+			runErr = errors.New("agent canceled")
 		case signalErr := <-signalCh:
 			signalCh = nil
 			if signalErr != nil {
