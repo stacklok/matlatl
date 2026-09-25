@@ -15,8 +15,10 @@ package config
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -56,6 +58,10 @@ type File struct {
 	// IDs (repo-root-relative, slash-separated) with the same path.Match
 	// semantics as the --root flag. UNIONED with conventions and --root.
 	Roots []string
+	// ContentRoots holds validated, sorted repository-relative directories whose
+	// single-slash links resolve from that directory. Empty preserves repository-
+	// root semantics. Entries are unique and non-overlapping.
+	ContentRoots []string
 	// InboundThreshold is the under-linked discoverability floor (ADR 0012). nil
 	// when the key is absent (the CLI then keeps its own default/flag value); a
 	// present value must be >= 0 (negative is a hard error).
@@ -197,6 +203,12 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		return File{}, nil, err
 	}
 
+	// --- contentRoots ---
+	contentRoots, err := resolveContentRoots(raw)
+	if err != nil {
+		return File{}, nil, err
+	}
+
 	// --- inboundThreshold ---
 	threshold, err := resolveOptionalNonNegInt(raw, "inboundThreshold")
 	if err != nil {
@@ -245,6 +257,7 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 	return File{
 		Version:                   version,
 		Roots:                     roots,
+		ContentRoots:              contentRoots,
 		InboundThreshold:          threshold,
 		StructureFindingsSeverity: severity,
 		LinkSuggestionMinShared:   linkMinShared,
@@ -397,12 +410,62 @@ func resolveRoots(raw rawFile) ([]string, error) {
 	return roots, nil
 }
 
+// resolveContentRoots validates site content-root directories. They are plain,
+// canonical repository-relative slash paths (not globs), and must form a
+// disjoint set so an origin can never have an ambiguous root. Sorting here makes
+// resolver behavior independent of YAML ordering.
+func resolveContentRoots(raw rawFile) ([]string, error) {
+	v, present := raw["contentRoots"]
+	if !present || v == nil {
+		return nil, nil
+	}
+	seq, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: `contentRoots` must be a list of strings, got %T", fileName, v)
+	}
+	if len(seq) == 0 {
+		return nil, nil
+	}
+	roots := make([]string, 0, len(seq))
+	for i, e := range seq {
+		s, ok := e.(string)
+		if !ok {
+			return nil, fmt.Errorf("%s: `contentRoots[%d]` must be a string, got %T", fileName, i, e)
+		}
+		cleaned := path.Clean(s)
+		if s == "" || s == "." || strings.Contains(s, "\\") || strings.HasPrefix(s, "/") || cleaned != s || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+			return nil, fmt.Errorf("%s: `contentRoots[%d]` must be a canonical repository-relative directory, got %q", fileName, i, s)
+		}
+		roots = append(roots, cleaned)
+	}
+	slices.Sort(roots)
+	seen := make(map[string]struct{}, len(roots))
+	for _, root := range roots {
+		if _, ok := seen[root]; ok {
+			return nil, fmt.Errorf("%s: duplicate `contentRoots` entry %q", fileName, root)
+		}
+		// A configured ancestor makes this root ambiguous. Checking only slash-
+		// delimited prefixes is linear in the root's length and avoids pairwise
+		// comparisons across a size-capped but potentially large configuration.
+		for i := 0; i < len(root); i++ {
+			if root[i] != '/' {
+				continue
+			}
+			if _, ok := seen[root[:i]]; ok {
+				return nil, fmt.Errorf("%s: overlapping `contentRoots` entries %q and %q", fileName, root[:i], root)
+			}
+		}
+		seen[root] = struct{}{}
+	}
+	return roots, nil
+}
+
 // unknownKeyNotices surfaces every key that is neither `version` nor `roots`,
 // one notice each, sorted for determinism. This catches typos (`rootz:`) while
 // tolerating future additive keys (ADR 0011 governing rule).
 func unknownKeyNotices(path string, raw rawFile) []application.Notice {
 	known := map[string]struct{}{
-		"version": {}, "roots": {},
+		"version": {}, "roots": {}, "contentRoots": {},
 		"inboundThreshold": {}, "structureFindingsSeverity": {},
 		"linkSuggestionMinShared": {}, "farFromRootThreshold": {}, "emitExclude": {},
 		"okf": {}, "respectGitignore": {},

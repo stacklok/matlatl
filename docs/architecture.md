@@ -20,7 +20,11 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    using the `HeadingInventory` and `AliasTable`. Relative links resolve against
    the linking document's directory; a **root-absolute** target (a single leading
    `/`, e.g. `/tables/orders.md`) resolves from the scan root, independent of the
-   origin ([ADR 0022](adr/0022-root-absolute-links.md)). `//host` stays external.
+   origin ([ADR 0022](adr/0022-root-absolute-links.md)). Configured
+   `contentRoots` instead resolve that form from the matching content-root for
+   origins inside it; `//host` stays external. Docusaurus explicit heading IDs
+   and literal `<Heading id="…">` anchors populate validation without creating
+   synthetic sections ([ADR 0025](adr/0025-content-roots-and-docusaurus-anchors.md)).
 4. **Build** — assemble the directed `ReferenceGraph` (documents + sections as
    vertices, typed edges) and the `HierarchyTree`. Node/edge semantics and the
    document projection that analysis runs over are pinned in

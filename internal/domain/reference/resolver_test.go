@@ -12,6 +12,7 @@ import (
 type fakeCatalog struct {
 	docs     map[identity.DocumentID]struct{}
 	headings map[identity.DocumentID]map[string]struct{}
+	anchors  map[identity.DocumentID]map[string]struct{}
 	aliases  map[string][]identity.DocumentID
 }
 
@@ -19,6 +20,7 @@ func newFakeCatalog(docs ...string) *fakeCatalog {
 	c := &fakeCatalog{
 		docs:     map[identity.DocumentID]struct{}{},
 		headings: map[identity.DocumentID]map[string]struct{}{},
+		anchors:  map[identity.DocumentID]map[string]struct{}{},
 		aliases:  map[string][]identity.DocumentID{},
 	}
 	for _, d := range docs {
@@ -36,6 +38,14 @@ func (c *fakeCatalog) withHeading(doc, slug string) *fakeCatalog {
 	return c
 }
 
+func (c *fakeCatalog) withAnchor(doc, slug string) *fakeCatalog {
+	id := identity.DocumentID(doc)
+	if c.anchors[id] == nil {
+		c.anchors[id] = map[string]struct{}{}
+	}
+	c.anchors[id][slug] = struct{}{}
+	return c
+}
 func (c *fakeCatalog) withAlias(alias string, docs ...string) *fakeCatalog {
 	for _, d := range docs {
 		c.aliases[alias] = append(c.aliases[alias], identity.DocumentID(d))
@@ -57,8 +67,19 @@ func (c *fakeCatalog) DocumentIDs() []identity.DocumentID {
 }
 
 func (c *fakeCatalog) HasHeading(id identity.DocumentID, slug string) bool {
-	_, ok := c.headings[id][slug]
-	return ok
+	_, heading := c.headings[id][slug]
+	_, anchor := c.anchors[id][slug]
+	return heading || anchor
+}
+
+func (c *fakeCatalog) AnchorKind(id identity.DocumentID, slug string) TargetKind {
+	if _, ok := c.headings[id][slug]; ok {
+		return TargetSection
+	}
+	if _, ok := c.anchors[id][slug]; ok {
+		return TargetDocument
+	}
+	return TargetNone
 }
 
 func (c *fakeCatalog) LookupAlias(alias string) []identity.DocumentID {
@@ -74,7 +95,30 @@ func (a fakeAssets) AssetExists(rel string) bool {
 }
 
 var _ Catalog = (*fakeCatalog)(nil)
+var _ AnchorCatalog = (*fakeCatalog)(nil)
 var _ AssetExistence = (fakeAssets)(nil)
+
+func TestResolve_FragmentTargetKind(t *testing.T) {
+	catalog := newFakeCatalog("origin.md", "target.md").
+		withHeading("target.md", "section").
+		withAnchor("target.md", "component")
+	resolver := NewResolver(catalog, nil, LongestSuffix)
+
+	for _, tt := range []struct {
+		fragment string
+		kind     TargetKind
+	}{
+		{"section", TargetSection},
+		{"component", TargetDocument},
+	} {
+		t.Run(tt.fragment, func(t *testing.T) {
+			got := resolver.Resolve(RawReference{Origin: "origin.md", RawTarget: "target.md", Fragment: tt.fragment, Type: RelativeLink})
+			if got.Health != Valid || got.Target.Kind != tt.kind || got.Target.Anchor != tt.fragment {
+				t.Errorf("target = %+v health=%s, want valid %s with anchor %q", got.Target, got.Health, tt.kind, tt.fragment)
+			}
+		})
+	}
+}
 
 func TestResolve_HealthBranches(t *testing.T) {
 	cat := newFakeCatalog(
@@ -363,7 +407,19 @@ func TestResolve_RootAbsoluteLinks(t *testing.T) {
 	}
 }
 
-// TestResolve_RootAbsoluteEscape is the ADR 0022 security test: a root-absolute
+func TestResolve_BareRootAbsoluteIsAlwaysBroken(t *testing.T) {
+	cat := newFakeCatalog("README.md", "docs/page.md")
+	probed := false
+	r := NewResolver(cat, assetProbe(func(string) bool { probed = true; return true }), LongestSuffix)
+	got := r.Resolve(RawReference{Origin: "docs/page.md", RawTarget: "/", Type: RelativeLink})
+	if got.Health != Broken || got.Target.Kind != TargetNone {
+		t.Errorf("'/' = %s/%s, want broken/none", got.Health, got.Target.Kind)
+	}
+	if probed {
+		t.Error("asset probe consulted for bare root-absolute target")
+	}
+}
+
 // target that traverses out of the scan root is Broken and the asset probe is
 // NEVER consulted (order: strip leading slash → clean → EscapesRoot). A
 // percent-encoded traversal ("/..%2F..") is NOT URL-decoded, so it stays a

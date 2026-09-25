@@ -208,7 +208,7 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	// using the corpus as the catalog and a root-confined asset-existence lookup
 	// (the resolver itself is pure: it only does path arithmetic + catalog
 	// lookups, never filesystem access).
-	resolver := reference.NewResolver(c, newAssetExistence(p.cfg.RootPath), p.cfg.ResolutionPolicy)
+	resolver := reference.NewResolverWithContentRoots(c, newAssetExistence(p.cfg.RootPath), p.cfg.ResolutionPolicy, p.cfg.ContentRoots)
 	var refs []reference.Reference
 	for _, doc := range c.Documents() {
 		refs = append(refs, resolver.ResolveAll(doc.RawReferences)...)

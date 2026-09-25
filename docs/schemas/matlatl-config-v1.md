@@ -25,6 +25,12 @@ version: 1
 roots:
   - ".claude/agents/*.md"
 
+# Optional Docusaurus-style site roots. For a document strictly inside one of
+# these repository-relative directories, a single-slash link resolves from this
+# directory instead of the scan root. No CLI flag; absent keeps existing behavior.
+contentRoots:
+  - "user-docs"
+
 # Discoverability threshold for the under-linked finding (ADR 0012). A document
 # with fewer than this many inbound navigational links (but at least one outbound
 # link) is reported as under-linked. Default 3; 0 = the default, negative is a
@@ -121,6 +127,20 @@ A root is **exempt from both the unreachable and the isolated-orphan findings**
 files — entry points that nothing links to by design — from being reported as
 isolated orphans. This can only **remove** findings; it never adds any, so the
 `check` gate only softens.
+
+### `contentRoots` (list of strings, optional)
+
+Repository-relative documentation directories with Docusaurus-style site-root
+link semantics ([ADR 0025](../adr/0025-content-roots-and-docusaurus-anchors.md)).
+For an origin strictly inside `user-docs`, `/api/widget.mdx` resolves to
+`user-docs/api/widget.mdx`; origins outside configured roots keep the normal
+scan-root behavior. Relative links and `//host` URLs are unchanged.
+
+- Entries must be canonical slash-separated directory paths: non-empty, not
+  absolute, no `.`/`..` cleaning, and no backslashes.
+- Entries are sorted deterministically. Duplicates and nested/overlapping roots
+  are hard errors, so an origin can have at most one content root.
+- Config-only: absent or empty preserves ADR 0022 exactly.
 
 ### `inboundThreshold` (integer, optional)
 
@@ -247,6 +267,7 @@ would introduce them.
 | `version` missing | assume 1 + notice | run continues |
 | `version` > 1 or wrong type | hard error | 2 (usage) |
 | `roots` wrong type | hard error | 2 (usage) |
+| `contentRoots` invalid, duplicate, overlapping, or wrong type | hard error | 2 (usage) |
 | `inboundThreshold` negative or wrong type | hard error | 2 (usage) |
 | `structureFindingsSeverity` not `info`/`warning` or wrong type | hard error | 2 (usage) |
 | `farFromRootThreshold` negative or wrong type | hard error | 2 (usage) |

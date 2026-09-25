@@ -63,7 +63,9 @@ testdata/                fixture corpora + golden artifacts
 5. **Identity is the canonical relative path** ([ADR 0001](adr/0001-document-identity.md)) —
    never the basename. Relative links resolve against the linking document's
    directory; a single leading `/` is root-absolute and resolves from the scan
-   root ([ADR 0022](adr/0022-root-absolute-links.md)).
+   root ([ADR 0022](adr/0022-root-absolute-links.md)), except an origin inside a
+   configured `contentRoots` directory resolves it from that site root ([ADR
+   0025](adr/0025-content-roots-and-docusaurus-anchors.md)).
 
 ## Build, test, lint
 

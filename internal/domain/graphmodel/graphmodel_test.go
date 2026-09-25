@@ -9,6 +9,24 @@ import (
 	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
+func TestReferenceTargets_ProjectSectionsAndComponentAnchors(t *testing.T) {
+	c := buildCorpus(t, doc("origin.md", "origin", nil), doc("target.md", "section", nil))
+	refs := []reference.Reference{
+		{RawReference: reference.RawReference{Origin: "origin.md", Type: reference.RelativeLink}, Target: reference.ResolvedTarget{Kind: reference.TargetSection, DocumentID: "target.md", Anchor: "section"}, Health: reference.Valid},
+		{RawReference: reference.RawReference{Origin: "origin.md", Type: reference.RelativeLink}, Target: reference.ResolvedTarget{Kind: reference.TargetDocument, DocumentID: "target.md", Anchor: "component"}, Health: reference.Valid},
+	}
+	g := BuildReferenceGraph(c, refs, BuildOptions{})
+
+	seen := map[NodeID]bool{}
+	for _, edge := range g.Edges() {
+		if edge.Kind == EdgeReference {
+			seen[edge.To] = true
+		}
+	}
+	if !seen[NodeIDForSection("target.md", "section")] || !seen[NodeIDForDocument("target.md")] {
+		t.Errorf("reference targets = %v, want section and document vertices", seen)
+	}
+}
 func TestNodeKind_StringValid(t *testing.T) {
 	all := []NodeKind{NodeKindDocument, NodeKindSection}
 	seen := make(map[string]bool)

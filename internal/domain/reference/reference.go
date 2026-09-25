@@ -227,7 +227,9 @@ type ResolvedTarget struct {
 	// TargetAsset. For TargetDirectory it is the directory's index document
 	// (README.md / index.md) when one exists, else empty (ADR 0008).
 	DocumentID identity.DocumentID
-	// Anchor is the resolved section slug, set when Kind is TargetSection.
+	// Anchor is the raw validated fragment. It identifies a section only when Kind
+	// is TargetSection; TargetDocument retains literal component-only anchors for
+	// reference metadata without creating a graph vertex (ADR 0025).
 	Anchor string
 	// Directory is the cleaned directory path, set only when Kind is
 	// TargetDirectory (ADR 0008).

@@ -27,12 +27,17 @@ type Catalog interface {
 	LookupAlias(alias string) []identity.DocumentID
 }
 
+// AnchorCatalog is an optional extension that distinguishes graph section slugs
+// from fragment-only anchors. Keeping it separate preserves existing Catalog
+// fakes and callers: without it, a validated heading retains the legacy section
+// projection.
+type AnchorCatalog interface {
+	AnchorKind(id identity.DocumentID, slug string) TargetKind
+}
+
 // AssetExistence answers whether a cleaned, root-relative path points at an
-// existing NON-markdown asset — either a regular file (image/pdf/etc.) or a
-// directory. It is injected so the domain stays free of filesystem access
-// (ADR 0003/0004): the path is always in-root and already cleaned by the
-// resolver before this is consulted. A nil AssetExistence is treated as "no
-// assets exist".
+// existing non-markdown asset or directory. It is injected so the domain stays
+// free of filesystem access (ADR 0003/0004).
 type AssetExistence interface {
 	// AssetExists reports whether the given root-relative slash path exists as a
 	// non-markdown asset: an existing non-markdown file or directory. Markdown
@@ -44,19 +49,30 @@ type AssetExistence interface {
 // stateless domain service: construct once with a Catalog, an optional
 // AssetExistence, and a ResolutionPolicy, then call Resolve per reference.
 type Resolver struct {
-	catalog Catalog
-	assets  AssetExistence
-	policy  ResolutionPolicy
+	catalog      Catalog
+	assets       AssetExistence
+	policy       ResolutionPolicy
+	contentRoots []string
 }
 
 // NewResolver builds a Resolver. An invalid policy falls back to the default
 // (LongestSuffix). A nil assets lookup means non-markdown targets that are not
 // known documents resolve to Broken rather than NonNote.
 func NewResolver(catalog Catalog, assets AssetExistence, policy ResolutionPolicy) *Resolver {
+	return NewResolverWithContentRoots(catalog, assets, policy, nil)
+}
+
+// NewResolverWithContentRoots builds a Resolver with optional site content-root
+// semantics for single-slash links. The configuration loader validates that the
+// roots are canonical and non-overlapping; sorting defensively keeps direct
+// callers deterministic.
+func NewResolverWithContentRoots(catalog Catalog, assets AssetExistence, policy ResolutionPolicy, contentRoots []string) *Resolver {
 	if !policy.Valid() {
 		policy = DefaultResolutionPolicy
 	}
-	return &Resolver{catalog: catalog, assets: assets, policy: policy}
+	contentRoots = slices.Clone(contentRoots)
+	slices.Sort(contentRoots)
+	return &Resolver{catalog: catalog, assets: assets, policy: policy, contentRoots: contentRoots}
 }
 
 // Resolve classifies a single RawReference. It performs only path arithmetic and
@@ -114,10 +130,7 @@ func (r *Resolver) resolveAnchorOnly(raw RawReference) Reference {
 	if raw.Fragment == "" {
 		return ref(raw, ResolvedTarget{Kind: TargetNone}, Broken)
 	}
-	if r.catalog.HasHeading(raw.Origin, raw.Fragment) {
-		return ref(raw, ResolvedTarget{Kind: TargetSection, DocumentID: raw.Origin, Anchor: raw.Fragment}, Valid)
-	}
-	return ref(raw, ResolvedTarget{Kind: TargetSection, DocumentID: raw.Origin}, BrokenAnchor)
+	return r.resolveFragment(raw, raw.Origin)
 }
 
 // resolveRelative resolves a relative or root-absolute link/image. A single
@@ -134,7 +147,7 @@ func (r *Resolver) resolveRelative(raw RawReference) Reference {
 		return ref(raw, ResolvedTarget{Kind: TargetNone}, Broken)
 	}
 
-	cleaned, ok := resolveInRoot(raw.Origin, target)
+	cleaned, ok := resolveInRoot(raw.Origin, target, r.contentRoots)
 	if !ok {
 		// Escapes the corpus root (ADR 0003): recorded as a finding, never read.
 		return ref(raw, ResolvedTarget{Kind: TargetNone}, Broken)
@@ -209,8 +222,21 @@ func (r *Resolver) withAnchor(raw RawReference, id identity.DocumentID) Referenc
 	if raw.Fragment == "" {
 		return ref(raw, ResolvedTarget{Kind: TargetDocument, DocumentID: id}, Valid)
 	}
-	if r.catalog.HasHeading(id, raw.Fragment) {
-		return ref(raw, ResolvedTarget{Kind: TargetSection, DocumentID: id, Anchor: raw.Fragment}, Valid)
+	return r.resolveFragment(raw, id)
+}
+
+// resolveFragment validates a fragment and preserves it on the resolved target.
+// Literal component anchors are valid document targets, while section slugs are
+// section targets. Catalogs that predate AnchorCatalog keep the section behavior.
+func (r *Resolver) resolveFragment(raw RawReference, id identity.DocumentID) Reference {
+	kind := TargetNone
+	if anchors, ok := r.catalog.(AnchorCatalog); ok {
+		kind = anchors.AnchorKind(id, raw.Fragment)
+	} else if r.catalog.HasHeading(id, raw.Fragment) {
+		kind = TargetSection
+	}
+	if kind == TargetSection || kind == TargetDocument {
+		return ref(raw, ResolvedTarget{Kind: kind, DocumentID: id, Anchor: raw.Fragment}, Valid)
 	}
 	return ref(raw, ResolvedTarget{Kind: TargetSection, DocumentID: id}, BrokenAnchor)
 }
@@ -424,20 +450,33 @@ func cleanWikilinkPath(target string) string {
 // root, independent of the origin; any other target is joined onto the origin
 // document's directory. It returns ok=false when the result escapes the corpus
 // root (ADR 0003) — the target is then never read.
-func resolveInRoot(origin identity.DocumentID, target string) (string, bool) {
+func resolveInRoot(origin identity.DocumentID, target string, contentRoots []string) (string, bool) {
 	target = strings.ReplaceAll(target, "\\", "/")
 
 	var joined string
 	if IsRootAbsolute(target) {
+		// A bare "/" is never a directory link, even when the catalog has root docs
+		// or nested directories from which a root directory could otherwise be inferred.
+		if target == "/" {
+			return "", false
+		}
 		// SECURITY-CRITICAL ORDER (ADR 0003/0022): strip the single leading slash
-		// FIRST, then let path.Clean below normalise. Cleaning before stripping
-		// would fold "/../etc/passwd" into "/etc/passwd" and hide the traversal;
-		// stripping first yields "../etc/passwd", which path.Clean preserves and
-		// EscapesRoot then rejects. IsRootAbsolute guarantees exactly one leading
-		// slash, so target[1:] drops it (and fails loudly if that guard is ever
-		// loosened). The slash is not URL-decoded, so "/..%2F.." stays a literal
-		// in-root filename (Broken), never an escape.
-		joined = target[1:]
+		// FIRST and reject traversal before adding an optional content-root prefix.
+		// Otherwise `/../x` from inside a content root could clean back into the
+		// repository and silently evade the existing root-absolute traversal guard.
+		rootRelative := path.Clean(target[1:])
+		if identity.EscapesRoot(rootRelative) {
+			return "", false
+		}
+		joined = rootRelative
+		if rootRelative != "." {
+			for _, root := range contentRoots {
+				if strings.HasPrefix(string(origin), root+"/") {
+					joined = path.Join(root, rootRelative)
+					break
+				}
+			}
+		}
 	} else {
 		dir := path.Dir(string(origin)) // "." for a top-level origin
 		joined = path.Join(dir, target)

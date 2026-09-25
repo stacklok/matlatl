@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 	"sync/atomic"
+
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 // Corpus is the in-memory collection of parsed documents plus the indices that
@@ -26,6 +28,7 @@ import (
 type Corpus struct {
 	docs     map[DocumentID]*Document
 	headings headingInventory
+	anchors  headingInventory
 	aliases  aliasTable
 	// frozen, once set by Freeze, makes every mutator (Add, AddHeading,
 	// AddAlias) reject further writes. This enforces the "built once, read-only
@@ -50,6 +53,7 @@ func NewCorpus() *Corpus {
 	return &Corpus{
 		docs:     make(map[DocumentID]*Document),
 		headings: newHeadingInventory(),
+		anchors:  newHeadingInventory(),
 		aliases:  newAliasTable(),
 	}
 }
@@ -86,22 +90,27 @@ func (c *Corpus) Add(doc *Document) error {
 	return nil
 }
 
-// indexHeadings records every section slug of doc into the heading inventory,
-// keeping the inventory consistent with the documents in the corpus (ADR 0006).
+// indexHeadings records section slugs and literal non-section anchors separately.
+// Both validate fragments, but only a section slug may resolve to a section vertex
+// (ADR 0025).
 func (c *Corpus) indexHeadings(doc *Document) {
-	if doc.Root == nil {
-		return
-	}
-	var walk func(s *Section)
-	walk = func(s *Section) {
-		if s.Slug != "" {
-			c.headings.add(doc.ID, s.Slug)
+	if doc.Root != nil {
+		var walk func(s *Section)
+		walk = func(s *Section) {
+			if s.Slug != "" {
+				c.headings.add(doc.ID, s.Slug)
+			}
+			for _, child := range s.Children {
+				walk(child)
+			}
 		}
-		for _, child := range s.Children {
-			walk(child)
+		walk(doc.Root)
+	}
+	for _, id := range doc.AnchorIDs {
+		if id != "" {
+			c.anchors.add(doc.ID, id)
 		}
 	}
-	walk(doc.Root)
 }
 
 // indexAliases records each front-matter alias of doc into the alias table, so
@@ -160,14 +169,26 @@ func (c *Corpus) Documents() []*Document {
 // Len returns the number of documents in the corpus.
 func (c *Corpus) Len() int { return len(c.docs) }
 
-// HeadingCount returns the total number of heading slugs indexed across all
-// documents.
-func (c *Corpus) HeadingCount() int { return c.headings.count() }
+// HeadingCount returns the total number of (document, slug) fragment targets.
+func (c *Corpus) HeadingCount() int { return c.headings.count() + c.anchors.count() }
 
-// HasHeading reports whether document id contains a heading with the given slug.
-// It is the read-only query used by anchor resolution.
+// HasHeading reports whether document id contains a fragment target. It remains
+// the broad validation query; AnchorKind distinguishes section slugs from literal
+// component-only anchors for graph resolution.
 func (c *Corpus) HasHeading(id DocumentID, slug string) bool {
-	return c.headings.has(id, slug)
+	return c.headings.has(id, slug) || c.anchors.has(id, slug)
+}
+
+// AnchorKind reports how a valid fragment target projects into the graph. A
+// section takes precedence when a literal anchor duplicates its slug.
+func (c *Corpus) AnchorKind(id DocumentID, slug string) reference.TargetKind {
+	if c.headings.has(id, slug) {
+		return reference.TargetSection
+	}
+	if c.anchors.has(id, slug) {
+		return reference.TargetDocument
+	}
+	return reference.TargetNone
 }
 
 // LookupAlias returns the candidate documents for an alias, sorted by
