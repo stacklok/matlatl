@@ -88,6 +88,10 @@ type Document struct {
 	// RawReferences are the outbound link edges extracted from the document,
 	// before resolution.
 	RawReferences []reference.RawReference
+	// AnchorIDs are static literal anchors that are valid link targets but do not
+	// define sections (for example Docusaurus MDX <Heading id="..."> components).
+	// Source order is preserved; the corpus indexes them with section slugs.
+	AnchorIDs []string
 	// ModTime is the file's last-modified time.
 	ModTime time.Time
 	// FrontMatterPresent reports whether the source began with a frontmatter fence

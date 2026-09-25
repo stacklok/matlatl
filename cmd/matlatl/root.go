@@ -207,6 +207,8 @@ func configFromFlags(cmd *cobra.Command, args []string) (application.Config, err
 	union = append(union, flagRoots...)
 	cfg.Roots = union
 
+	cfg.ContentRoots = slices.Clone(file.ContentRoots)
+
 	// Under-linked discoverability threshold (ADR 0012). Precedence:
 	// --inbound-threshold flag (when explicitly set) > .matlatl.yml > default.
 	if file.InboundThreshold != nil {

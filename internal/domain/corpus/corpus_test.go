@@ -138,6 +138,22 @@ func TestCorpus_AddIndexesHeadings(t *testing.T) {
 	}
 }
 
+func TestCorpus_AnchorKindDistinguishesSections(t *testing.T) {
+	c := NewCorpus()
+	if err := c.Add(&Document{
+		ID:        "a.md",
+		Root:      section(0, "", section(1, "section")),
+		AnchorIDs: []string{"component"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.AnchorKind("a.md", "section"); got != reference.TargetSection {
+		t.Errorf("section kind = %s, want section", got)
+	}
+	if got := c.AnchorKind("a.md", "component"); got != reference.TargetDocument {
+		t.Errorf("component kind = %s, want document", got)
+	}
+}
 func TestCorpus_AddIndexesAliases(t *testing.T) {
 	c := NewCorpus()
 	doc := &Document{

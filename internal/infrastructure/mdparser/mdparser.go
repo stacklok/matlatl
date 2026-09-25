@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -199,6 +200,7 @@ func (p *Parser) ParseBytes(ctx context.Context, id identity.DocumentID, src []b
 		FrontMatterPresent: frontMatterPresent,
 		FrontMatterParsed:  frontMatterParsed,
 		Root:               buildSectionTree(root, src, lines),
+		AnchorIDs:          staticHeadingAnchorIDs(src),
 	}
 	doc.RawReferences = extractReferences(root, src, id, lines)
 
@@ -384,10 +386,11 @@ func buildSectionTree(root ast.Node, src []byte, lines *lineIndex) *corpus.Secti
 			return ast.WalkContinue, nil
 		}
 		start, end := nodeSpan(h, src)
+		heading, slug := headingPresentation(headingText(h, src), headingSlug(h))
 		sec := &corpus.Section{
 			Level:     h.Level,
-			Text:      headingText(h, src),
-			Slug:      headingSlug(h),
+			Text:      heading,
+			Slug:      slug,
 			Start:     start,
 			End:       end,
 			StartLine: lines.lineAt(start),
@@ -462,6 +465,374 @@ func headingSlug(h *ast.Heading) string {
 		}
 	}
 	return ""
+}
+
+var explicitHeadingID = regexp.MustCompile(`^(.*?)[ \t]+(?:\{#([A-Za-z0-9][A-Za-z0-9_.:-]*)\}|\{/\*[ \t]*#([A-Za-z0-9][A-Za-z0-9_.:-]*)[ \t]*\*/\})[ \t]*$`)
+
+// headingPresentation recognizes Docusaurus's documented explicit heading IDs.
+// They replace Goldmark's automatic slug and are omitted from the displayed text.
+func headingPresentation(text, automaticSlug string) (string, string) {
+	match := explicitHeadingID.FindStringSubmatch(text)
+	if match == nil {
+		return text, automaticSlug
+	}
+	id := match[2]
+	if id == "" {
+		id = match[3]
+	}
+	return strings.TrimSpace(match[1]), id
+}
+
+// staticHeadingAnchorIDs recognizes block-level literal Docusaurus <Heading> components.
+// It intentionally does not attempt to lex Markdown or MDX generally: an opening
+// tag must start a Markdown line after at most three spaces. Tags are parsed once,
+// forward-only, with a bounded size, so malformed input cannot trigger suffix scans.
+func staticHeadingAnchorIDs(src []byte) []string {
+	const maxHeadingTagBytes = 16 << 10
+
+	var ids []string
+	frontMatterEnd := staticHeadingFrontMatterEnd(src)
+	inFence := byte(0)
+	fenceLen := 0
+	lex := staticHeadingLexState{}
+
+	for lineStart := 0; lineStart < len(src); {
+		lineEnd := lineStart + bytes.IndexByte(src[lineStart:], '\n')
+		if lineEnd < lineStart {
+			lineEnd = len(src)
+		} else {
+			lineEnd++
+		}
+		line := src[lineStart:lineEnd]
+
+		if lineStart < frontMatterEnd {
+			lineStart = lineEnd
+			continue
+		}
+		if lex.inLiteral() {
+			lex.advance(line)
+			lineStart = lineEnd
+			continue
+		}
+		indent := markdownIndent(line)
+		if inFence != 0 {
+			if fenceClose(line, indent, inFence, fenceLen) {
+				inFence, fenceLen = 0, 0
+			}
+			lineStart = lineEnd
+			continue
+		}
+		if marker, run := fenceOpen(line, indent); marker != 0 {
+			inFence, fenceLen = marker, run
+			lineStart = lineEnd
+			continue
+		}
+		if indent >= 4 || (len(line) > 0 && line[0] == '\t') {
+			lineStart = lineEnd
+			continue
+		}
+
+		if !lex.inLiteral() && indent <= 3 && bytes.HasPrefix(line[indent:], []byte("<Heading")) {
+			if id, end, ok := staticHeadingTagID(src, lineStart+indent, maxHeadingTagBytes); ok {
+				ids = append(ids, id)
+				lineStart = nextLineStart(src, end)
+				// The tag itself was already parsed, but its trailing bytes can open a
+				// comment or literal that conceals candidates on following lines.
+				lex.advance(src[end:lineStart])
+				continue
+			} else if end > lineStart {
+				// The tag parser consumed this malformed construct. Do not reconsider
+				// candidate-looking lines in it, which keeps malformed JSX linear.
+				lineStart = nextLineStart(src, end)
+				continue
+			}
+		}
+		lex.advance(line)
+		lineStart = lineEnd
+	}
+	return ids
+}
+
+// staticHeadingTagID parses one bounded opening tag. It accepts normal quoted
+// JSX attributes and expression-valued non-id attributes, but exactly one id must
+// be a quoted literal. end is always forward progress for a recognized opener.
+func staticHeadingTagID(src []byte, start, limit int) (id string, end int, ok bool) {
+	end = start + len("<Heading")
+	stop := end + limit
+	if stop > len(src) {
+		stop = len(src)
+	}
+	if end >= stop || (!asciiSpace(src[end]) && src[end] != '>' && src[end] != '/') {
+		return "", end, false
+	}
+	seenID := false
+	for end < stop {
+		for end < stop && asciiSpace(src[end]) {
+			end++
+		}
+		if end >= stop {
+			return "", end, false
+		}
+		if src[end] == '>' {
+			return id, end + 1, seenID
+		}
+		if src[end] == '/' && end+1 < stop && src[end+1] == '>' {
+			return id, end + 2, seenID
+		}
+		nameStart := end
+		for end < stop && asciiAttr(src[end]) {
+			end++
+		}
+		if nameStart == end {
+			return "", end + 1, false
+		}
+		name := string(src[nameStart:end])
+		for end < stop && asciiSpace(src[end]) {
+			end++
+		}
+		if end >= stop {
+			return "", end, false
+		}
+		if src[end] != '=' {
+			if name == "id" {
+				return "", end, false
+			}
+			continue
+		}
+		end++
+		for end < stop && asciiSpace(src[end]) {
+			end++
+		}
+		if end >= stop {
+			return "", end, false
+		}
+		switch src[end] {
+		case '\'', '"':
+			quote := src[end]
+			valueStart := end + 1
+			for end++; end < stop && src[end] != quote; end++ {
+				if src[end] == '<' || src[end] == '\n' || src[end] == '\r' {
+					return "", end + 1, false
+				}
+			}
+			if end >= stop {
+				return "", end, false
+			}
+			if name == "id" {
+				if seenID || !validLiteralID(string(src[valueStart:end])) {
+					return "", end + 1, false
+				}
+				id, seenID = string(src[valueStart:end]), true
+			}
+			end++
+		case '{':
+			if name == "id" {
+				return "", end + 1, false
+			}
+			depth := 1
+			for end++; end < stop && depth > 0; end++ {
+				switch src[end] {
+				case '\n', '\r':
+					return "", end + 1, false
+				case '{':
+					depth++
+				case '}':
+					depth--
+				}
+			}
+			if depth != 0 {
+				return "", end, false
+			}
+		default:
+			return "", end + 1, false
+		}
+	}
+	return "", end, false
+}
+
+func markdownIndent(line []byte) int {
+	indent := 0
+	for indent < len(line) && indent < 4 && line[indent] == ' ' {
+		indent++
+	}
+	return indent
+}
+
+func fenceOpen(line []byte, indent int) (byte, int) {
+	if indent > 3 || indent >= len(line) || (line[indent] != '`' && line[indent] != '~') {
+		return 0, 0
+	}
+	marker := line[indent]
+	run := 0
+	for indent+run < len(line) && line[indent+run] == marker {
+		run++
+	}
+	if run < 3 {
+		return 0, 0
+	}
+	return marker, run
+}
+
+func fenceClose(line []byte, indent int, marker byte, minRun int) bool {
+	if indent > 3 || indent >= len(line) || line[indent] != marker {
+		return false
+	}
+	run := 0
+	for indent+run < len(line) && line[indent+run] == marker {
+		run++
+	}
+	if run < minRun {
+		return false
+	}
+	for _, b := range line[indent+run:] {
+		if b != ' ' && b != '\t' && b != '\r' && b != '\n' {
+			return false
+		}
+	}
+	return true
+}
+
+// staticHeadingLexState tracks only contexts that can conceal a line-start JSX
+// tag. It is a single forward pass: Markdown code spans (with their exact
+// backtick-run delimiter), MDX comments, and JavaScript strings introduced by a
+// declaration may cross lines, so candidate recognition never runs while one is open.
+type staticHeadingLexState struct {
+	htmlComment bool
+	jsxComment  bool
+	quote       byte
+	codeRun     int
+}
+
+func (s staticHeadingLexState) inLiteral() bool {
+	return s.htmlComment || s.jsxComment || s.quote != 0 || s.codeRun != 0
+}
+
+func (s *staticHeadingLexState) advance(line []byte) {
+	jsStringLine := staticHeadingJSStringLine(line)
+	for i := 0; i < len(line); {
+		if s.htmlComment {
+			end := bytes.Index(line[i:], []byte("-->"))
+			if end < 0 {
+				return
+			}
+			s.htmlComment, i = false, i+end+3
+			continue
+		}
+		if s.jsxComment {
+			end := bytes.Index(line[i:], []byte("*/"))
+			if end < 0 {
+				return
+			}
+			i += end + 2
+			for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
+				i++
+			}
+			if i < len(line) && line[i] == '}' {
+				s.jsxComment, i = false, i+1
+				continue
+			}
+			return
+		}
+		if s.quote != 0 {
+			if line[i] == '\\' {
+				i += 2 // escaped quote (including an escaped line ending)
+				continue
+			}
+			if line[i] == s.quote {
+				s.quote = 0
+			}
+			i++
+			continue
+		}
+		if s.codeRun != 0 {
+			if line[i] != '`' {
+				i++
+				continue
+			}
+			run := backtickRun(line, i)
+			i += run
+			if run == s.codeRun {
+				s.codeRun = 0
+			}
+			continue
+		}
+
+		switch {
+		case bytes.HasPrefix(line[i:], []byte("<!--")):
+			s.htmlComment, i = true, i+4
+		case bytes.HasPrefix(line[i:], []byte("{/*")):
+			s.jsxComment, i = true, i+3
+		case jsStringLine && (line[i] == '\'' || line[i] == '"'):
+			s.quote, i = line[i], i+1
+		case line[i] == '`':
+			s.codeRun = backtickRun(line, i)
+			i += s.codeRun
+		default:
+			i++
+		}
+	}
+}
+
+// staticHeadingJSStringLine limits multiline quote tracking to conventional MDX
+// JavaScript declaration/import lines. Markdown prose commonly contains apostrophes
+// and quotes, so treating every quote as JavaScript would hide later components.
+func staticHeadingJSStringLine(line []byte) bool {
+	line = bytes.TrimLeft(line, " \t")
+	for _, keyword := range [...]string{"const", "let", "var", "export", "import"} {
+		if !bytes.HasPrefix(line, []byte(keyword)) {
+			continue
+		}
+		return len(line) == len(keyword) || line[len(keyword)] == ' ' || line[len(keyword)] == '\t'
+	}
+	return false
+}
+
+func backtickRun(line []byte, start int) int {
+	run := 0
+	for start+run < len(line) && line[start+run] == '`' {
+		run++
+	}
+	return run
+}
+
+func staticHeadingFrontMatterEnd(src []byte) int {
+	var fence []byte
+	switch {
+	case bytes.HasPrefix(src, []byte("---\n")), bytes.HasPrefix(src, []byte("---\r\n")):
+		fence = []byte("---")
+	case bytes.HasPrefix(src, []byte("+++\n")), bytes.HasPrefix(src, []byte("+++\r\n")):
+		fence = []byte("+++")
+	default:
+		return 0
+	}
+	for lineStart := len(fence); lineStart < len(src); {
+		lineEnd := nextLineStart(src, lineStart)
+		line := bytes.TrimRight(src[lineStart:lineEnd], "\r\n")
+		if bytes.Equal(line, fence) || (bytes.Equal(fence, []byte("---")) && bytes.Equal(line, []byte("..."))) {
+			return lineEnd
+		}
+		lineStart = lineEnd
+	}
+	return 0
+}
+
+func nextLineStart(src []byte, offset int) int {
+	if offset >= len(src) {
+		return len(src)
+	}
+	if newline := bytes.IndexByte(src[offset:], '\n'); newline >= 0 {
+		return offset + newline + 1
+	}
+	return len(src)
+}
+
+func validLiteralID(id string) bool {
+	return id != "" && strings.TrimSpace(id) == id && !strings.ContainsAny(id, "{}<>\\\"'")
+}
+
+func asciiSpace(b byte) bool { return b == ' ' || b == '\t' || b == '\n' || b == '\r' }
+func asciiAttr(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '-' || b == ':'
 }
 
 // nodeSpan returns the byte span [start, end) covered by a block node's lines.

@@ -6,6 +6,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Docusaurus content roots and heading anchors ([ADR 0025](docs/adr/0025-content-roots-and-docusaurus-anchors.md)).**
+  `.matlatl.yml contentRoots` maps single-slash links made from configured site
+  content trees to their repository-relative content root while preserving
+  repository-root semantics elsewhere. Matlatl also recognizes Docusaurus
+  explicit Markdown IDs and bounded, literal block-level MDX `<Heading id>`
+  anchors without evaluating MDX or JavaScript. Literal component anchors
+  validate fragments without creating synthetic graph sections.
+
 ## [v0.0.8] - 2026-08-12
 
 ### Added

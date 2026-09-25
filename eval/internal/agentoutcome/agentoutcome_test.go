@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ type fakeRuntime struct {
 	args               []string
 	preExposureFailure bool
 	terminal           string
+	terminalMessage    string
 	captureSymlink     bool
 	cleanupErr         error
 	cleanupCalls       int
@@ -43,8 +45,11 @@ func (f *fakeRuntime) Name() string {
 func (f *fakeRuntime) InspectImage(context.Context, string) (string, error)            { return testImageID, nil }
 func (f *fakeRuntime) EnsureContainerAbsent(context.Context, ContainerOwnership) error { return nil }
 func (f *fakeRuntime) PrepareWorkspace(context.Context, ContainerOwnership) error      { return nil }
-func (f *fakeRuntime) Run(_ context.Context, args []string) ([]byte, error) {
+func (f *fakeRuntime) Run(ctx context.Context, args []string, _ ContainerIdentity) ([]byte, error) {
 	f.args = append([]string(nil), args...)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if f.preExposureFailure {
 		return nil, errors.New("runtime unavailable")
 	}
@@ -75,7 +80,11 @@ func (f *fakeRuntime) Run(_ context.Context, args []string) ([]byte, error) {
 	if status == "" {
 		status = "completed"
 	}
-	return []byte(`{"type":"exposure","attemptId":"` + attempt + `","time":"2026-08-17T00:00:00Z","exposed":true}` + "\n" + `{"type":"terminal","attemptId":"` + attempt + `","exposed":true,"status":"` + status + `"}` + "\n"), nil
+	terminal := `{"type":"terminal","attemptId":"` + attempt + `","exposed":true,"status":"` + status + `"`
+	if f.terminalMessage != "" {
+		terminal += `,"message":` + strconv.Quote(f.terminalMessage)
+	}
+	return []byte(`{"type":"exposure","attemptId":"` + attempt + `","time":"2026-08-17T00:00:00Z","exposed":true}` + "\n" + terminal + "}\n"), nil
 }
 func (f *fakeRuntime) Cleanup(_ context.Context, owner ContainerOwnership) error {
 	f.cleanupCalls++
@@ -154,17 +163,17 @@ func TestIsolatedRunPreparationAndSecurityArgv(t *testing.T) {
 				}
 			}
 			joinedArgs := strings.Join(rt.args, "\n")
-			if !strings.Contains(joinedArgs, "type=volume,source=matlatl-eval-") || !strings.Contains(joinedArgs, "-tmp,destination=/tmp") {
+			if !strings.Contains(joinedArgs, "type=volume,source=matlatl-eval-") || !strings.Contains(joinedArgs, "-tmp,destination=/tmp") || slices.Contains(rt.args, "--tmpfs") {
 				t.Fatalf("bounded /tmp volume mount missing: %v", rt.args)
 			}
 			if got := rt.args[len(rt.args)-1]; got != testImageID {
 				t.Fatalf("run uses %q, not immutable ID", got)
 			}
 			if count := strings.Count(strings.Join(rt.args, "\n"), "--volume\n"); count != 2 {
-				t.Fatalf("container has %d bind mounts, want exactly read-only input and supervisor capture: %v", count, rt.args)
+				t.Fatalf("container has %d direct volumes, want read-only input and supervisor capture: %v", count, rt.args)
 			}
 			joined := strings.Join(rt.args, " ")
-			if !strings.Contains(joined, ":/input:ro") || !strings.Contains(joined, ":/capture:rw") || !strings.Contains(joined, "type=volume,source=matlatl-eval-") {
+			if !strings.Contains(joined, ":/input:ro") || !strings.Contains(joined, ":/capture:rw") || !strings.Contains(joined, "type=volume,source=matlatl-eval-") || !strings.Contains(joined, "-tmp,destination=/tmp") {
 				t.Fatalf("missing hard filesystem isolation: %v", rt.args)
 			}
 			for _, forbidden := range []string{filepath.Join(root, "eval"), filepath.Join(root, "eval", "gold"), os.Getenv("HOME"), "/var/run/docker.sock"} {
@@ -178,6 +187,11 @@ func TestIsolatedRunPreparationAndSecurityArgv(t *testing.T) {
 			_, trails := files["trails.json"]
 			if llms != (arm == "all") || trails != (arm == "all") {
 				t.Fatalf("treatment files: %v", files)
+			}
+			var ownership map[string]any
+			decodeFile(t, filepath.Join(runDir, "container-ownership.json"), &ownership)
+			if ownership["tempVolume"] == "" || ownership["workspaceVolume"] == "" {
+				t.Fatalf("container ownership=%v", ownership)
 			}
 			var execution Execution
 			decodeFile(t, filepath.Join(runDir, "execution.json"), &execution)
@@ -199,23 +213,28 @@ func TestFailureExposureSemantics(t *testing.T) {
 	t.Run("post-exposure-provider-is-gradeable", func(t *testing.T) {
 		env := base
 		env.RunDir = t.TempDir()
-		rt := &fakeRuntime{terminal: "provider-failure"}
+		rt := &fakeRuntime{terminal: "provider-failure", terminalMessage: "provider quota exceeded\nretry later"}
 		outcome, _, gradeable, err := RunWithRuntime(context.Background(), env, rt)
 		if err != nil || !gradeable || outcome.Status != "provider-failure" {
 			t.Fatalf("outcome=%+v gradeable=%v err=%v", outcome, gradeable, err)
+		}
+		var execution Execution
+		decodeFile(t, filepath.Join(env.RunDir, "execution.json"), &execution)
+		if execution.Diagnostic != "provider quota exceeded retry later" {
+			t.Fatalf("execution diagnostic=%q", execution.Diagnostic)
 		}
 	})
 	t.Run("cleanup-failure-after-exposure-is-gradeable", func(t *testing.T) {
 		env := base
 		env.RunDir = t.TempDir()
-		rt := &fakeRuntime{cleanupErr: errors.New("simulated cleanup failure")}
+		rt := &fakeRuntime{terminalMessage: "terminal diagnostic", cleanupErr: errors.New("simulated cleanup failure")}
 		outcome, _, gradeable, err := RunWithRuntime(context.Background(), env, rt)
 		if err != nil || !gradeable || outcome.Status != manifest.StatusEnvironmentFailure || rt.cleanupCalls != 1 {
 			t.Fatalf("outcome=%+v gradeable=%v cleanupCalls=%d err=%v", outcome, gradeable, rt.cleanupCalls, err)
 		}
 		var execution Execution
 		decodeFile(t, filepath.Join(env.RunDir, "execution.json"), &execution)
-		if !execution.Exposed || execution.TerminalStatus != manifest.StatusEnvironmentFailure || !strings.Contains(execution.Diagnostic, "simulated cleanup failure") {
+		if !execution.Exposed || execution.TerminalStatus != manifest.StatusEnvironmentFailure || !strings.Contains(execution.Diagnostic, "simulated cleanup failure") || strings.Contains(execution.Diagnostic, "terminal diagnostic") {
 			t.Fatalf("execution=%+v", execution)
 		}
 	})
@@ -241,6 +260,16 @@ func TestFailureExposureSemantics(t *testing.T) {
 			t.Fatalf("gradeable=%v err=%v", gradeable, err)
 		}
 	})
+	t.Run("pre-exposure-cancellation-is-non-gradeable", func(t *testing.T) {
+		env := base
+		env.RunDir = t.TempDir()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_, _, gradeable, err := RunWithRuntime(ctx, env, &fakeRuntime{})
+		if err == nil || gradeable {
+			t.Fatalf("gradeable=%v err=%v", gradeable, err)
+		}
+	})
 	t.Run("malicious-capture-symlink-is-evaluator-failure", func(t *testing.T) {
 		env := base
 		env.RunDir = t.TempDir()
@@ -254,6 +283,212 @@ func TestFailureExposureSemantics(t *testing.T) {
 	})
 }
 
+func TestCommandRuntimeReturnsWithoutStartingForDoneContext(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("helper uses POSIX shell")
+	}
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "runtime-helper")
+	started := filepath.Join(dir, "started")
+	if err := os.WriteFile(helper, []byte("#!/bin/sh\n: > \"$TEST_STARTED_FILE\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TEST_STARTED_FILE", started)
+	rt := &commandRuntime{name: "docker", executable: helper}
+
+	contexts := map[string]func() context.Context{
+		"canceled": func() context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx
+		},
+		"expired deadline": func() context.Context {
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			defer cancel()
+			return ctx
+		},
+	}
+	for name, newContext := range contexts {
+		t.Run(name, func(t *testing.T) {
+			ctx := newContext()
+			_, err := rt.Run(ctx, []string{"run"}, ContainerIdentity{})
+			if !errors.Is(err, ctx.Err()) {
+				t.Fatalf("Run error=%v, want %v", err, ctx.Err())
+			}
+			if _, err := os.Stat(started); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("runtime started for completed context: %v", err)
+			}
+		})
+	}
+}
+
+func TestCommandRuntimeCancellationStopsAndDrains(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("helper uses POSIX signals")
+	}
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "runtime-helper")
+	script := `#!/bin/sh
+set -eu
+case "$1" in
+container)
+  printf '%s|%s|%s\n' "$TEST_CONTAINER_ID" "$TEST_IMAGE_ID" "$TEST_LABEL"
+  ;;
+stop)
+  kill -TERM "$(cat "$TEST_PID_FILE")"
+  : > "$TEST_STOP_FILE"
+  ;;
+run)
+  printf '%s\n' '{"type":"exposure","attemptId":"attempt-drain","time":"2026-08-17T00:00:00Z","exposed":true}'
+  echo $$ > "$TEST_PID_FILE"
+  trap 'sleep 0.1; printf "%s\n" "{\"type\":\"terminal\",\"attemptId\":\"attempt-drain\",\"exposed\":true,\"status\":\"evaluator-failure\"}"; exit 0' TERM
+  : > "$TEST_READY_FILE"
+  while :; do sleep 1; done
+  ;;
+esac
+`
+	if err := os.WriteFile(helper, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	pidFile, readyFile, stopFile := filepath.Join(dir, "pid"), filepath.Join(dir, "ready"), filepath.Join(dir, "stopped")
+	containerID := strings.Repeat("b", 64)
+	for key, value := range map[string]string{
+		"TEST_CONTAINER_ID": containerID,
+		"TEST_IMAGE_ID":     testImageID,
+		"TEST_LABEL":        "run-drain",
+		"TEST_PID_FILE":     pidFile,
+		"TEST_READY_FILE":   readyFile,
+		"TEST_STOP_FILE":    stopFile,
+	} {
+		t.Setenv(key, value)
+	}
+	rt := &commandRuntime{name: "docker", executable: helper}
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan struct {
+		out []byte
+		err error
+	}, 1)
+	go func() {
+		out, err := rt.Run(ctx, []string{"run"}, ContainerIdentity{Name: "owned", LabelValue: "run-drain", ImageID: testImageID})
+		result <- struct {
+			out []byte
+			err error
+		}{out, err}
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(readyFile); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("runtime helper did not become ready")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	got := <-result
+	if !errors.Is(got.err, context.Canceled) {
+		t.Fatalf("Run error=%v, want context cancellation", got.err)
+	}
+	if _, err := os.Stat(stopFile); err != nil {
+		t.Fatalf("owned container was not stopped: %v", err)
+	}
+	frames, err := parseControl(got.out, "attempt-drain")
+	if err != nil || len(frames) != 2 || frames[1].Type != "terminal" {
+		t.Fatalf("drained control=%q frames=%v err=%v", got.out, frames, err)
+	}
+	if err := os.Remove(stopFile); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TEST_LABEL", "other-run")
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), time.Second)
+	err = rt.stopOwnedContainer(stopCtx, ContainerIdentity{Name: "owned", LabelValue: "run-drain", ImageID: testImageID})
+	stopCancel()
+	if err == nil || !strings.Contains(err.Error(), "ownership mismatch") {
+		t.Fatalf("unowned cancellation stop error=%v", err)
+	}
+	if _, err := os.Stat(stopFile); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unowned container stop was invoked: %v", err)
+	}
+}
+
+func TestCommandRuntimeCancellationBoundsInheritedDescriptorDrain(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("helper uses POSIX signals")
+	}
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "runtime-helper")
+	script := `#!/bin/sh
+set -eu
+case "$1" in
+container)
+  printf '%s|%s|%s\n' "$TEST_CONTAINER_ID" "$TEST_IMAGE_ID" "$TEST_LABEL"
+  ;;
+stop)
+  :
+  ;;
+run)
+  (
+    : > "$TEST_DESCENDANT_READY_FILE"
+    while [ ! -e "$TEST_DESCENDANT_RELEASE_FILE" ]; do sleep 1; done
+  ) &
+  trap 'exit 0' TERM
+  : > "$TEST_READY_FILE"
+  while :; do sleep 1; done
+  ;;
+esac
+`
+	if err := os.WriteFile(helper, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	readyFile := filepath.Join(dir, "ready")
+	descendantReadyFile := filepath.Join(dir, "descendant-ready")
+	descendantReleaseFile := filepath.Join(dir, "descendant-release")
+	for key, value := range map[string]string{
+		"TEST_CONTAINER_ID":            strings.Repeat("b", 64),
+		"TEST_IMAGE_ID":                testImageID,
+		"TEST_LABEL":                   "run-drain",
+		"TEST_READY_FILE":              readyFile,
+		"TEST_DESCENDANT_READY_FILE":   descendantReadyFile,
+		"TEST_DESCENDANT_RELEASE_FILE": descendantReleaseFile,
+	} {
+		t.Setenv(key, value)
+	}
+	t.Cleanup(func() { _ = os.WriteFile(descendantReleaseFile, nil, 0o600) })
+	rt := &commandRuntime{name: "docker", executable: helper}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		_, err := rt.Run(ctx, []string{"run"}, ContainerIdentity{Name: "owned", LabelValue: "run-drain", ImageID: testImageID})
+		result <- err
+	}()
+	for _, path := range []string{readyFile, descendantReadyFile} {
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			if _, err := os.Stat(path); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("runtime helper did not create %s", path)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Run error=%v, want context cancellation", err)
+		}
+	case <-time.After(cancellationStopTimeout + 2*cancellationDrainGrace + 2*time.Second):
+		t.Fatal("Run remained blocked on inherited stdout/stderr after killing the runtime client")
+	}
+	if _, err := os.Stat(descendantReleaseFile); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("descendant was released before Run returned: %v", err)
+	}
+}
+
 func TestRuntimeSelectionAndImageValidation(t *testing.T) {
 	if _, err := SelectRuntime("sh"); err == nil {
 		t.Fatal("arbitrary executable accepted")
@@ -261,13 +496,27 @@ func TestRuntimeSelectionAndImageValidation(t *testing.T) {
 	if !validImageID(testImageID) || validImageID("local:latest") {
 		t.Fatal("image ID validation failed")
 	}
-	wantTmpfsVolume := []string{"volume", "create", "--driver", "local", "--label", runLabelKey + "=run", "--opt", "type=tmpfs", "--opt", "device=tmpfs", "--opt", "o=size=16m,nr_inodes=2048,mode=1777,uid=0,gid=0,noexec,nosuid,nodev", "tmp"}
+	wantTmpfsVolume := []string{"volume", "create", "--driver", "local", "--label", runLabelKey + "=run", "--opt", "type=tmpfs", "--opt", "device=tmpfs", "--opt", "o=size=16m,nr_inodes=2048,mode=1777,noexec,nosuid,nodev", "tmp"}
 	if got := tempVolumeCreateArgs("tmp", "run"); !slices.Equal(got, wantTmpfsVolume) {
 		t.Fatalf("tmpfs volume argv=%v want %v", got, wantTmpfsVolume)
 	}
-	args := containerArgs(testImageID, "/input", "/capture", "/r/container.cid", "matlatl-eval-nonce", "matlatl-eval-nonce-workspace", "matlatl-eval-nonce-tmp", "all", "attempt-a", "run-a", "correct")
-	if runtime.GOOS == "linux" && (!strings.Contains(strings.Join(args, " "), ":/input:ro,Z") || !strings.Contains(strings.Join(args, " "), ":/capture:rw,Z")) {
-		t.Fatal("SELinux relabel missing")
+	for _, tc := range []struct {
+		runtimeName string
+		tempMount   string
+		volumeCount int
+	}{
+		{"docker", "type=volume,source=matlatl-eval-nonce-tmp,destination=/tmp", 2},
+		{"podman", "matlatl-eval-nonce-tmp:/tmp:noexec,nosuid,nodev", 3},
+	} {
+		t.Run(tc.runtimeName, func(t *testing.T) {
+			args := containerArgs(tc.runtimeName, testImageID, "/input", "/capture", "/r/container.cid", "matlatl-eval-nonce", "matlatl-eval-nonce-workspace", "matlatl-eval-nonce-tmp", "all", "attempt-a", "run-a", "correct")
+			if slices.Contains(args, "--tmpfs") || !slices.Contains(args, tc.tempMount) || strings.Count(strings.Join(args, "\n"), "--volume\n") != tc.volumeCount {
+				t.Fatalf("tmpfs argv=%v", args)
+			}
+			if runtime.GOOS == "linux" && (!strings.Contains(strings.Join(args, " "), ":/input:ro,Z") || !strings.Contains(strings.Join(args, " "), ":/capture:rw,Z")) {
+				t.Fatal("SELinux relabel missing")
+			}
+		})
 	}
 	if got := imageBuildArgs("docker", true, "/ctx", "tag", "run"); strings.Join(got[:3], " ") != "buildx build --load" {
 		t.Fatalf("buildx argv=%v", got)

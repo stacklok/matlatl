@@ -40,6 +40,11 @@ type Config struct {
 	Roots []string
 	// Ignore holds additional ignore patterns layered on .matlatlignore.
 	Ignore []string
+	// ContentRoots are repository-relative documentation roots whose single-slash
+	// links use site-root semantics. For an origin strictly inside one of these
+	// directories, `/x.md` resolves to `<content-root>/x.md`; origins elsewhere
+	// retain repository-root semantics. Config-only; empty preserves ADR 0022.
+	ContentRoots []string
 	// ResolutionPolicy selects how raw targets map to documents (ADR 0001).
 	ResolutionPolicy reference.ResolutionPolicy
 	// OutputDir is the artifact output directory; empty means no artifacts.
@@ -114,6 +119,7 @@ func DefaultConfig() Config {
 		RootPath:         ".",
 		Roots:            nil,
 		Ignore:           nil,
+		ContentRoots:     nil,
 		ResolutionPolicy: reference.DefaultResolutionPolicy,
 		OutputDir:        "",
 		Formats:          nil,

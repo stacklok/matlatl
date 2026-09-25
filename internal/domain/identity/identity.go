@@ -64,7 +64,7 @@ func NewDocumentID(root, p string) (DocumentID, error) {
 // MarkdownExts are the recognized markdown file extensions (lowercase, with
 // leading dot). It is the single source of truth shared by the scanner
 // (discovery) and the resolver (note vs. asset classification).
-var MarkdownExts = []string{".md", ".markdown"}
+var MarkdownExts = []string{".md", ".markdown", ".mdx"}
 
 // IsMarkdownPath reports whether p has a recognized markdown extension. The
 // comparison is case-insensitive.

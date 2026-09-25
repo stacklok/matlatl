@@ -59,11 +59,20 @@ $ matlatl emit --out ai  # write the full human + LLM artifact bundle to ./ai
   resolved against the linking file's directory) and **root-absolute** (`/tables/orders.md`,
   a single leading `/` resolved from the **scan root** — the directory you point
   matlatl at, independent of where the link lives. If you scan a subdirectory, `/`
-  means that subdirectory, not the git repository root; see
-  [ADR 0022](adr/0022-root-absolute-links.md)). A `//host/...` target is a
+  means that subdirectory, not the git repository root. Set config-only
+  `contentRoots: [user-docs]` for a docs site: a link from strictly inside
+  `user-docs/` then resolves `/tables/orders.md` as `user-docs/tables/orders.md`;
+  origins outside it retain scan-root behavior; see
+  [ADR 0022](adr/0022-root-absolute-links.md) and
+  [ADR 0025](adr/0025-content-roots-and-docusaurus-anchors.md)). A `//host/...` target is a
   protocol-relative URL and is treated as external.
 - **Broken anchors** — `other.md#heading` where that heading doesn't exist. Slugs
   are GitHub-style (lowercase, spaces→`-`); see [ADR 0006](adr/0006-slug-dialect.md).
+  Docusaurus `## Title {#id}` and `## Title {/* #id */}` replace the generated
+  slug, and block-level literal static `<Heading id="id">` anchors are also
+  checked. The opening component must begin a Markdown line (after at most three
+  spaces); dynamic MDX expressions are never evaluated; see
+  [ADR 0025](adr/0025-content-roots-and-docusaurus-anchors.md).
 - **Ambiguous links** — e.g. `[[notes]]` when two `notes.md` exist. matlatl
   refuses to guess and shows you the candidates. A wikilink also resolves through
   front-matter aliases: both the `aliases:` list **and** a single-valued `name:`

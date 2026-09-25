@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -27,8 +28,8 @@ type damagedCIDRuntime struct {
 	malformed bool
 }
 
-func (r *damagedCIDRuntime) Run(ctx context.Context, args []string) ([]byte, error) {
-	out, err := r.commandRuntime.Run(ctx, args)
+func (r *damagedCIDRuntime) Run(ctx context.Context, args []string, owner ContainerIdentity) ([]byte, error) {
+	out, err := r.commandRuntime.Run(ctx, args, owner)
 	cidfile := flagValue(args, "--cidfile")
 	if r.malformed {
 		_ = os.WriteFile(cidfile, []byte("not-a-container\n"), 0o600)
@@ -95,8 +96,10 @@ func TestOCIIsolationEndToEnd(t *testing.T) {
 		outcome, _, gradeable, runErr := RunWithRuntime(context.Background(), Environment{Model: "test/offline-fake", Prompt: prompt, Task: "canonical-navigation", RunDir: runDir, EvalRoot: filepath.Join(root, "eval"), Arm: arm, Image: imageID, ScheduledRunID: scheduledRunID, AttemptID: attempt, FakeMode: "adversarial", HostGoldSentinel: gold, HostTempSentinel: tempSentinel, NetworkCanary: "http://" + listener.Addr().String() + "/canary", Timeout: 30 * time.Second}, rt)
 		assertOwnershipAbsent(t, rt.(*commandRuntime), runDir)
 		if runErr != nil || !gradeable || outcome.Status != "completed" {
+			var execution Execution
+			decodeFile(t, filepath.Join(runDir, "execution.json"), &execution)
 			events, _ := os.ReadFile(filepath.Join(runDir, "events.jsonl"))
-			t.Fatalf("arm=%s outcome=%+v gradeable=%v err=%v events=%s", arm, outcome, gradeable, runErr, events)
+			t.Fatalf("arm=%s outcome=%+v gradeable=%v err=%v diagnostic=%q events=%s", arm, outcome, gradeable, runErr, execution.Diagnostic, events)
 		}
 		var isolation map[string]bool
 		decodeFile(t, filepath.Join(runDir, "capture/isolation.json"), &isolation)
@@ -161,6 +164,12 @@ func TestOCIIsolationEndToEnd(t *testing.T) {
 		t.Fatalf("provider outcome=%+v gradeable=%v err=%v", outcome, gradeable, err)
 	}
 
+	var providerExecution Execution
+	decodeFile(t, filepath.Join(runDir, "execution.json"), &providerExecution)
+	if providerExecution.Diagnostic == "" {
+		t.Fatal("provider terminal diagnostic missing")
+	}
+
 	for _, malformed := range []bool{false, true} {
 		name := "missing-cidfile"
 		if malformed {
@@ -170,11 +179,7 @@ func TestOCIIsolationEndToEnd(t *testing.T) {
 			runDir := t.TempDir()
 			damaged := &damagedCIDRuntime{commandRuntime: rt.(*commandRuntime), malformed: malformed}
 			outcome, _, gradeable, runErr := RunWithRuntime(context.Background(), Environment{Model: "test/offline-fake", Prompt: prompt, Task: "canonical-navigation", RunDir: runDir, EvalRoot: filepath.Join(root, "eval"), Arm: "baseline", Image: imageID, ScheduledRunID: scheduledRunID, AttemptID: "attempt-" + name, Timeout: 30 * time.Second}, damaged)
-			var owner ContainerOwnership
-			decodeFile(t, filepath.Join(runDir, "container-ownership.json"), &owner)
-			if err := damaged.EnsureContainerAbsent(context.Background(), owner); err != nil {
-				t.Fatalf("cleanup fallback: %v", err)
-			}
+			assertOwnershipAbsent(t, damaged.commandRuntime, runDir)
 			if runErr != nil || !gradeable || outcome.Status != manifest.StatusCompleted {
 				t.Fatalf("outcome=%+v gradeable=%v err=%v", outcome, gradeable, runErr)
 			}
@@ -290,6 +295,12 @@ func assertOwnershipAbsent(t *testing.T, rt *commandRuntime, runDir string) {
 	decodeFile(t, filepath.Join(runDir, "container-ownership.json"), &owner)
 	if err := rt.EnsureContainerAbsent(context.Background(), owner); err != nil {
 		t.Fatalf("container cleanup not verified: %v", err)
+	}
+	for _, name := range []string{owner.WorkspaceVolume, owner.TempVolume} {
+		out, err := exec.Command(rt.executable, "volume", "inspect", name).CombinedOutput()
+		if err == nil || !isContainerAbsent(fmt.Errorf("%w: %s", err, out)) {
+			t.Fatalf("volume cleanup not verified for %q: %v: %s", name, err, out)
+		}
 	}
 }
 

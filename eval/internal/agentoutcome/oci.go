@@ -27,10 +27,12 @@ import (
 )
 
 const (
-	maxControlBytes  = 64 << 10
-	maxControlFrames = 2
-	cleanupTimeout   = 15 * time.Second
-	runLabelKey      = "io.stacklok.matlatl.eval-run"
+	maxControlBytes         = 64 << 10
+	maxControlFrames        = 2
+	cleanupTimeout          = 15 * time.Second
+	cancellationStopTimeout = 5 * time.Second
+	cancellationDrainGrace  = 3 * time.Second
+	runLabelKey             = "io.stacklok.matlatl.eval-run"
 )
 
 // ContainerOwnership is the complete identity required to safely clean up one run.
@@ -43,13 +45,20 @@ type ContainerOwnership struct {
 	TempVolume      string `json:"tempVolume"`
 }
 
+// ContainerIdentity is the runtime-owned identity needed to safely stop one container.
+type ContainerIdentity struct {
+	Name       string
+	LabelValue string
+	ImageID    string
+}
+
 // OCIRuntime is the narrow host seam used by ordinary tests.
 type OCIRuntime interface {
 	Name() string
 	InspectImage(context.Context, string) (string, error)
 	EnsureContainerAbsent(context.Context, ContainerOwnership) error
 	PrepareWorkspace(context.Context, ContainerOwnership) error
-	Run(context.Context, []string) ([]byte, error)
+	Run(context.Context, []string, ContainerIdentity) ([]byte, error)
 	Cleanup(context.Context, ContainerOwnership) error
 }
 
@@ -72,23 +81,83 @@ func (r *commandRuntime) InspectImage(ctx context.Context, image string) (string
 	}
 	return id, nil
 }
-func (r *commandRuntime) Run(ctx context.Context, args []string) ([]byte, error) {
-	childCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+func (r *commandRuntime) Run(ctx context.Context, args []string, owner ContainerIdentity) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// r.executable is resolved from the docker/podman allowlist; every caller
 	// constructs args from validated IDs and fixed OCI flags.
-	cmd := exec.CommandContext(childCtx, r.executable, args...) //nolint:gosec // Runtime and argv vocabulary are constrained by this package.
-	stdout := limitedBuffer{limit: maxControlBytes, overflow: cancel}
-	stderr := limitedBuffer{limit: maxControlBytes, overflow: cancel}
+	cmd := exec.Command(r.executable, args...) //nolint:gosec // Runtime and argv vocabulary are constrained by this package.
+	overflow := make(chan struct{}, 1)
+	signalOverflow := func() {
+		select {
+		case overflow <- struct{}{}:
+		default:
+		}
+	}
+	stdout := limitedBuffer{limit: maxControlBytes, overflow: signalOverflow}
+	stderr := limitedBuffer{limit: maxControlBytes, overflow: signalOverflow}
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
+	cmd.WaitDelay = cancellationDrainGrace
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	waited := make(chan error, 1)
+	go func() { waited <- cmd.Wait() }()
+
+	var runErr error
+	select {
+	case runErr = <-waited:
+		return runtimeOutput(&stdout, &stderr, runErr)
+	case <-ctx.Done():
+		runErr = ctx.Err()
+	case <-overflow:
+		runErr = errors.New("OCI output exceeded limit; container was killed")
+	}
+
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), cancellationStopTimeout)
+	stopErr := r.stopOwnedContainer(stopCtx, owner)
+	stopCancel()
+	if stopErr != nil {
+		runErr = errors.Join(runErr, stopErr)
+	}
+	select {
+	case <-waited:
+	case <-time.After(cancellationDrainGrace):
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		<-waited
+	}
+	return runtimeOutput(&stdout, &stderr, runErr)
+}
+
+func runtimeOutput(stdout, stderr *limitedBuffer, runErr error) ([]byte, error) {
 	if stdout.Exceeded() || stderr.Exceeded() {
 		return stdout.CopyBytes(), errors.New("OCI output exceeded limit; container was killed")
 	}
-	if err != nil && stderr.Len() != 0 {
-		err = fmt.Errorf("%w: %s", err, boundedMessage(string(stderr.CopyBytes())))
+	if runErr != nil && stderr.Len() != 0 {
+		runErr = fmt.Errorf("%w: %s", runErr, boundedMessage(string(stderr.CopyBytes())))
 	}
-	return stdout.CopyBytes(), err
+	return stdout.CopyBytes(), runErr
+}
+
+func (r *commandRuntime) stopOwnedContainer(ctx context.Context, owner ContainerIdentity) error {
+	identity, err := r.inspectOwnedContainer(ctx, owner.Name)
+	if isContainerAbsent(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect container before cancellation stop: %w", err)
+	}
+	if identity.Label != owner.LabelValue || identity.ImageID != owner.ImageID {
+		return fmt.Errorf("container %q ownership mismatch; refusing stop", owner.Name)
+	}
+	out, err := exec.CommandContext(ctx, r.executable, "stop", "--time", "1", identity.ID).CombinedOutput() //nolint:gosec // Allowlisted runtime and ownership-checked container ID.
+	if err != nil && !isContainerAbsent(fmt.Errorf("%w: %s", err, out)) {
+		return fmt.Errorf("%s stop container %s: %w: %s", r.name, identity.ID, err, boundedMessage(string(out)))
+	}
+	return nil
 }
 
 func (r *commandRuntime) EnsureContainerAbsent(ctx context.Context, owner ContainerOwnership) error {
@@ -139,9 +208,8 @@ func workspaceVolumeCreateArgs(name, label string) []string {
 }
 
 func tempVolumeCreateArgs(name, label string) []string {
-	return tmpfsVolumeCreateArgs(name, label, "size=16m,nr_inodes=2048,mode=1777,uid=0,gid=0,noexec,nosuid,nodev")
+	return tmpfsVolumeCreateArgs(name, label, "size=16m,nr_inodes=2048,mode=1777,noexec,nosuid,nodev")
 }
-
 func tmpfsVolumeCreateArgs(name, label, options string) []string {
 	return []string{"volume", "create", "--driver", "local", "--label", runLabelKey + "=" + label, "--opt", "type=tmpfs", "--opt", "device=tmpfs", "--opt", "o=" + options, name}
 }
@@ -532,7 +600,7 @@ func isolatedRun(parent context.Context, env Environment, oci OCIRuntime) (Outco
 	if err := oci.PrepareWorkspace(parent, owner); err != nil {
 		return fail(runRoot, manifest.StatusEnvironmentFailure, err)
 	}
-	args := containerArgs(imageID, input, capture, cidfile, containerName, owner.WorkspaceVolume, owner.TempVolume, env.Arm, attemptID, runID, env.FakeMode)
+	args := containerArgs(oci.Name(), imageID, input, capture, cidfile, containerName, owner.WorkspaceVolume, owner.TempVolume, env.Arm, attemptID, runID, env.FakeMode)
 	for _, item := range []struct{ key, value string }{
 		{"MATLATL_HOST_GOLD_SENTINEL", env.HostGoldSentinel},
 		{"MATLATL_HOST_TEMP_SENTINEL", env.HostTempSentinel},
@@ -544,7 +612,7 @@ func isolatedRun(parent context.Context, env Environment, oci OCIRuntime) (Outco
 	}
 	ctx, cancel := context.WithTimeout(parent, env.Timeout)
 	defer cancel()
-	control, runErr := oci.Run(ctx, args)
+	control, runErr := oci.Run(ctx, args, ContainerIdentity{Name: owner.Name, LabelValue: owner.LabelValue, ImageID: owner.ImageID})
 	frames, protocolErr := parseControl(control, attemptID)
 	execRecord := Execution{SchemaVersion: 1, ScheduledRunID: runID, AttemptID: attemptID, RetryParent: env.RetryParent, Arm: env.Arm, Runtime: oci.Name(), ImageID: imageID, CommonParity: parity}
 	execRecord.Billing.Method, execRecord.Billing.CorrelationID = "not-applicable", attemptID
@@ -554,6 +622,7 @@ func isolatedRun(parent context.Context, env Environment, oci OCIRuntime) (Outco
 		}
 		if f.Type == "terminal" {
 			execRecord.TerminalStatus = manifest.Status(f.Status)
+			execRecord.Diagnostic = boundedMessage(f.Message)
 		}
 	}
 	if ctx.Err() != nil && execRecord.Exposed {
@@ -649,14 +718,18 @@ func isolatedRun(parent context.Context, env Environment, oci OCIRuntime) (Outco
 	return recordAgent(runRoot, events, Outcome{SchemaVersion: 1, Status: manifest.StatusCompleted, Answer: answer}, metrics)
 }
 
-func containerArgs(imageID, input, capture, cidfile, name, workspaceVolume, tempVolume, arm, attempt, runID, mode string) []string {
+func containerArgs(runtimeName, imageID, input, capture, cidfile, name, workspaceVolume, tempVolume, arm, attempt, runID, mode string) []string {
 	readOnlySuffix, writableSuffix := ":ro", ":rw"
 	if runtime.GOOS == "linux" {
 		readOnlySuffix, writableSuffix = ":ro,Z", ":rw,Z"
 	}
 	args := []string{"run", "--name", name, "--cidfile", cidfile, "--label", runLabelKey + "=" + runID, "--pull=never", "--network=none", "--ipc=none", "--read-only", "--cap-drop=ALL", "--cap-add=CHOWN", "--cap-add=DAC_OVERRIDE", "--cap-add=SETUID", "--cap-add=SETGID", "--security-opt=no-new-privileges", "--pids-limit=128", "--cpus=1.0", "--memory=512m", "--memory-swap=512m", "--ulimit=nofile=256:256", "--ulimit=core=0:0", "--ulimit=fsize=1048576:1048576"}
 	args = append(args, "--mount", "type=volume,source="+workspaceVolume+",destination=/workspace")
-	args = append(args, "--mount", "type=volume,source="+tempVolume+",destination=/tmp")
+	if runtimeName == "docker" {
+		args = append(args, "--mount", "type=volume,source="+tempVolume+",destination=/tmp")
+	} else {
+		args = append(args, "--volume", tempVolume+":/tmp:noexec,nosuid,nodev")
+	}
 	return append(args, "--workdir", "/workspace", "--volume", input+":/input"+readOnlySuffix, "--volume", capture+":/capture"+writableSuffix, "--env", "MATLATL_ARM="+arm, "--env", "MATLATL_ATTEMPT_ID="+attempt, "--env", "MATLATL_FAKE_MODE="+mode, imageID)
 }
 

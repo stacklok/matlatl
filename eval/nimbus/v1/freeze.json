@@ -878,7 +878,7 @@
       },
       {
         "name": "github.com/stacklok/matlatl/eval/cmd/eval-supervisor",
-        "sha256": "84d3066fc15c5806ba48527e6b23d7b2a10ab2fb14ad9f98e0c7f0a8acb3a0b4"
+        "sha256": "1a26b6f4c2e236cd28f9670d1702f885d384243df7b4d9a12b34d15e222793f2"
       },
       {
         "name": "github.com/stacklok/matlatl/eval/cmd/fake-opencode",
@@ -890,7 +890,7 @@
       },
       {
         "name": "github.com/stacklok/matlatl/internal/application",
-        "sha256": "3e4f040e4a16a5a234a37eb21b63ba675c87b4717a3e148d3dbedd5e000b53b0"
+        "sha256": "86c7f330c82da6680ae28cfcd459e4cc0321a9e121cb3a6c5677d1e05632af4f"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/analysis",
@@ -898,7 +898,7 @@
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/corpus",
-        "sha256": "107b7da8cdc1149cc80fea9687a1eeeb96d0900406a7a7b98cbda4a08cd72c0a"
+        "sha256": "227c2d4883fd7b18229744b17228f125de51d9a2aabc7401ab46c99ff4da928d"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/graphmodel",
@@ -906,7 +906,7 @@
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/identity",
-        "sha256": "47f385f99d726296f1600fe107139b3da0145ce932a9cc0586d94bc2cde75aee"
+        "sha256": "259786279e106186dea2afedf0a7a9b96bb715327f70d3ab034049479c7635bd"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/okf",
@@ -914,7 +914,7 @@
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/reference",
-        "sha256": "2c10da67e36c0f341e6eb8998fdf9488ec7f31504a1a5dd906e26d638b9b9e77"
+        "sha256": "ba552402b545d028d036d673fb5beefa01b7ac70fb77e9b15ced6e9f7eb25556"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/infrastructure/emit",
@@ -934,7 +934,7 @@
       },
       {
         "name": "github.com/stacklok/matlatl/internal/infrastructure/mdparser",
-        "sha256": "bac84975a1e848b121716bcf69abd01871ad8292c40dd7691105e4b615f57ea8"
+        "sha256": "00e4522c9d1f605eae899cf8c35f3a68dde59351d64c1decb3b99627fb0d9174"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/platform",
@@ -1536,7 +1536,7 @@
     "staticBinaries": [
       {
         "name": "eval-supervisor",
-        "sha256": "e493dbcfb5923e2dee37d1a1598f656022dc3f12e461de4c12d861f4b4ea1a5d"
+        "sha256": "7c5541c7e1579217696cd3c435f8661b0645789ee81daa402b31c5a5043928fe"
       },
       {
         "name": "fake-opencode",
