@@ -556,7 +556,7 @@ func autoHeadingUnderscoreOffsets(h *ast.Heading, src []byte, codeUnderscores ma
 		c := raw[i]
 		width := int(util.UTF8Len(c))
 		i += width
-		if width != 1 || !(util.IsAlphaNumeric(c) || util.IsSpace(c) || c == '-' || c == '_') {
+		if width != 1 || (!util.IsAlphaNumeric(c) && !util.IsSpace(c) && c != '-' && c != '_') {
 			continue
 		}
 		if c == '_' {
