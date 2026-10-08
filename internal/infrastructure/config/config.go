@@ -23,6 +23,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 	"github.com/stacklok/matlatl/internal/platform"
 )
 
@@ -96,6 +97,11 @@ type File struct {
 	// a present value must be a bool (anything else is a hard error). The
 	// effective mode is `--respect-gitignore` flag OR this value.
 	RespectGitignore *bool
+	// MentionInvocations are the unlinked-mention invocation rules (ADR 0026,
+	// `mentions.invocations`): each pairs a prefix with the globs of documents a
+	// `prefix+name` token may resolve to. Empty when absent. Path and file-name
+	// mentions are always on and are not configured here.
+	MentionInvocations []reference.InvocationRule
 }
 
 // rawFile is the permissive decode target. We decode into a generic map first
@@ -251,6 +257,13 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		return File{}, nil, err
 	}
 
+	// --- mentions ---
+	invocations, mNotices, err := resolveMentions(path, raw)
+	if err != nil {
+		return File{}, nil, err
+	}
+	notices = append(notices, mNotices...)
+
 	// --- unknown keys (typo / future additive key): ignore + notice ---
 	notices = append(notices, unknownKeyNotices(path, raw)...)
 
@@ -265,6 +278,7 @@ func decode(path string, b []byte) (File, []application.Notice, error) {
 		EmitExclude:               emitExclude,
 		OKF:                       okfMode,
 		RespectGitignore:          respectGitignore,
+		MentionInvocations:        invocations,
 	}, notices, nil
 }
 
@@ -460,6 +474,140 @@ func resolveContentRoots(raw rawFile) ([]string, error) {
 	return roots, nil
 }
 
+// maxPrefixBytes bounds an invocation prefix. Prefixes are sigils (`/`, `@`,
+// `$`), not words.
+const maxPrefixBytes = 4
+
+// resolveMentions enforces the `mentions` block (ADR 0026): absent → no
+// invocation rules; a mapping whose only understood key is `invocations`, a list
+// of `{prefix, targets}` mappings. A wrong shape, an invalid prefix, or a
+// missing/empty/malformed `targets` is a HARD error (a thing matlatl
+// understands but that is wrong is loud, ADR 0011); an unknown key inside the
+// block or inside a rule is ignored with a notice. Rules are returned sorted by
+// prefix (stable for equal prefixes) so the configuration order of different
+// prefixes never matters.
+func resolveMentions(path string, raw rawFile) ([]reference.InvocationRule, []application.Notice, error) {
+	v, present := raw["mentions"]
+	if !present || v == nil {
+		return nil, nil, nil
+	}
+	block, ok := asMapping(v)
+	if !ok {
+		return nil, nil, fmt.Errorf("%s: `mentions` must be a mapping, got %T", fileName, v)
+	}
+	notices := nestedUnknownKeyNotices(path, "mentions", block, "invocations")
+
+	iv, present := block["invocations"]
+	if !present || iv == nil {
+		return nil, notices, nil
+	}
+	seq, ok := iv.([]any)
+	if !ok {
+		return nil, nil, fmt.Errorf("%s: `mentions.invocations` must be a list, got %T", fileName, iv)
+	}
+	rules := make([]reference.InvocationRule, 0, len(seq))
+	for i, e := range seq {
+		where := fmt.Sprintf("mentions.invocations[%d]", i)
+		entry, ok := asMapping(e)
+		if !ok {
+			return nil, nil, fmt.Errorf("%s: `%s` must be a mapping with `prefix` and `targets`, got %T", fileName, where, e)
+		}
+		notices = append(notices, nestedUnknownKeyNotices(path, where, entry, "prefix", "targets")...)
+		prefix, err := resolvePrefix(where, entry["prefix"])
+		if err != nil {
+			return nil, nil, err
+		}
+		targets, err := resolveTargets(where, entry["targets"])
+		if err != nil {
+			return nil, nil, err
+		}
+		rules = append(rules, reference.InvocationRule{Prefix: prefix, Targets: targets})
+	}
+	slices.SortStableFunc(rules, func(a, b reference.InvocationRule) int { return strings.Compare(a.Prefix, b.Prefix) })
+	return rules, notices, nil
+}
+
+// asMapping returns v as a string-keyed mapping. yaml.v3 decodes a nested
+// mapping into the outer map's named type (rawFile), so accept both shapes.
+func asMapping(v any) (map[string]any, bool) {
+	switch m := v.(type) {
+	case rawFile:
+		return m, true
+	case map[string]any:
+		return m, true
+	default:
+		return nil, false
+	}
+}
+
+// resolvePrefix validates an invocation prefix: 1 to maxPrefixBytes printable
+// ASCII punctuation bytes. Letters and digits would make every word a candidate.
+func resolvePrefix(where string, v any) (string, error) {
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("%s: `%s.prefix` must be a string, got %T", fileName, where, v)
+	}
+	if s == "" || len(s) > maxPrefixBytes {
+		return "", fmt.Errorf("%s: `%s.prefix` must be 1 to %d characters, got %q", fileName, where, maxPrefixBytes, s)
+	}
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		alnum := b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
+		punct := b > ' ' && b < 0x7f && !alnum
+		if !punct {
+			return "", fmt.Errorf("%s: `%s.prefix` must be ASCII punctuation (e.g. \"/\" or \"@\"), got %q", fileName, where, s)
+		}
+	}
+	return s, nil
+}
+
+// resolveTargets validates an invocation rule's target globs: a non-empty list
+// of well-formed, repository-relative globs (`**` matches any number of path
+// segments). Like `roots`, they are only string-matched against in-corpus
+// document IDs, never a filesystem read.
+func resolveTargets(where string, v any) ([]string, error) {
+	seq, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: `%s.targets` must be a non-empty list of globs, got %T", fileName, where, v)
+	}
+	if len(seq) == 0 {
+		return nil, fmt.Errorf("%s: `%s.targets` must not be empty", fileName, where)
+	}
+	targets := make([]string, 0, len(seq))
+	for i, e := range seq {
+		g, ok := e.(string)
+		if !ok {
+			return nil, fmt.Errorf("%s: `%s.targets[%d]` must be a string, got %T", fileName, where, i, e)
+		}
+		if err := reference.ValidateGlob(g); err != nil {
+			return nil, fmt.Errorf("%s: `%s.targets[%d]`: %w", fileName, where, i, err)
+		}
+		targets = append(targets, g)
+	}
+	return targets, nil
+}
+
+// nestedUnknownKeyNotices reports the keys of a nested mapping that are not in
+// known, one notice each, sorted for determinism.
+func nestedUnknownKeyNotices(path, where string, m map[string]any, known ...string) []application.Notice {
+	var unknown []string
+	for k := range m {
+		if !slices.Contains(known, k) {
+			unknown = append(unknown, where+"."+k)
+		}
+	}
+	slices.Sort(unknown)
+	notices := make([]application.Notice, 0, len(unknown))
+	for _, k := range unknown {
+		notices = append(notices, application.Notice{
+			Kind:   application.NoticeConfig,
+			Path:   path,
+			Detail: fmt.Sprintf("ignoring unknown config key %q (typo, or a key from a newer matlatl)", k),
+		})
+	}
+	return notices
+}
+
 // unknownKeyNotices surfaces every key that is neither `version` nor `roots`,
 // one notice each, sorted for determinism. This catches typos (`rootz:`) while
 // tolerating future additive keys (ADR 0011 governing rule).
@@ -468,7 +616,7 @@ func unknownKeyNotices(path string, raw rawFile) []application.Notice {
 		"version": {}, "roots": {}, "contentRoots": {},
 		"inboundThreshold": {}, "structureFindingsSeverity": {},
 		"linkSuggestionMinShared": {}, "farFromRootThreshold": {}, "emitExclude": {},
-		"okf": {}, "respectGitignore": {},
+		"okf": {}, "respectGitignore": {}, "mentions": {},
 	}
 	var unknown []string
 	for k := range raw {

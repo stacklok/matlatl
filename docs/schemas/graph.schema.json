@@ -34,14 +34,14 @@
     "reachability"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 7 },
+    "schemaVersion": { "type": "integer", "const": 8 },
     "tool": { "type": "string" },
     "generatedNote": { "type": "string" },
     "summary": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "documents", "sections", "edges", "references", "components",
+        "documents", "sections", "edges", "mentions", "references", "components",
         "orphans", "unreachable", "underLinked", "deadEnd", "farFromRoot",
         "brokenLinks", "brokenAnchors", "ambiguous", "knowledgeGaps", "suggestedLinks",
         "articulationPoints", "bridges",
@@ -50,7 +50,8 @@
       "properties": {
         "documents": { "type": "integer", "minimum": 0 },
         "sections": { "type": "integer", "minimum": 0 },
-        "edges": { "type": "integer", "minimum": 0 },
+        "edges": { "description": "Number of type \"reference\" (explicit link) edges.", "type": "integer", "minimum": 0 },
+        "mentions": { "description": "Number of type \"mention\" (unlinked mention, ADR 0026) edges. edges + mentions = len(edges array).", "type": "integer", "minimum": 0 },
         "references": { "type": "integer", "minimum": 0 },
         "components": { "type": "integer", "minimum": 0 },
         "orphans": { "type": "integer", "minimum": 0 },
@@ -129,6 +130,7 @@
       }
     },
     "edges": {
+      "description": "Document-to-document edges sorted by (from, to, type, kind, line, text). A \"reference\" edge is one explicit-link document-projection pair. A \"mention\" edge (ADR 0026) is one resolved unlinked mention occurrence and carries kind, line and text. Both kinds count in every graph metric.",
       "type": "array",
       "items": {
         "type": "object",
@@ -137,9 +139,18 @@
         "properties": {
           "from": { "type": "string" },
           "to": { "type": "string" },
-          "type": { "type": "string" },
-          "health": { "type": "string" }
-        }
+          "type": { "type": "string", "enum": ["reference", "mention"] },
+          "health": { "type": "string" },
+          "kind": { "description": "Mention edges only: the textual form of the mention.", "type": "string", "enum": ["path", "filename", "invocation"] },
+          "line": { "description": "Mention edges only: 1-based source line in the from document.", "type": "integer", "minimum": 1 },
+          "text": { "description": "Mention edges only: the token as written (an invocation includes its prefix).", "type": "string" }
+        },
+        "allOf": [
+          {
+            "if": { "type": "object", "properties": { "type": { "const": "mention" } }, "required": ["type"] },
+            "then": { "type": "object", "required": ["kind", "line", "text"] }
+          }
+        ]
       }
     },
     "sections": {

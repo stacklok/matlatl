@@ -9,6 +9,7 @@ import (
 
 	"github.com/stacklok/matlatl/internal/domain/corpus"
 	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 // LowScentThreshold is the Jaccard-similarity floor below which a navigational
@@ -133,6 +134,11 @@ func (g *ReferenceGraph) ComputeScent(c *corpus.Corpus) []ScentFinding {
 			continue
 		}
 		if _, nav := g.navSet[e.Type]; !nav {
+			continue
+		}
+		// An unlinked mention (ADR 0026) has no label distinct from its target: its
+		// "anchor text" is the path or name itself, so scent does not apply.
+		if e.Type == reference.Mention {
 			continue
 		}
 		toNode, hasTo := g.nodes[e.To]

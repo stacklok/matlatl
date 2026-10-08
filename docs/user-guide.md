@@ -382,7 +382,7 @@ steps expecting a different Go toolchain.
 `matlatl emit --out <dir>` produces a bundle designed for agents:
 
 - **`graph.json`** — the machine-queryable corpus manifest (schema **version
-  7**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`,
+  8**): nodes (with importance scores, per-node `bowtie`/`underLinked`/`deadEnd`,
   `betweenness`, `isArticulation`, `pageRank` and `hopsFromRoot` — the distance
   from the nearest root, `-1` if unreachable), edges, orphans,
   under-linked/dead-end, `farFromRoot` (docs beyond the hop-distance threshold),
@@ -390,9 +390,11 @@ steps expecting a different Go toolchain.
   gaps, `suggestedLinks` (topology-based suggestions, each with
   `sharedNeighbours`/`coupling`/`coCitation`/`adamicAdar`), a `betweenness` block
   (top load-bearing docs), a `pageRank` block (top docs by global importance),
-  and `articulationPoints` / `bridges` (the critical structure). Backlinks are
-  derived from the existing `edges` (every edge's `from`), so there is no separate
-  backlinks array. Validated against
+  and `articulationPoints` / `bridges` (the critical structure). Each edge has a
+  `type`: `"reference"` for an explicit link (one per document pair) or
+  `"mention"` for an [unlinked mention](#unlinked-mentions) (one per occurrence,
+  with `kind` and `line`). Backlinks are derived from the existing `edges` (every
+  edge's `from`), so there is no separate backlinks array. Validated against
   [`docs/schemas/graph.schema.json`](schemas/graph.schema.json) and byte-stable
   run to run.
 - **`trails.json`** — suggested reading orders (associative trails, Bush 1945):
@@ -409,7 +411,7 @@ steps expecting a different Go toolchain.
 - **`findings.json`** — every finding is self-contained and actionable, plus a
   `remediationGuide` so an agent can fix issues without extra context. Validated
   against [`docs/schemas/findings.schema.json`](schemas/findings.schema.json)
-  (schema version 7) and byte-stable run to run.
+  (schema version 8) and byte-stable run to run.
 
 ### Fixing findings with an agent
 
@@ -553,6 +555,66 @@ filesystem read). `.matlatlignore` stays the sole ignore mechanism and run
 behavior (`--strict`/`--out`/…) stays flag-only. See
 [ADR 0011](adr/0011-per-repo-config-file.md) and the
 [schema reference](schemas/matlatl-config-v1.md).
+
+## Unlinked mentions
+
+Prose references documents without link syntax all the time: a path in a code
+span (`` Per `.claude/rules/metrics.md` ``), a bare file name
+(`` see `frontdoor.md` ``), or a command-style invocation (`/panel-review`).
+matlatl picks these up as unlinked mentions and adds them to the graph as edges,
+so they count toward reachability, orphans, PageRank and every other metric,
+just like links ([ADR 0026](adr/0026-unlinked-mentions.md)). This is always on.
+
+There are three kinds:
+
+- `path`: a path-shaped token such as `docs/guide.md`, `../x.md` or
+  `.claude/skills/foo/`. It resolves relative to the document first, then from
+  the repository root, since prose usually writes repository paths. A directory
+  resolves to its `README.md` / `index.md`, else its `SKILL.md`.
+- `filename`: a bare name such as `metrics.md`. It resolves only when exactly one
+  document in the corpus has that name. If several do (`testing.md` in two
+  folders), matlatl doesn't guess and the mention is dropped.
+- `invocation`: a configured prefix plus a name, such as `/panel-review`,
+  resolved through front-matter `name:` / `aliases:`. This one needs
+  configuration, because the prefix and which files count are your repo's
+  conventions, not matlatl's:
+
+```yaml
+# .matlatl.yml
+version: 1
+mentions:
+  invocations:
+    - prefix: "/"
+      targets: ["**/.claude/skills/*/SKILL.md"]   # `**` crosses directories
+```
+
+With that, `run /panel-review before pushing` links to the skill whose
+`SKILL.md` front matter says `name: panel-review`. `https://host/panel-review`
+and `docs/x/panel-review` never match, because the prefix must not follow a URL,
+path or word character.
+
+A few rules keep mentions honest:
+
+- Fenced and indented code blocks, raw HTML, and anything inside link syntax
+  (labels, reference definitions, autolinks, wikilinks) are never scanned, so a
+  link is never counted twice. URLs are skipped.
+- A mention that names nothing is not an error. Text that looks like a path is
+  too common to fail on, so mentions can make `check` softer (a mentioned doc is
+  no longer an orphan) but never stricter.
+- Mentions aren't scored for information scent: their text is the target's own
+  name, not a label.
+
+In `graph.json`, each resolved mention is its own edge with the source line, so
+tools can annotate or enforce rules on it:
+
+```json
+{ "from": "docs/guide.md", "to": ".claude/rules/metrics.md", "type": "mention",
+  "health": "valid", "kind": "path", "line": 3, "text": ".claude/rules/metrics.md" }
+```
+
+`summary.edges` counts link edges and `summary.mentions` counts mention edges.
+If a doc names a file in prose but you don't want that to count as a reference,
+reword it (for example, use the document's title instead of its file name).
 
 ## Hiding docs from the navigation surfaces (`emitExclude`)
 

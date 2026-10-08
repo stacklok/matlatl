@@ -11,7 +11,7 @@ import (
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson"
 )
 
-const expectedGraphSchemaVersion = 7
+const expectedGraphSchemaVersion = 8
 
 // Edge is one expected directed graph edge.
 type Edge struct{ From, To string }
