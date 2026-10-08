@@ -118,8 +118,21 @@ func TestExtractMentions(t *testing.T) {
 			src:  "See [the guide][g].\n\n[g]: docs/guide.md\n",
 		},
 		{
-			name: "raw HTML is skipped",
-			src:  "<!-- docs/guide.md -->\n\ntext <span title=\"docs/x.md\">x</span>\n",
+			name: "raw HTML other than comments is skipped",
+			src:  "<div title=\"docs/guide.md\">\n\ntext <span title=\"docs/x.md\">x</span>\n",
+		},
+		{
+			name: "HTML comment block is scanned",
+			src:  "Intro.\n\n<!--\n  rule: .claude/rules/a.md, skill:\n  /x-skill end\n-->\n",
+			want: []gotMention{
+				{path, ".claude/rules/a.md", ".claude/rules/a.md", 4},
+				{inv, "x-skill", "/x-skill", 5},
+			},
+		},
+		{
+			name: "inline HTML comment is scanned",
+			src:  "Text <!-- see docs/b.md --> and <span title=\"docs/c.md\">x</span>.\n",
+			want: []gotMention{{path, "docs/b.md", "docs/b.md", 1}},
 		},
 		{
 			name: "non-markdown and dot-only tokens are not mentions",

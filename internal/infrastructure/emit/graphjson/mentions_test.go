@@ -52,13 +52,13 @@ func TestJSON_MentionEdges(t *testing.T) {
 	doc := graphjson.Build(buildMentionsView(t))
 
 	type key struct {
-		From, To, Type, Kind string
-		Line                 int
+		From, To, Type, Kind, Health string
+		Line                         int
 	}
 	got := map[key]string{}
 	mentions := 0
 	for _, e := range doc.Edges {
-		got[key{e.From, e.To, e.Type, e.Kind, e.Line}] = e.Text
+		got[key{e.From, e.To, e.Type, e.Kind, e.Health, e.Line}] = e.Text
 		if e.Type == "mention" {
 			mentions++
 		} else if e.Kind != "" || e.Line != 0 || e.Text != "" {
@@ -66,14 +66,19 @@ func TestJSON_MentionEdges(t *testing.T) {
 		}
 	}
 	want := map[key]string{
-		{"docs/guide.md", ".claude/rules/metrics.md", "mention", "path", 3}:                    ".claude/rules/metrics.md",
-		{"docs/guide.md", "docs/reference.md", "mention", "path", 4}:                           "docs/reference.md",
-		{"docs/guide.md", "docs/reference.md", "reference", "", 0}:                             "",
-		{"docs/guide.md", "docs/sibling.md", "mention", "path", 5}:                             "./sibling.md",
-		{"docs/guide.md", "docs/design/frontdoor.md", "mention", "filename", 6}:                "frontdoor.md",
-		{"docs/guide.md", ".claude/skills/panel-review/SKILL.md", "mention", "path", 8}:        ".claude/skills/panel-review/",
-		{"docs/guide.md", ".claude/skills/panel-review/SKILL.md", "mention", "invocation", 12}: "/panel-review",
-		{"docs/guide.md", ".claude/skills/triage-cve/SKILL.md", "mention", "invocation", 13}:   "/triage-cve",
+		{"docs/guide.md", ".claude/rules/metrics.md", "mention", "path", "valid", 3}:                    ".claude/rules/metrics.md",
+		{"docs/guide.md", "docs/reference.md", "mention", "path", "valid", 4}:                           "docs/reference.md",
+		{"docs/guide.md", "docs/reference.md", "reference", "", "valid", 0}:                             "",
+		{"docs/guide.md", "docs/sibling.md", "mention", "path", "valid", 5}:                             "./sibling.md",
+		{"docs/guide.md", "docs/design/frontdoor.md", "mention", "filename", "valid", 6}:                "frontdoor.md",
+		{"docs/guide.md", "docs/a/testing.md", "mention", "filename", "ambiguous", 7}:                   "testing.md",
+		{"docs/guide.md", "docs/b/testing.md", "mention", "filename", "ambiguous", 7}:                   "testing.md",
+		{"docs/guide.md", ".claude/skills/panel-review/SKILL.md", "mention", "path", "valid", 8}:        ".claude/skills/panel-review/",
+		{"docs/guide.md", ".claude/skills/panel-review/SKILL.md", "mention", "invocation", "valid", 12}: "/panel-review",
+		{"docs/guide.md", ".claude/skills/triage-cve/SKILL.md", "mention", "invocation", "valid", 13}:   "/triage-cve",
+		{"docs/guide.md", "docs/nope.md", "mention", "path", "broken", 15}:                              "docs/nope.md",
+		{"docs/guide.md", "ghost.md", "mention", "filename", "broken", 15}:                              "ghost.md",
+		{"docs/guide.md", "docs/sibling.md", "mention", "path", "valid", 25}:                            "docs/sibling.md",
 	}
 	for k, text := range want {
 		gotText, ok := got[k]
@@ -85,11 +90,11 @@ func TestJSON_MentionEdges(t *testing.T) {
 			t.Errorf("edge %+v text = %q, want %q", k, gotText, text)
 		}
 	}
-	// Ambiguous basenames, fenced blocks, URL/path-prefixed invocations and
-	// out-of-glob front-matter names never become edges.
+	// Fenced blocks, URL/path-prefixed invocations and out-of-glob
+	// front-matter names never become edges.
 	for _, e := range doc.Edges {
 		switch e.To {
-		case "docs/a/testing.md", "docs/b/testing.md", "docs/fenced.md", "docs/design/panel-review.md":
+		case "docs/fenced.md", "docs/design/panel-review.md":
 			t.Errorf("unexpected edge to %s: %+v", e.To, e)
 		}
 	}

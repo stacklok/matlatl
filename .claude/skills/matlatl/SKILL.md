@@ -203,13 +203,15 @@ Before reporting orphans/noise, check what the repo already declares:
 - **`.matlatl.yml`** (scan root only) — declares extra reachability `roots` (path
   globs). Roots are exempt from orphan/unreachable findings. `version: 1`.
 - **Unlinked mentions** (always on) — paths (`docs/x.md`, `.claude/skills/foo/`)
-  and unique bare file names (`metrics.md`) written in prose or code spans become
+  and bare file names (`metrics.md`) written in prose, code spans or HTML
+  comments become
   `"mention"` edges in `graph.json` (with `kind` and `line`) and count in every
   metric, so a doc that is only mentioned is not an orphan. Declare command-style
   invocations in `.matlatl.yml`:
   `mentions: {invocations: [{prefix: "/", targets: ["**/.claude/skills/*/SKILL.md"]}]}`
-  resolves `/panel-review` via front-matter `name:`. Unresolved mentions are
-  never findings. List them with
+  resolves `/panel-review` via front-matter `name:`. Mentions are never findings;
+  stale markdown references are `"broken"` mention edges and unresolvable shared
+  names `"ambiguous"` ones. List them with
   `jq '.edges[] | select(.type=="mention")' graph.json`.
 - **`emitExclude`** (in `.matlatl.yml`, gitignore syntax) — keeps docs IN the
   corpus (link-checked, ranked) but hides them from llms.txt/index.md/trails.json

@@ -573,7 +573,7 @@ func edgesFrom(g *graphmodel.ReferenceGraph, mentions []emit.MentionEdge) []Edge
 			From:   m.From.String(),
 			To:     m.To.String(),
 			Type:   edgeTypeMention,
-			Health: "valid",
+			Health: m.Health.String(),
 			Kind:   m.Kind.String(),
 			Line:   m.Line,
 			Text:   m.Text,

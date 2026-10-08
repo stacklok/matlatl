@@ -49,12 +49,15 @@ linked docs rather than re-deriving them.
     notice on a non-git root — and prepends it to the `.matlatlignore` lines so
     the committed file stays the final word; off by default, corpus only
     shrinks, no schema change); 0026 unlinked mentions (always on: path,
-    bare-filename and config-declared `mentions.invocations` tokens in prose and
-    code spans become `reference.Mention` edges that join the navigational set
+    bare-filename and config-declared `mentions.invocations` tokens in prose,
+    code spans and HTML comments become `reference.Mention` edges that join the navigational set
     and count in EVERY metric; extraction in `mdparser/mention.go` skips code
-    blocks, raw HTML and link syntax; resolution in the pure-domain
+    blocks, non-comment raw HTML and link syntax; resolution in the pure-domain
     `reference.MentionResolver` reuses `resolveInRoot` + the alias index;
-    unresolved/ambiguous mentions are dropped, never findings; skipped by
+    paths try each ancestor dir of the origin, shared names pick the nearest
+    dot-directory scope; stale markdown mentions are Broken and unresolvable
+    shared names Ambiguous, both emitted as graph.json mention edges but never
+    findings or graph edges; skipped by
     information scent; graph.json v8 lists one `"mention"` edge per occurrence
     with `kind`/`line`/`text`, `"reference"` edges come from
     `LinkProjectionOut`; naming a file in prose now links it, so fixtures that

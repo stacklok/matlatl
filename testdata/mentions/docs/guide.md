@@ -21,3 +21,5 @@ docs/fenced.md is inside a fenced block
 A [labelled reference][ref] stays a link.
 
 [ref]: design/frontdoor.md
+
+<!-- maintainers: keep docs/sibling.md in sync -->

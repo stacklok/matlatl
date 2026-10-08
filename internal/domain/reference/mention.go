@@ -46,7 +46,7 @@ type InvocationRule struct {
 	Targets []string
 }
 
-// MentionResolver turns RawMentions into Valid Mention references. It reuses
+// MentionResolver turns RawMentions into Mention references. It reuses
 // the link Resolver's path arithmetic (root containment, root-absolute and
 // content-root handling, directory detection) and the corpus alias index, so
 // mentions and links can never disagree on what a path names. It is a pure
@@ -79,17 +79,21 @@ func NewMentionResolver(r *Resolver, rules []InvocationRule) *MentionResolver {
 	return m
 }
 
-// ResolveAll resolves every mention and returns only the ones that name an
-// in-corpus document other than their origin, in input order. Duplicates (the
-// same target, kind, line and text) are collapsed. An unresolved or ambiguous
-// mention is dropped silently: text that merely looks like a path is too common
-// to report on (ADR 0026).
+// ResolveAll resolves every mention, in input order. A mention that names one
+// in-corpus document other than its origin is Valid. A markdown-named path or
+// file name that names no document is Broken (a stale reference), and one that
+// still names several after the nearest-scope tie-break is Ambiguous. Other
+// unresolved tokens are dropped: text that merely looks like a path is too
+// common to keep (ADR 0026). Duplicates (the same target, kind, line, text and
+// health) are collapsed. Broken and Ambiguous mentions are never findings and
+// never graph edges; they surface only in graph.json's mention edges.
 func (m *MentionResolver) ResolveAll(raws []RawMention) []Reference {
 	type key struct {
 		target identity.DocumentID
 		kind   MentionKind
 		line   int
 		text   string
+		health LinkHealth
 	}
 	seen := make(map[key]struct{})
 	var out []Reference
@@ -98,7 +102,7 @@ func (m *MentionResolver) ResolveAll(raws []RawMention) []Reference {
 		if !ok {
 			continue
 		}
-		k := key{target: ref.Target.DocumentID, kind: raw.Kind, line: raw.Line, text: raw.Text}
+		k := key{target: ref.Target.DocumentID, kind: raw.Kind, line: raw.Line, text: raw.Text, health: ref.Health}
 		if _, dup := seen[k]; dup {
 			continue
 		}
@@ -108,53 +112,92 @@ func (m *MentionResolver) ResolveAll(raws []RawMention) []Reference {
 	return out
 }
 
-// Resolve classifies a single mention. ok is false when the mention names no
-// single in-corpus document, or names its own origin (a self-mention carries no
-// navigational information, mirroring the projection's self-loop rule).
+// Resolve classifies a single mention. ok is false when the mention is dropped:
+// it names its own origin (a self-mention carries no navigational information,
+// mirroring the projection's self-loop rule), or it names nothing and is not
+// markdown-named, or it is an invocation that matches no target.
 func (m *MentionResolver) Resolve(raw RawMention) (Reference, bool) {
-	var (
-		id identity.DocumentID
-		ok bool
-	)
+	var res resolution
 	switch raw.Kind {
 	case MentionPath:
-		id, ok = m.resolvePath(raw.Origin, raw.Target)
+		res = m.resolvePath(raw.Origin, raw.Target)
 	case MentionFilename:
-		id, ok = m.resolveFilename(raw.Target)
+		res = m.nearest(raw.Origin, m.basenames[raw.Target])
+		if len(res.ids) == 0 {
+			res.missing = raw.Target
+		}
 	case MentionInvocation:
-		id, ok = m.resolveInvocation(raw.Prefix, raw.Target)
+		res = m.nearest(raw.Origin, m.invocationCandidates(raw.Prefix, raw.Target))
 	}
-	if !ok || id == raw.Origin {
-		return Reference{}, false
-	}
-	return ref(RawReference{
+	rr := RawReference{
 		Origin:      raw.Origin,
 		RawTarget:   raw.Target,
 		Type:        Mention,
 		Line:        raw.Line,
 		AnchorText:  raw.Text,
 		MentionKind: raw.Kind,
-	}, ResolvedTarget{Kind: TargetDocument, DocumentID: id}, Valid), true
+	}
+	switch {
+	case len(res.ids) == 1:
+		if res.ids[0] == raw.Origin {
+			return Reference{}, false
+		}
+		return ref(rr, ResolvedTarget{Kind: TargetDocument, DocumentID: res.ids[0]}, Valid), true
+	case len(res.ids) > 1:
+		r := ref(rr, ResolvedTarget{Kind: TargetDocument}, Ambiguous)
+		r.Candidates = res.ids
+		return r, true
+	case res.missing != "" && raw.Kind != MentionInvocation && identity.IsMarkdownPath(res.missing):
+		return ref(rr, ResolvedTarget{Kind: TargetDocument, DocumentID: identity.DocumentID(res.missing)}, Broken), true
+	}
+	return Reference{}, false
+}
+
+// resolution is a mention's candidate documents (sorted, unique) and, when
+// there are none, the cleaned in-root path it was looking for.
+type resolution struct {
+	ids     []identity.DocumentID
+	missing string
 }
 
 // resolvePath resolves a path mention the way a link resolves (relative to the
-// origin, or from the scan/content root for a single leading "/"), then falls
-// back to repo-root-relative, since prose usually writes repository paths. Both
-// attempts run through the ADR 0003 root-containment guard.
-func (m *MentionResolver) resolvePath(origin identity.DocumentID, target string) (identity.DocumentID, bool) {
+// origin, or from the scan/content root for a single leading "/"), then
+// relative to each ancestor directory of the origin, nearest first, ending at
+// the repo root. Prose often writes a path relative to the enclosing project
+// (`.claude/rules/x.md` in a subproject's docs) or to the repository. Every
+// attempt runs through the ADR 0003 root-containment guard. When nothing
+// resolves, missing is the repo-root reading of the path.
+func (m *MentionResolver) resolvePath(origin identity.DocumentID, target string) resolution {
 	if cleaned, ok := resolveInRoot(origin, target, m.resolver.contentRoots); ok {
 		if id, ok := m.documentAt(cleaned); ok {
-			return id, true
+			return resolution{ids: []identity.DocumentID{id}}
+		}
+		if IsRootAbsolute(target) {
+			return resolution{missing: cleaned}
 		}
 	}
 	if IsRootAbsolute(target) {
-		return "", false // already resolved from the root above
+		return resolution{}
 	}
 	cleaned := path.Clean(target)
 	if identity.EscapesRoot(cleaned) {
-		return "", false
+		return resolution{}
 	}
-	return m.documentAt(cleaned)
+	for dir := path.Dir(origin.String()); ; dir = path.Dir(dir) {
+		if dir == "." || dir == "/" {
+			dir = ""
+		}
+		candidate := path.Join(dir, cleaned)
+		if !identity.EscapesRoot(candidate) {
+			if id, ok := m.documentAt(candidate); ok {
+				return resolution{ids: []identity.DocumentID{id}}
+			}
+		}
+		if dir == "" {
+			break
+		}
+	}
+	return resolution{missing: cleaned}
 }
 
 // documentAt maps a cleaned, in-root path to the document it names: the
@@ -181,23 +224,13 @@ func (m *MentionResolver) documentAt(cleaned string) (identity.DocumentID, bool)
 	return "", false
 }
 
-// resolveFilename resolves a bare file name by basename, only when exactly one
-// in-corpus document carries it. A shared basename is ambiguous and is never
-// guessed at.
-func (m *MentionResolver) resolveFilename(name string) (identity.DocumentID, bool) {
-	if ids := m.basenames[name]; len(ids) == 1 {
-		return ids[0], true
-	}
-	return "", false
-}
-
-// resolveInvocation resolves a prefixed name through the front-matter
-// name/aliases index (the one wikilinks use), keeping only documents the
-// prefix's target globs admit. Exactly one survivor resolves.
-func (m *MentionResolver) resolveInvocation(prefix, name string) (identity.DocumentID, bool) {
+// invocationCandidates returns the documents a prefixed name refers to through
+// the front-matter name/aliases index (the one wikilinks use), keeping only
+// documents the prefix's target globs admit.
+func (m *MentionResolver) invocationCandidates(prefix, name string) []identity.DocumentID {
 	globs := m.globs[prefix]
 	if len(globs) == 0 || name == "" {
-		return "", false
+		return nil
 	}
 	var match []identity.DocumentID
 	for _, id := range m.resolver.catalog.LookupAlias(name) {
@@ -208,11 +241,65 @@ func (m *MentionResolver) resolveInvocation(prefix, name string) (identity.Docum
 			}
 		}
 	}
-	match = sortedUnique(match)
-	if len(match) == 1 {
-		return match[0], true
+	return sortedUnique(match)
+}
+
+// nearest narrows several same-named candidates to the one closest to the
+// origin. A candidate's scope is the directory holding its first dot-directory
+// (`enterprise/app` for `enterprise/app/.claude/skills/x/SKILL.md`, the repo
+// root for `.claude/skills/x/SKILL.md`), or its own directory when it has none.
+// Candidates whose scope does not enclose the origin are discarded, and the
+// deepest enclosing scope wins. When no single candidate wins, every candidate
+// is kept and the mention is Ambiguous: a shared name is never guessed at.
+func (m *MentionResolver) nearest(origin identity.DocumentID, ids []identity.DocumentID) resolution {
+	if len(ids) <= 1 {
+		return resolution{ids: ids}
 	}
-	return "", false
+	originDir := path.Dir(origin.String())
+	best, bestDepth, tie := identity.DocumentID(""), -1, false
+	for _, id := range ids {
+		scope := mentionScope(id.String())
+		if !encloses(scope, originDir) {
+			continue
+		}
+		depth := 0
+		if scope != "" {
+			depth = strings.Count(scope, "/") + 1
+		}
+		switch {
+		case depth > bestDepth:
+			best, bestDepth, tie = id, depth, false
+		case depth == bestDepth:
+			tie = true
+		}
+	}
+	if bestDepth < 0 || tie {
+		return resolution{ids: ids}
+	}
+	return resolution{ids: []identity.DocumentID{best}}
+}
+
+// mentionScope returns the directory holding p's first dot-directory segment,
+// or p's own directory when it has none. "" is the repo root.
+func mentionScope(p string) string {
+	segs := strings.Split(p, "/")
+	for i, seg := range segs[:len(segs)-1] {
+		if strings.HasPrefix(seg, ".") {
+			return strings.Join(segs[:i], "/")
+		}
+	}
+	if d := path.Dir(p); d != "." {
+		return d
+	}
+	return ""
+}
+
+// encloses reports whether dir is scope or lies below it; "" is the repo root.
+func encloses(scope, dir string) bool {
+	if dir == "." {
+		dir = ""
+	}
+	return scope == "" || dir == scope || strings.HasPrefix(dir, scope+"/")
 }
 
 // errEmptyGlob is returned by ValidateGlob for an empty pattern.

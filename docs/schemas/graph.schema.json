@@ -130,7 +130,7 @@
       }
     },
     "edges": {
-      "description": "Document-to-document edges sorted by (from, to, type, kind, line, text). A \"reference\" edge is one explicit-link document-projection pair. A \"mention\" edge (ADR 0026) is one resolved unlinked mention occurrence and carries kind, line and text. Both kinds count in every graph metric.",
+      "description": "Document-to-document edges sorted by (from, to, type, kind, line, text). A \"reference\" edge is one explicit-link document-projection pair. A \"mention\" edge (ADR 0026) is one unlinked mention occurrence and carries kind, line and text; its health is valid, broken (a markdown-named target that does not exist) or ambiguous (one edge per candidate). Reference edges and valid mention edges count in every graph metric.",
       "type": "array",
       "items": {
         "type": "object",
@@ -140,7 +140,7 @@
           "from": { "type": "string" },
           "to": { "type": "string" },
           "type": { "type": "string", "enum": ["reference", "mention"] },
-          "health": { "type": "string" },
+          "health": { "description": "Reference edges are always valid. Mention edges are valid, broken or ambiguous.", "type": "string" },
           "kind": { "description": "Mention edges only: the textual form of the mention.", "type": "string", "enum": ["path", "filename", "invocation"] },
           "line": { "description": "Mention edges only: 1-based source line in the from document.", "type": "integer", "minimum": 1 },
           "text": { "description": "Mention edges only: the token as written (an invocation includes its prefix).", "type": "string" }
