@@ -591,11 +591,12 @@ mentions:
 With that, `run /panel-review before pushing` links to the skill whose
 `SKILL.md` front matter says `name: panel-review`.
 
-When a file name or invocation matches several documents, the nearest one wins.
-A candidate's scope is the directory holding its first dot-directory (`app` for
-`app/.claude/skills/x/SKILL.md`), and only candidates whose scope encloses the
-mentioning doc count; the deepest wins. So a subproject's skill shadows the
-repository's for docs inside that subproject. `https://host/panel-review`
+When a file name or invocation matches several documents that all live under a
+dot-directory, the nearest one wins. A candidate's scope is the directory
+holding its first dot-directory (`app` for `app/.claude/skills/x/SKILL.md`), and
+only candidates whose scope encloses the mentioning doc count; the deepest wins.
+So a subproject's skill shadows the repository's for docs inside that
+subproject. If a plain document shares the name, the mention stays ambiguous. `https://host/panel-review`
 and `docs/x/panel-review` never match, because the prefix must not follow a URL,
 path or word character.
 
