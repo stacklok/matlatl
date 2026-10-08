@@ -209,9 +209,15 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	// (the resolver itself is pure: it only does path arithmetic + catalog
 	// lookups, never filesystem access).
 	resolver := reference.NewResolverWithContentRoots(c, newAssetExistence(p.cfg.RootPath), p.cfg.ResolutionPolicy, p.cfg.ContentRoots)
+	// Unlinked mentions (ADR 0026) resolve through the same path arithmetic and
+	// alias index as links. Only mentions that name an in-corpus document come
+	// back (an unresolved mention is never a finding), so they join refs as Valid
+	// Mention edges and count toward every graph analysis like a link does.
+	mentions := reference.NewMentionResolver(resolver, p.cfg.MentionInvocations)
 	var refs []reference.Reference
 	for _, doc := range c.Documents() {
 		refs = append(refs, resolver.ResolveAll(doc.RawReferences)...)
+		refs = append(refs, mentions.ResolveAll(doc.RawMentions)...)
 	}
 
 	// Stage 4: Build the reference graph (documents + sections, contains +

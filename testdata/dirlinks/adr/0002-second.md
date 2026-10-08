@@ -1,3 +1,3 @@
 # 2. Second decision
 
-Another non-indexed ADR reached only via the directory link to `adr/`.
+Another non-indexed ADR reached only via the parent README's directory link.

@@ -116,7 +116,9 @@ type Edge struct {
 
 // DefaultNavigationalTypes is the set of LinkTypes that count as navigational in
 // the document projection (ADR 0007). External is deliberately absent: an
-// external link neither reaches nor is reached.
+// external link neither reaches nor is reached. Mention (ADR 0026) is present:
+// a resolved unlinked mention is a reference a reader (human or agent) can
+// follow, so it counts toward reachability, orphans and every ranking.
 var DefaultNavigationalTypes = []reference.LinkType{
 	reference.RelativeLink,
 	reference.Wikilink,
@@ -124,6 +126,7 @@ var DefaultNavigationalTypes = []reference.LinkType{
 	reference.ImageEmbed,
 	reference.Transclusion,
 	reference.FrontmatterRelated,
+	reference.Mention,
 }
 
 // ReferenceGraph is the mixed-granularity graph: document and section vertices
@@ -147,6 +150,10 @@ type ReferenceGraph struct {
 	// excluded (ADR 0007).
 	projAdj map[identity.DocumentID][]identity.DocumentID
 	projRev map[identity.DocumentID][]identity.DocumentID
+	// linkAdj is the projection out-adjacency restricted to explicit links: the
+	// navigational edges other than unlinked mentions (ADR 0026). It drives the
+	// graph.json "reference" edges, which stay distinct from "mention" edges.
+	linkAdj map[identity.DocumentID][]identity.DocumentID
 }
 
 // BuildOptions tunes graph construction.
@@ -185,6 +192,7 @@ func BuildReferenceGraph(c *corpus.Corpus, refs []reference.Reference, opts Buil
 		strictDirLinks: opts.StrictDirectoryLinks,
 		projAdj:        make(map[identity.DocumentID][]identity.DocumentID),
 		projRev:        make(map[identity.DocumentID][]identity.DocumentID),
+		linkAdj:        make(map[identity.DocumentID][]identity.DocumentID),
 	}
 
 	// Vertices + CONTAINS edges, in sorted document order.
@@ -334,9 +342,11 @@ func (g *ReferenceGraph) buildProjection() {
 	// Use sets to de-dup multi-edges before sorting.
 	out := make(map[identity.DocumentID]map[identity.DocumentID]struct{})
 	in := make(map[identity.DocumentID]map[identity.DocumentID]struct{})
+	links := make(map[identity.DocumentID]map[identity.DocumentID]struct{})
 	for _, id := range g.documents {
 		out[id] = make(map[identity.DocumentID]struct{})
 		in[id] = make(map[identity.DocumentID]struct{})
+		links[id] = make(map[identity.DocumentID]struct{})
 	}
 
 	for _, e := range g.edges {
@@ -353,11 +363,15 @@ func (g *ReferenceGraph) buildProjection() {
 		}
 		out[fromDoc][toDoc] = struct{}{}
 		in[toDoc][fromDoc] = struct{}{}
+		if e.Type != reference.Mention {
+			links[fromDoc][toDoc] = struct{}{}
+		}
 	}
 
 	for _, id := range g.documents {
 		g.projAdj[id] = sortedKeys(out[id])
 		g.projRev[id] = sortedKeys(in[id])
+		g.linkAdj[id] = sortedKeys(links[id])
 	}
 }
 
@@ -383,6 +397,14 @@ func (g *ReferenceGraph) HasDocument(id identity.DocumentID) bool {
 // ProjectionOut returns the document-projection out-neighbors of id (sorted).
 func (g *ReferenceGraph) ProjectionOut(id identity.DocumentID) []identity.DocumentID {
 	return slices.Clone(g.projAdj[id])
+}
+
+// LinkProjectionOut returns the document-projection out-neighbors of id reached
+// by at least one explicit link, i.e. excluding pairs connected only by
+// unlinked mentions (ADR 0026). Sorted. Analyses use ProjectionOut; this view
+// exists so emitters can keep link edges and mention edges distinct.
+func (g *ReferenceGraph) LinkProjectionOut(id identity.DocumentID) []identity.DocumentID {
+	return slices.Clone(g.linkAdj[id])
 }
 
 // ProjectionIn returns the document-projection in-neighbors of id (sorted).

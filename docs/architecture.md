@@ -14,7 +14,9 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
 1. **Scan** — walk the repo, respect `.matlatlignore`, enforce the security
    boundary and resource caps (ADR 0003).
 2. **Parse** — goldmark + front matter + the custom wikilink parser turn each file
-   into a pure-domain `Document` (front matter, section tree, raw references).
+   into a pure-domain `Document` (front matter, section tree, raw references, and
+   raw unlinked mentions: path, bare-filename and configured-invocation tokens in
+   prose and code spans, [ADR 0026](adr/0026-unlinked-mentions.md)).
 3. **Resolve** — the `LinkResolver` turns each raw reference into a typed, health-
    classified edge (valid / broken / broken-anchor / non-note / ambiguous / external),
    using the `HeadingInventory` and `AliasTable`. Relative links resolve against
@@ -25,6 +27,9 @@ Scan ─▶ Parse ─▶ Resolve ─▶ Build graph/tree ─▶ Analyze ─▶ E
    origins inside it; `//host` stays external. Docusaurus explicit heading IDs
    and literal `<Heading id="…">` anchors populate validation without creating
    synthetic sections ([ADR 0025](adr/0025-content-roots-and-docusaurus-anchors.md)).
+   The `MentionResolver` reuses the same path arithmetic and alias index to turn
+   mentions into `Mention` edges; only resolved mentions are kept, and they are
+   never findings ([ADR 0026](adr/0026-unlinked-mentions.md)).
 4. **Build** — assemble the directed `ReferenceGraph` (documents + sections as
    vertices, typed edges) and the `HierarchyTree`. Node/edge semantics and the
    document projection that analysis runs over are pinned in

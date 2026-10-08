@@ -1,6 +1,7 @@
 package emit
 
 import (
+	"cmp"
 	"path"
 	"slices"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/stacklok/matlatl/internal/domain/corpus"
 	"github.com/stacklok/matlatl/internal/domain/graphmodel"
 	"github.com/stacklok/matlatl/internal/domain/identity"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 )
 
 // View is the render-ready, emitter-agnostic snapshot every human emitter
@@ -103,6 +105,12 @@ type View struct {
 	// BrokenEdges are unresolved navigational references (origin → raw target),
 	// for the diagram emitters' red placeholder target nodes. Sorted upstream.
 	BrokenEdges []application.BrokenEdge
+
+	// Mentions are the resolved unlinked mentions (ADR 0026), one per occurrence,
+	// sorted (Origin, Target, kind, Line, text). They are already counted in the
+	// graph metrics like links; graph.json additionally lists each one as a typed
+	// "mention" edge carrying its kind and source line.
+	Mentions []MentionEdge
 
 	// Metrics is the frozen graph-analysis carrier, for emitters that render the
 	// graph itself (mermaid, dot). Read-only.
@@ -215,6 +223,7 @@ func BuildView(res application.Result) View {
 	v.ArticulationPoints = slices.Clone(m.Critical.ArticulationPoints)
 	v.Bridges = slices.Clone(m.Critical.Bridges)
 	v.BrokenEdges = slices.Clone(res.BrokenEdges)
+	v.Mentions = mentionEdges(res.ResolvedReferences)
 
 	intentional := identity.IDSet(graphmodel.IntentionalOrphans(c))
 
@@ -403,4 +412,38 @@ func titleAndDescription(doc *corpus.Document) (title, description string) {
 		description = first
 	}
 	return title, description
+}
+
+// MentionEdge is one resolved unlinked mention (ADR 0026): the origin and
+// target documents, the textual form it took, the token as written, and the
+// 1-based source line in the origin.
+type MentionEdge struct {
+	From identity.DocumentID
+	To   identity.DocumentID
+	Kind reference.MentionKind
+	Text string
+	Line int
+}
+
+// mentionEdges projects the Valid Mention references into sorted MentionEdges.
+func mentionEdges(refs []reference.Reference) []MentionEdge {
+	var out []MentionEdge
+	for _, r := range refs {
+		if r.Type != reference.Mention || r.Health != reference.Valid || r.Target.DocumentID == "" {
+			continue
+		}
+		out = append(out, MentionEdge{
+			From: r.Origin, To: r.Target.DocumentID, Kind: r.MentionKind, Text: r.AnchorText, Line: r.Line,
+		})
+	}
+	slices.SortFunc(out, func(a, b MentionEdge) int {
+		return cmp.Or(
+			cmp.Compare(a.From, b.From),
+			cmp.Compare(a.To, b.To),
+			cmp.Compare(a.Kind, b.Kind),
+			cmp.Compare(a.Line, b.Line),
+			cmp.Compare(a.Text, b.Text),
+		)
+	})
+	return out
 }

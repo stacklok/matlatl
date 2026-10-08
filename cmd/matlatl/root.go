@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/stacklok/matlatl/internal/application"
+	"github.com/stacklok/matlatl/internal/domain/reference"
 	"github.com/stacklok/matlatl/internal/infrastructure/config"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit"
 	"github.com/stacklok/matlatl/internal/infrastructure/emit/report"
@@ -209,6 +210,11 @@ func configFromFlags(cmd *cobra.Command, args []string) (application.Config, err
 
 	cfg.ContentRoots = slices.Clone(file.ContentRoots)
 
+	// Unlinked-mention invocation rules (ADR 0026): config-only, since the prefix
+	// and the eligible documents are tool knowledge the repo declares. Path and
+	// file-name mentions are always on and need no configuration.
+	cfg.MentionInvocations = slices.Clone(file.MentionInvocations)
+
 	// Under-linked discoverability threshold (ADR 0012). Precedence:
 	// --inbound-threshold flag (when explicitly set) > .matlatl.yml > default.
 	if file.InboundThreshold != nil {
@@ -268,7 +274,7 @@ func buildPipeline(cfg application.Config, logSink io.Writer) *application.Pipel
 		OutputDir:        cfg.OutputDir,
 		RespectGitignore: cfg.RespectGitignore,
 	})
-	parserFac := mdparser.NewFactory(mdparser.Config{})
+	parserFac := mdparser.NewFactory(mdparser.Config{InvocationPrefixes: invocationPrefixes(cfg.MentionInvocations)})
 	// Wire the external link checker only when --check-external is set so a
 	// default run pays nothing for it and stays deterministic (ADR 0003). The
 	// checker carries the mandatory SSRF guard.
@@ -276,6 +282,18 @@ func buildPipeline(cfg application.Config, logSink io.Writer) *application.Pipel
 		cfg.ExternalChecker = linkcheck.New(linkcheck.Config{})
 	}
 	return application.NewPipeline(cfg, scanner, parserFac, logSink)
+}
+
+// invocationPrefixes returns the sorted, de-duplicated prefixes of the
+// invocation rules: the parser extracts candidate tokens for exactly the
+// prefixes the resolver can resolve (ADR 0026).
+func invocationPrefixes(rules []reference.InvocationRule) []string {
+	out := make([]string, 0, len(rules))
+	for _, r := range rules {
+		out = append(out, r.Prefix)
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // usageArgs wraps a cobra positional-args validator so that an arg-count

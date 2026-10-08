@@ -93,8 +93,8 @@ func validateDeterminismArtifacts(file *determinismFile, artifacts map[string][]
 	if err := json.Unmarshal(artifacts["graph.json"], &graph); err != nil {
 		return fmt.Errorf("decode graph.json: %w", err)
 	}
-	if graph.SchemaVersion != 7 || !slices.ContainsFunc(graph.Nodes, func(node graphjson.Node) bool { return node.ID == file.Sentinels.GraphDocument }) {
-		return fmt.Errorf("graph.json missing schema 7 or document %q", file.Sentinels.GraphDocument)
+	if graph.SchemaVersion != 8 || !slices.ContainsFunc(graph.Nodes, func(node graphjson.Node) bool { return node.ID == file.Sentinels.GraphDocument }) {
+		return fmt.Errorf("graph.json missing schema 8 or document %q", file.Sentinels.GraphDocument)
 	}
 	var findings findingsWire
 	if err := json.Unmarshal(artifacts["findings.json"], &findings); err != nil {
