@@ -246,8 +246,8 @@ func TestTool_CorpusSummary(t *testing.T) {
 	if !ok {
 		t.Fatalf("corpus-summary structured content is not a graphjson.Document: %T", res.StructuredContent)
 	}
-	if doc.SchemaVersion != 7 {
-		t.Errorf("corpus-summary schemaVersion = %d, want 7", doc.SchemaVersion)
+	if doc.SchemaVersion != 8 {
+		t.Errorf("corpus-summary schemaVersion = %d, want 8", doc.SchemaVersion)
 	}
 	if len(doc.Betweenness.TopDocs) == 0 {
 		t.Error("corpus-summary betweenness.topDocs is empty (the fixture has load-bearing docs)")

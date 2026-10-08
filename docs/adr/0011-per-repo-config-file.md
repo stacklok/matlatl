@@ -173,6 +173,16 @@ loud/tolerated contract: a non-boolean value is a HARD error (ExitUsage), absent
 is the zero-config default (off). This does not reopen the general run-behavior
 deferral — other run flags remain flag-only.
 
+## Amendment (2026-10-08, ADR 0026: unlinked mentions)
+
+The additive `mentions.invocations` key ([ADR 0026](0026-unlinked-mentions.md))
+declares name-prefixed invocation forms: a prefix plus the globs of documents a
+`prefix+name` token may resolve to via front-matter `name:` / `aliases:`. It is
+repo shape, not run behavior: the prefix and the eligible files are exactly the
+tool knowledge this ADR keeps out of matlatl. It follows the same contract (a
+wrong shape or invalid prefix/glob is a HARD error; an unknown key inside the
+block is a notice) and does not bump `version`.
+
 ## See also
 
 - [ADR 0003](0003-security-model.md) — security model (caps, scan scope, bounded decode).
@@ -181,4 +191,5 @@ deferral — other run flags remain flag-only.
 - [ADR 0005](0005-exit-code-contract.md) — the exit-code contract (ExitUsage = 2).
 - [ADR 0007](0007-graph-node-semantics.md) — roots, orphans, unreachable.
 - [ADR 0010](0010-agent-scaffolding-roots-and-default-ignores.md) — conventions, the root→isolated exemption, and the boundary rule this builds on.
+- [ADR 0026](0026-unlinked-mentions.md) — unlinked mentions (the `mentions` key).
 - [docs/schemas/matlatl-config-v1.md](../schemas/matlatl-config-v1.md) — the human-readable schema reference.

@@ -13,7 +13,7 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0004 | DDD layering and full-fat scope         | Accepted |
 | 0005 | `check` exit-code contract              | Accepted |
 | 0006 | Canonical anchor-slug dialect           | Accepted |
-| 0007 | Graph node semantics and the document projection | Accepted (superseded in part by 0012, 0013) |
+| 0007 | Graph node semantics and the document projection | Accepted (superseded in part by 0012, 0013, 0026) |
 | 0008 | Directory links resolve and confer navigational reachability | Accepted |
 | 0009 | `fix-prompt` serves acting agents with an embedded prompt | Accepted |
 | 0010 | How matlatl treats agent-tooling scaffolding | Accepted (superseded in part by 0018) |
@@ -32,3 +32,4 @@ Format: [Michael Nygard's ADR template](https://github.com/joelparkerhenderson/a
 | 0023 | OKF v0.1 conformance mode | Accepted |
 | 0024 | Opt-in exclusion of git-ignored files (`--respect-gitignore`) | Accepted |
 | 0025 | Content roots and Docusaurus heading anchors | Accepted |
+| 0026 | Unlinked mentions are typed edges that count in the graph | Accepted |

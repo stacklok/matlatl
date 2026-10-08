@@ -8,6 +8,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Unlinked mentions ([ADR 0026](docs/adr/0026-unlinked-mentions.md)).**
+  References written as text rather than link syntax are now graph edges: path
+  tokens in prose, code spans or HTML comments (`.claude/rules/metrics.md`,
+  `docs/adr/`), bare file names (`metrics.md`), and, when declared in
+  `.matlatl.yml mentions.invocations`, name-prefixed invocations
+  (`/panel-review`) resolved through front-matter `name:` / `aliases:` and
+  restricted to configured target globs. Paths resolve against each parent
+  directory of the mentioning doc, and a shared name resolves to the candidate
+  in the nearest enclosing project. Code blocks, other raw HTML and text inside
+  link syntax are never scanned. A mention is never a finding: stale markdown
+  references and unresolvable shared names stay in `graph.json` as `"broken"` and
+  `"ambiguous"` mention edges. Always on.
+
 - **Docusaurus content roots and heading anchors ([ADR 0025](docs/adr/0025-content-roots-and-docusaurus-anchors.md)).**
   `.matlatl.yml contentRoots` maps single-slash links made from configured site
   content trees to their repository-relative content root while preserving
@@ -15,6 +28,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   explicit Markdown IDs and bounded, literal block-level MDX `<Heading id>`
   anchors without evaluating MDX or JavaScript. Literal component anchors
   validate fragments without creating synthetic graph sections.
+
+### Changed
+
+- **Mentions count in every graph metric, and `graph.json` is schema v8
+  ([ADR 0026](docs/adr/0026-unlinked-mentions.md)).** Resolved mentions join the
+  navigational edge set, so reachability, orphan / unreachable / under-linked /
+  dead-end, hops from root, PageRank, HITS, betweenness, navigability, link
+  suggestions, backlinks and trails all reflect them. Expect fewer orphans and
+  shifted scores in repos whose docs name each other in prose; `check` can only
+  get softer. `graph.json` adds `"mention"` edges (one per occurrence, with
+  `kind`, `line` and `text`) beside the `"reference"` edges, plus a required
+  `summary.mentions` count. `findings.json` and `trails.json` are unchanged.
 
 ## [v0.0.8] - 2026-08-12
 

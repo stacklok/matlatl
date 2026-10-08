@@ -170,8 +170,8 @@ func TestJSON_Navigability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc := graphjson.Build(v); doc.SchemaVersion != 7 {
-		t.Errorf("schemaVersion = %d, want 7", doc.SchemaVersion)
+	if doc := graphjson.Build(v); doc.SchemaVersion != 8 {
+		t.Errorf("schemaVersion = %d, want 8", doc.SchemaVersion)
 	}
 
 	// The navigability floats must render at the fixed precision (determinism).
@@ -241,8 +241,8 @@ func TestJSON_CriticalStructure(t *testing.T) {
 	if err := json.Unmarshal(b, &typed); err != nil {
 		t.Fatal(err)
 	}
-	if typed.SchemaVersion != 7 {
-		t.Errorf("schemaVersion = %d, want 7", typed.SchemaVersion)
+	if typed.SchemaVersion != 8 {
+		t.Errorf("schemaVersion = %d, want 8", typed.SchemaVersion)
 	}
 
 	// Per-node betweenness + isArticulation.
@@ -567,7 +567,8 @@ func TestJSON_ValidatesAgainstSchema(t *testing.T) {
 
 // validateNode is a minimal JSON-Schema (Draft 2020-12 subset) checker: it
 // resolves local $ref, and enforces type, required, additionalProperties:false,
-// const, enum, and recurses into properties / array items. It is intentionally
+// const, enum, allOf and if/then, and recurses into properties / array items.
+// It is intentionally
 // small — just enough to assert the shape contract this repo publishes.
 func validateNode(data any, schema, root map[string]any, path string) []string {
 	if ref, ok := schema["$ref"].(string); ok {
@@ -641,6 +642,18 @@ func validateNode(data any, schema, root map[string]any, path string) []string {
 	if c, ok := schema["const"]; ok {
 		if !jsonEqual(data, c) {
 			errs = append(errs, fmt.Sprintf("%s: const mismatch (want %v)", path, c))
+		}
+	}
+	if all, ok := schema["allOf"].([]any); ok {
+		for _, sub := range all {
+			if sm, ok := sub.(map[string]any); ok {
+				errs = append(errs, validateNode(data, sm, root, path)...)
+			}
+		}
+	}
+	if cond, ok := schema["if"].(map[string]any); ok && len(validateNode(data, cond, root, path)) == 0 {
+		if then, ok := schema["then"].(map[string]any); ok {
+			errs = append(errs, validateNode(data, then, root, path)...)
 		}
 	}
 	if en, ok := schema["enum"].([]any); ok {

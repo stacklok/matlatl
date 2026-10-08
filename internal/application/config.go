@@ -45,6 +45,12 @@ type Config struct {
 	// directories, `/x.md` resolves to `<content-root>/x.md`; origins elsewhere
 	// retain repository-root semantics. Config-only; empty preserves ADR 0022.
 	ContentRoots []string
+	// MentionInvocations are the repo-declared invocation rules for unlinked
+	// mentions (ADR 0026, `.matlatl.yml mentions.invocations`): a prefix plus the
+	// globs of documents a `prefix+name` token may resolve to via front-matter
+	// name/aliases. Path and bare-file-name mentions need no configuration and
+	// are always on. The CLI must hand the same prefixes to the parser factory.
+	MentionInvocations []reference.InvocationRule
 	// ResolutionPolicy selects how raw targets map to documents (ADR 0001).
 	ResolutionPolicy reference.ResolutionPolicy
 	// OutputDir is the artifact output directory; empty means no artifacts.

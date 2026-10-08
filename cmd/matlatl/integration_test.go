@@ -894,7 +894,7 @@ func TestIntegration_GraphJSONToOut(t *testing.T) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("graph.json does not parse: %v", err)
 	}
-	if doc.SchemaVersion != 7 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
+	if doc.SchemaVersion != 8 || doc.Summary.Documents == 0 || len(doc.Nodes) == 0 {
 		t.Errorf("graph.json content unexpected: version=%d docs=%d nodes=%d", doc.SchemaVersion, doc.Summary.Documents, len(doc.Nodes))
 	}
 	// summary.navigability (ADR 0014) is present with sensible values: the fixture

@@ -1,0 +1,7 @@
+version: 1
+# Unlinked mentions (ADR 0026): `/name` resolves to the skill whose front-matter
+# name matches, restricted to SKILL.md files under a .claude/skills directory.
+mentions:
+  invocations:
+    - prefix: "/"
+      targets: ["**/.claude/skills/*/SKILL.md"]

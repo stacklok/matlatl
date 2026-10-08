@@ -298,7 +298,7 @@ func probeMCP(content []byte) (names []string, retErr error) {
 		}
 		if call.name == "corpus-summary" {
 			encoded, marshalErr := json.Marshal(result.StructuredContent)
-			if marshalErr != nil || !bytes.Contains(encoded, []byte(`"docs/operate.md"`)) || !bytes.Contains(encoded, []byte(`"schemaVersion":7`)) {
+			if marshalErr != nil || !bytes.Contains(encoded, []byte(`"docs/operate.md"`)) || !bytes.Contains(encoded, []byte(`"schemaVersion":8`)) {
 				return nil, errors.New("MCP corpus-summary omitted canonical fixture content")
 			}
 		}
