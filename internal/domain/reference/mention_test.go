@@ -129,6 +129,7 @@ func TestMentionResolve(t *testing.T) {
 		{
 			name:       "shared basename with no enclosing candidate is ambiguous",
 			raw:        RawMention{Origin: "README.md", Kind: MentionFilename, Target: "testing.md"},
+			want:       "testing.md",
 			wantHealth: Ambiguous,
 			wantOK:     true,
 		},

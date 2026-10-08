@@ -603,12 +603,13 @@ A few rules keep mentions honest:
 
 - Fenced and indented code blocks, raw HTML other than comments, and anything
   inside link syntax (labels, reference definitions, autolinks, wikilinks) are
-  never scanned, so a link is never counted twice. URLs are skipped. HTML
+  never scanned, so a link is never counted twice. URLs and glob patterns
+  (`*-overlay.md`) are skipped. HTML
   comments are scanned, since readers of the source follow them.
 - A mention is never a finding. A markdown-named path or file name that names
   nothing is kept in `graph.json` as a `"broken"` mention edge (a stale
-  reference), and one that still matches several documents as `"ambiguous"`
-  edges, one per candidate. Neither counts in the graph. Any other unresolved
+  reference), and one that still matches several documents as one
+  `"ambiguous"` edge listing its `candidates`. Neither counts in the graph. Any other unresolved
   token is dropped, so mentions can make `check` softer (a mentioned doc is no
   longer an orphan) but never stricter.
 - Mentions aren't scored for information scent: their text is the target's own

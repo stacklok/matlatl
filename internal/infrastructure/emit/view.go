@@ -418,38 +418,37 @@ func titleAndDescription(doc *corpus.Document) (title, description string) {
 // target documents, the textual form it took, the token as written, and the
 // 1-based source line in the origin.
 type MentionEdge struct {
-	From   identity.DocumentID
+	From identity.DocumentID
+	// To is the resolved document for a Valid mention, the missing document
+	// for a Broken one, and the name as written for an Ambiguous one.
 	To     identity.DocumentID
 	Kind   reference.MentionKind
 	Text   string
 	Line   int
 	Health reference.LinkHealth
+	// Candidates lists the documents an Ambiguous mention may name, sorted.
+	Candidates []identity.DocumentID
 }
 
-// mentionEdges projects the Mention references into sorted MentionEdges: one
-// per Valid or Broken mention, and one per candidate of an Ambiguous mention.
+// mentionEdges projects the Valid, Broken and Ambiguous Mention references
+// into sorted MentionEdges, one per occurrence.
 func mentionEdges(refs []reference.Reference) []MentionEdge {
 	var out []MentionEdge
 	for _, r := range refs {
-		if r.Type != reference.Mention {
+		if r.Type != reference.Mention || r.Target.DocumentID == "" {
 			continue
 		}
-		targets := []identity.DocumentID{r.Target.DocumentID}
+		e := MentionEdge{
+			From: r.Origin, To: r.Target.DocumentID, Kind: r.MentionKind, Text: r.AnchorText, Line: r.Line, Health: r.Health,
+		}
 		switch r.Health {
 		case reference.Valid, reference.Broken:
 		case reference.Ambiguous:
-			targets = r.Candidates
+			e.Candidates = r.Candidates
 		default:
 			continue
 		}
-		for _, to := range targets {
-			if to == "" {
-				continue
-			}
-			out = append(out, MentionEdge{
-				From: r.Origin, To: to, Kind: r.MentionKind, Text: r.AnchorText, Line: r.Line, Health: r.Health,
-			})
-		}
+		out = append(out, e)
 	}
 	slices.SortFunc(out, func(a, b MentionEdge) int {
 		return cmp.Or(

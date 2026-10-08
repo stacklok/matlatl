@@ -6,7 +6,7 @@
     "documents": 12,
     "sections": 14,
     "edges": 3,
-    "mentions": 12,
+    "mentions": 11,
     "references": 14,
     "components": 5,
     "orphans": 4,
@@ -354,24 +354,6 @@
     },
     {
       "from": "docs/guide.md",
-      "to": "docs/a/testing.md",
-      "type": "mention",
-      "health": "ambiguous",
-      "kind": "filename",
-      "line": 7,
-      "text": "testing.md"
-    },
-    {
-      "from": "docs/guide.md",
-      "to": "docs/b/testing.md",
-      "type": "mention",
-      "health": "ambiguous",
-      "kind": "filename",
-      "line": 7,
-      "text": "testing.md"
-    },
-    {
-      "from": "docs/guide.md",
       "to": "docs/design/frontdoor.md",
       "type": "mention",
       "health": "valid",
@@ -435,6 +417,19 @@
       "kind": "filename",
       "line": 15,
       "text": "ghost.md"
+    },
+    {
+      "from": "docs/guide.md",
+      "to": "testing.md",
+      "type": "mention",
+      "health": "ambiguous",
+      "kind": "filename",
+      "line": 7,
+      "text": "testing.md",
+      "candidates": [
+        "docs/a/testing.md",
+        "docs/b/testing.md"
+      ]
     }
   ],
   "sections": [

@@ -219,6 +219,11 @@ func scanPathTokens(word []byte, wordStart int, emit func(offset int, kind refer
 		if tok == "" || strings.HasPrefix(tok, "//") || (start > 0 && word[start-1] == ':') {
 			continue
 		}
+		// A token touching a glob character is a pattern (`*-overlay.md`,
+		// `docs/*.md`), not a reference to one file.
+		if (start > 0 && isGlobByte(word[start-1])) || (i < len(word) && isGlobByte(word[i])) {
+			continue
+		}
 		if !strings.ContainsFunc(tok, isAlnumRune) {
 			continue
 		}
@@ -230,6 +235,10 @@ func scanPathTokens(word []byte, wordStart int, emit func(offset int, kind refer
 			emit(wordStart+start, reference.MentionFilename, tok, "", tok)
 		}
 	}
+}
+
+func isGlobByte(b byte) bool {
+	return b == '*' || b == '?' || b == '[' || b == ']' || b == '{' || b == '}'
 }
 
 // hasStem reports whether a markdown path's base name has a non-empty stem

@@ -144,7 +144,8 @@ func (m *MentionResolver) Resolve(raw RawMention) (Reference, bool) {
 		}
 		return ref(rr, ResolvedTarget{Kind: TargetDocument, DocumentID: res.ids[0]}, Valid), true
 	case len(res.ids) > 1:
-		r := ref(rr, ResolvedTarget{Kind: TargetDocument}, Ambiguous)
+		// The target is the name as written; Candidates lists what it may mean.
+		r := ref(rr, ResolvedTarget{Kind: TargetDocument, DocumentID: identity.DocumentID(raw.Target)}, Ambiguous)
 		r.Candidates = res.ids
 		return r, true
 	case res.missing != "" && raw.Kind != MentionInvocation && identity.IsMarkdownPath(res.missing):

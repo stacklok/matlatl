@@ -63,8 +63,10 @@ code spans and HTML comments for tokens and classifies them:
 A path or file-name token is a maximal run of `[A-Za-z0-9._~+@/-]` with trailing
 sentence dots removed, so `#fragment` suffixes and punctuation fall away. A token
 starting with `//`, a token directly after a `:` (`scheme:path`), a token with no
-letter or digit (`./`, `../`), and every token in a whitespace-delimited word
-containing a URL (`://`, `mailto:`, `www.`) are not mentions.
+letter or digit (`./`, `../`), a token touching a glob character (`*`, `?`, `[`,
+`]`, `{`, `}`, as in `*-overlay.md` or `docs/*.md`), and every token in a
+whitespace-delimited word containing a URL (`://`, `mailto:`, `www.`) are not
+mentions.
 
 An invocation only matches when the byte before the prefix is not a path, word or
 URL character, so `https://host/panel-review` and `docs/x/panel-review` never
@@ -115,8 +117,8 @@ boundary.
 Each mention then gets a health:
 
 - Valid: exactly one document, other than the origin.
-- Ambiguous: several documents and no single nearest one. Every candidate is
-  kept.
+- Ambiguous: several documents and no single nearest one. The target is the
+  name as written, and every candidate is kept.
 - Broken: a `path` or `filename` mention whose token has a markdown extension
   and names no document. A doc that names a deleted or renamed file is exactly
   the stale reference a consumer wants to see. The target is the repo-root
@@ -168,8 +170,10 @@ link-only projection, `ReferenceGraph.LinkProjectionOut`), and adds one
 
 `kind`, `line` and `text` appear only on mention edges, and the schema requires
 them when `type` is `"mention"`. A mention edge's `health` is `valid`, `broken`
-or `ambiguous`. An ambiguous mention emits one edge per candidate, and a broken
-mention's `to` names a document that does not exist. Only valid mention edges
+or `ambiguous`. A broken mention's `to` names a document that does not exist.
+An ambiguous mention is one edge whose `to` is the name as written and whose
+`candidates` lists the documents it may name, so a common name such as
+`SKILL.md` adds one edge, not one per file carrying it. Only valid mention edges
 count in the graph. A pair connected by both a link and a mention carries both
 edges. Edges sort by `(from, to, type, kind, line, text)`.
 `summary.edges` counts reference edges and the new required `summary.mentions`

@@ -135,6 +135,10 @@ func TestExtractMentions(t *testing.T) {
 			want: []gotMention{{path, "docs/b.md", "docs/b.md", 1}},
 		},
 		{
+			name: "glob patterns are not mentions",
+			src:  "Overlays match `*-test-quality-overlay.md` and `docs/*.md`, plus {a,b}.md.\n",
+		},
+		{
 			name: "non-markdown and dot-only tokens are not mentions",
 			src:  "Taskfile.yml, ./ and ../ and .md and v1.2\n",
 		},
