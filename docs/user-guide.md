@@ -568,12 +568,12 @@ just like links ([ADR 0026](adr/0026-unlinked-mentions.md)). This is always on.
 There are three kinds:
 
 - `path`: a path-shaped token such as `docs/guide.md`, `../x.md` or
-  `.claude/skills/foo/`. It resolves relative to the document first, then from
-  the repository root, since prose usually writes repository paths. A directory
-  resolves to its `README.md` / `index.md`, else its `SKILL.md`.
-- `filename`: a bare name such as `metrics.md`. It resolves only when exactly one
-  document in the corpus has that name. If several do (`testing.md` in two
-  folders), matlatl doesn't guess and the mention is dropped.
+  `.claude/skills/foo/`. It resolves relative to the document first, then
+  relative to each parent directory up to the repository root, nearest first,
+  since prose writes paths relative to the enclosing project or the repository.
+  A directory resolves to its `README.md` / `index.md`, else its `SKILL.md`.
+- `filename`: a bare name such as `metrics.md`, matched against every document
+  with that name.
 - `invocation`: a configured prefix plus a name, such as `/panel-review`,
   resolved through front-matter `name:` / `aliases:`. This one needs
   configuration, because the prefix and which files count are your repo's
@@ -589,18 +589,28 @@ mentions:
 ```
 
 With that, `run /panel-review before pushing` links to the skill whose
-`SKILL.md` front matter says `name: panel-review`. `https://host/panel-review`
+`SKILL.md` front matter says `name: panel-review`.
+
+When a file name or invocation matches several documents, the nearest one wins.
+A candidate's scope is the directory holding its first dot-directory (`app` for
+`app/.claude/skills/x/SKILL.md`), and only candidates whose scope encloses the
+mentioning doc count; the deepest wins. So a subproject's skill shadows the
+repository's for docs inside that subproject. `https://host/panel-review`
 and `docs/x/panel-review` never match, because the prefix must not follow a URL,
 path or word character.
 
 A few rules keep mentions honest:
 
-- Fenced and indented code blocks, raw HTML, and anything inside link syntax
-  (labels, reference definitions, autolinks, wikilinks) are never scanned, so a
-  link is never counted twice. URLs are skipped.
-- A mention that names nothing is not an error. Text that looks like a path is
-  too common to fail on, so mentions can make `check` softer (a mentioned doc is
-  no longer an orphan) but never stricter.
+- Fenced and indented code blocks, raw HTML other than comments, and anything
+  inside link syntax (labels, reference definitions, autolinks, wikilinks) are
+  never scanned, so a link is never counted twice. URLs are skipped. HTML
+  comments are scanned, since readers of the source follow them.
+- A mention is never a finding. A markdown-named path or file name that names
+  nothing is kept in `graph.json` as a `"broken"` mention edge (a stale
+  reference), and one that still matches several documents as `"ambiguous"`
+  edges, one per candidate. Neither counts in the graph. Any other unresolved
+  token is dropped, so mentions can make `check` softer (a mentioned doc is no
+  longer an orphan) but never stricter.
 - Mentions aren't scored for information scent: their text is the target's own
   name, not a label.
 

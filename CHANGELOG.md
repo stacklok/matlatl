@@ -10,13 +10,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Unlinked mentions ([ADR 0026](docs/adr/0026-unlinked-mentions.md)).**
   References written as text rather than link syntax are now graph edges: path
-  tokens in prose or code spans (`.claude/rules/metrics.md`, `docs/adr/`), bare
-  file names that match exactly one document (`metrics.md`), and, when declared
-  in `.matlatl.yml mentions.invocations`, name-prefixed invocations
+  tokens in prose, code spans or HTML comments (`.claude/rules/metrics.md`,
+  `docs/adr/`), bare file names (`metrics.md`), and, when declared in
+  `.matlatl.yml mentions.invocations`, name-prefixed invocations
   (`/panel-review`) resolved through front-matter `name:` / `aliases:` and
-  restricted to configured target globs. Code blocks, raw HTML and text inside
-  link syntax are never scanned, and an unresolved or ambiguous mention is never
-  a finding. Always on.
+  restricted to configured target globs. Paths resolve against each parent
+  directory of the mentioning doc, and a shared name resolves to the candidate
+  in the nearest enclosing project. Code blocks, other raw HTML and text inside
+  link syntax are never scanned. A mention is never a finding: stale markdown
+  references and unresolvable shared names stay in `graph.json` as `"broken"` and
+  `"ambiguous"` mention edges. Always on.
 
 - **Docusaurus content roots and heading anchors ([ADR 0025](docs/adr/0025-content-roots-and-docusaurus-anchors.md)).**
   `.matlatl.yml contentRoots` maps single-slash links made from configured site

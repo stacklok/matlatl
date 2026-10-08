@@ -16,12 +16,14 @@ import (
 
 // Unlinked-mention extraction (ADR 0026). The parser finds path-shaped tokens,
 // bare markdown file names, and configured name-prefixed invocations in prose
-// and code spans; the domain MentionResolver decides which of them name an
-// in-corpus document. Text already inside link syntax (links, images,
-// autolinks, wikilinks), fenced/indented code blocks, and raw HTML is never
-// scanned, so a link stays a link edge and is never double-counted. Link
-// reference definitions are consumed by goldmark before the AST is built, so
-// they never surface as text either.
+// code spans and HTML comments; the domain MentionResolver decides which of
+// them name an in-corpus document. Text already inside link syntax (links,
+// images, autolinks, wikilinks), fenced/indented code blocks, and raw HTML
+// other than comments is never scanned, so a link stays a link edge and is
+// never double-counted. An HTML comment is scanned because it is prose a
+// reader of the source (or an agent) follows even though it never renders.
+// Link reference definitions are consumed by goldmark before the AST is built,
+// so they never surface as text either.
 
 // textRun is a contiguous [start, stop) byte span of source text.
 type textRun struct{ start, stop int }
@@ -59,8 +61,29 @@ func extractMentions(root ast.Node, src []byte, origin identity.DocumentID, line
 			return ast.WalkContinue, nil
 		}
 		switch node := n.(type) {
-		case *ast.Link, *ast.Image, *ast.AutoLink, *wikilinkNode, *ast.RawHTML,
-			*ast.FencedCodeBlock, *ast.CodeBlock, *ast.HTMLBlock:
+		case *ast.HTMLBlock:
+			flush()
+			if isHTMLComment(src, node.Lines()) {
+				for i := 0; i < node.Lines().Len(); i++ {
+					add(node.Lines().At(i))
+				}
+				if node.HasClosure() {
+					add(node.ClosureLine)
+				}
+				flush()
+			}
+			return ast.WalkSkipChildren, nil
+		case *ast.RawHTML:
+			flush()
+			if isHTMLComment(src, node.Segments) {
+				for i := 0; i < node.Segments.Len(); i++ {
+					add(node.Segments.At(i))
+				}
+				flush()
+			}
+			return ast.WalkSkipChildren, nil
+		case *ast.Link, *ast.Image, *ast.AutoLink, *wikilinkNode,
+			*ast.FencedCodeBlock, *ast.CodeBlock:
 			flush()
 			return ast.WalkSkipChildren, nil
 		case *ast.CodeSpan:
@@ -109,6 +132,15 @@ func extractMentions(root ast.Node, src []byte, origin identity.DocumentID, line
 		out = append(out, f.raw)
 	}
 	return out
+}
+
+// isHTMLComment reports whether raw HTML segments open with an HTML comment.
+func isHTMLComment(src []byte, segs *text.Segments) bool {
+	if segs == nil || segs.Len() == 0 {
+		return false
+	}
+	first := segs.At(0)
+	return bytes.HasPrefix(bytes.TrimLeft(first.Value(src), " \t"), []byte("<!--"))
 }
 
 // scanRun tokenizes one run into whitespace-delimited words and reports every

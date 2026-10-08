@@ -364,7 +364,7 @@ func brokenEdgesFromReferences(refs []reference.Reference) []BrokenEdge {
 	seen := make(map[BrokenEdge]struct{})
 	var out []BrokenEdge
 	for _, r := range refs {
-		if r.Health != reference.Broken {
+		if r.Health != reference.Broken || r.Type == reference.Mention {
 			continue
 		}
 		e := BrokenEdge{Origin: r.Origin, Target: rawTargetText(r)}

@@ -142,10 +142,15 @@ const (
 //
 // Severity follows ADR 0005: broken links/anchors are Error (fail the build),
 // ambiguous links are Warning (fail only under --strict). The CLI maps severity
-// to the exit code via the configured threshold.
+// to the exit code via the configured threshold. Unlinked mentions never
+// produce findings, whatever their health (ADR 0026): they surface only as
+// graph.json mention edges.
 func findingsFromReferences(refs []reference.Reference) []analysis.Finding {
 	var out []analysis.Finding
 	for _, r := range refs {
+		if r.Type == reference.Mention {
+			continue
+		}
 		switch r.Health {
 		case reference.Broken:
 			out = append(out, brokenLinkFinding(r))

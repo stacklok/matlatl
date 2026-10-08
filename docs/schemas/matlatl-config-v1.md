@@ -276,7 +276,9 @@ Each entry declares one invocation form:
 
 A token made of `prefix` plus a name (`[A-Za-z0-9._:-]`) resolves to the document
 whose front-matter `name:` or `aliases:` equals that name, among documents
-matching `targets`. Exactly one match resolves; zero or several resolve to
+matching `targets`. When several match, the one whose scope (the directory
+holding its first dot-directory) most closely encloses the mentioning document
+wins; with no single winner the mention is ambiguous. Zero matches resolve to
 nothing. The prefix must not follow a path, word or URL character, so
 `https://host/panel-review` and `docs/x/panel-review` never match. Rules sharing
 a prefix merge their targets.

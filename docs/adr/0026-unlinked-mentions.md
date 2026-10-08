@@ -43,16 +43,16 @@ Two analyses deliberately ignore mentions:
 
 - Information scent (`low-scent-anchor`, ADR 0016) scores a link's label against
   its target. A mention has no label: its text is the target's own path or name.
-- Link-health findings. Only resolved mentions are ever materialized. A mention
-  that names nothing, or names more than one document, is dropped silently and
-  never produces a broken-link or ambiguous finding. Text that merely looks like
-  a path is too common to fail a build on, so a mention can make `check` softer
-  (an orphan becomes linked) but never stricter.
+- Link-health findings. A mention never produces a broken-link or ambiguous
+  finding and never counts toward `summary.brokenLinks` or `summary.ambiguous`.
+  Text that merely looks like a path is too common to fail a build on, so a
+  mention can make `check` softer (an orphan becomes linked) but never stricter.
+  Only Valid mentions become graph edges and count in metrics.
 
 ### Three kinds, classified by shape in the parser
 
-The parser (`internal/infrastructure/mdparser/mention.go`) scans plain text and
-code spans for tokens and classifies them:
+The parser (`internal/infrastructure/mdparser/mention.go`) scans plain text,
+code spans and HTML comments for tokens and classifies them:
 
 | Kind | Shape | Examples |
 |---|---|---|
@@ -73,11 +73,15 @@ ending in a markdown extension is left to the path / file-name scan.
 
 ### What is never scanned
 
-Fenced and indented code blocks, raw HTML (block and inline), and everything
-inside link syntax: link and image labels, autolinks and wikilinks. Link
-reference definitions (`[id]: target`) are consumed by goldmark before the AST
-exists, so they never surface as text. This is what keeps a link a link edge with
-no double counting. Front matter is not scanned. Headings are.
+Fenced and indented code blocks, raw HTML other than comments (block and
+inline), and everything inside link syntax: link and image labels, autolinks and
+wikilinks. Link reference definitions (`[id]: target`) are consumed by goldmark
+before the AST exists, so they never surface as text. This is what keeps a link
+a link edge with no double counting. Front matter is not scanned. Headings are.
+
+An HTML comment (`<!-- ... -->`, block or inline) is scanned. It never renders,
+but it is prose that a reader of the source, and an agent in particular, follows:
+templates and maintainer notes routinely point at other files from comments.
 
 ### Resolution reuses the link machinery
 
@@ -85,21 +89,44 @@ no double counting. Front matter is not scanned. Headings are.
 
 - `path`: resolved the way a link resolves (relative to the origin, or from the
   scan root or content root for a single leading `/`, ADRs 0022 and 0025), then,
-  if that names nothing, repo-root-relative, because prose usually writes
-  repository paths. Both attempts go through `resolveInRoot` and the ADR 0003
+  if that names nothing, relative to each ancestor directory of the origin,
+  nearest first, ending at the repo root. Prose writes paths relative to the
+  enclosing project (`.claude/rules/x.md` in a subproject's docs) or to the
+  repository. Every attempt goes through `resolveInRoot` or the ADR 0003
   root-containment guard. A path naming a directory (ADR 0008) resolves to its
   `README.md` / `index.md`, else to its `SKILL.md` (the filename convention ADR
   0010 already auto-detects), else to nothing. A mention never fans out to a
-  folder's children: one mention, at most one edge. Fragments are ignored.
-- `filename`: matched by basename, only when exactly one in-corpus document
-  carries it. A shared basename (`testing.md` in two folders) is dropped, never
-  guessed.
+  folder's children: one mention, at most one target. Fragments are ignored.
+- `filename`: matched by basename against every in-corpus document.
 - `invocation`: the name is looked up in the corpus alias index that wikilinks
   already use (front-matter `name:` and `aliases:`), then filtered to documents
-  matching the rule's `targets` globs. Exactly one survivor resolves.
+  matching the rule's `targets` globs.
 
-A mention of its own origin is dropped, mirroring the projection's self-loop
-rule. Duplicates (same target, kind, line and text) collapse.
+When a file name or invocation matches several documents, the nearest wins. A
+candidate's scope is the directory holding its first dot-directory
+(`app` for `app/.claude/skills/x/SKILL.md`, the repo root for
+`.claude/skills/x/SKILL.md`), or its own directory when it has none. Candidates
+whose scope does not enclose the origin are discarded, and the deepest
+enclosing scope wins. This is how project-scoped tool files behave: a
+subproject's `.claude/skills/x` shadows the repository's for docs inside that
+subproject. matlatl knows no tool's layout; it only reads the dot-directory
+boundary.
+
+Each mention then gets a health:
+
+- Valid: exactly one document, other than the origin.
+- Ambiguous: several documents and no single nearest one. Every candidate is
+  kept.
+- Broken: a `path` or `filename` mention whose token has a markdown extension
+  and names no document. A doc that names a deleted or renamed file is exactly
+  the stale reference a consumer wants to see. The target is the repo-root
+  reading of the path, or the file name as written.
+- Dropped: any other mention that names nothing (a token without a markdown
+  extension, such as `internal/domain/reference`, or an invocation matching no
+  target), and a mention of its own origin, mirroring the projection's
+  self-loop rule. Text that merely looks like a path is too common to keep.
+
+Duplicates (same target, kind, line, text and health) collapse.
 
 ### Invocations are repo-declared
 
@@ -140,8 +167,11 @@ link-only projection, `ReferenceGraph.LinkProjectionOut`), and adds one
 ```
 
 `kind`, `line` and `text` appear only on mention edges, and the schema requires
-them when `type` is `"mention"`. A pair connected by both a link and a mention
-carries both edges. Edges sort by `(from, to, type, kind, line, text)`.
+them when `type` is `"mention"`. A mention edge's `health` is `valid`, `broken`
+or `ambiguous`. An ambiguous mention emits one edge per candidate, and a broken
+mention's `to` names a document that does not exist. Only valid mention edges
+count in the graph. A pair connected by both a link and a mention carries both
+edges. Edges sort by `(from, to, type, kind, line, text)`.
 `summary.edges` counts reference edges and the new required `summary.mentions`
 counts mention edges, so their sum is `len(edges)`. Because mentions now count
 in every metric, node scores and corpus scalars shift wherever mentions exist.
@@ -177,9 +207,10 @@ scanning is a single forward pass per text run, linear in its length.
   noise.
 - `matlatl serve` does not read `.matlatl.yml`, so its analysis carries path and
   file-name mentions but not invocations.
-- Deferred: reporting ambiguous mentions, matching invocations by directory name,
-  and semantic references ("the owning rule"), which need an LLM rather than a
-  parser.
+- Stale and ambiguous mentions are reported in `graph.json` but never in
+  `findings.json`, so a consumer that wants to enforce on them reads the edges.
+- Deferred: matching invocations by directory name, and semantic references
+  ("the owning rule"), which need an LLM rather than a parser.
 
 ## See also
 

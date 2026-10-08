@@ -6,8 +6,8 @@
     "documents": 12,
     "sections": 14,
     "edges": 3,
-    "mentions": 7,
-    "references": 10,
+    "mentions": 12,
+    "references": 14,
     "components": 5,
     "orphans": 4,
     "unreachable": 0,
@@ -354,6 +354,24 @@
     },
     {
       "from": "docs/guide.md",
+      "to": "docs/a/testing.md",
+      "type": "mention",
+      "health": "ambiguous",
+      "kind": "filename",
+      "line": 7,
+      "text": "testing.md"
+    },
+    {
+      "from": "docs/guide.md",
+      "to": "docs/b/testing.md",
+      "type": "mention",
+      "health": "ambiguous",
+      "kind": "filename",
+      "line": 7,
+      "text": "testing.md"
+    },
+    {
+      "from": "docs/guide.md",
       "to": "docs/design/frontdoor.md",
       "type": "mention",
       "health": "valid",
@@ -366,6 +384,15 @@
       "to": "docs/design/frontdoor.md",
       "type": "reference",
       "health": "valid"
+    },
+    {
+      "from": "docs/guide.md",
+      "to": "docs/nope.md",
+      "type": "mention",
+      "health": "broken",
+      "kind": "path",
+      "line": 15,
+      "text": "docs/nope.md"
     },
     {
       "from": "docs/guide.md",
@@ -390,6 +417,24 @@
       "kind": "path",
       "line": 5,
       "text": "./sibling.md"
+    },
+    {
+      "from": "docs/guide.md",
+      "to": "docs/sibling.md",
+      "type": "mention",
+      "health": "valid",
+      "kind": "path",
+      "line": 25,
+      "text": "docs/sibling.md"
+    },
+    {
+      "from": "docs/guide.md",
+      "to": "ghost.md",
+      "type": "mention",
+      "health": "broken",
+      "kind": "filename",
+      "line": 15,
+      "text": "ghost.md"
     }
   ],
   "sections": [
