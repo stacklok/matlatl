@@ -104,12 +104,15 @@ templates and maintainer notes routinely point at other files from comments.
   already use (front-matter `name:` and `aliases:`), then filtered to documents
   matching the rule's `targets` globs.
 
-When a file name or invocation matches several documents, the nearest wins. A
-candidate's scope is the directory holding its first dot-directory
-(`app` for `app/.claude/skills/x/SKILL.md`, the repo root for
-`.claude/skills/x/SKILL.md`), or its own directory when it has none. Candidates
-whose scope does not enclose the origin are discarded, and the deepest
-enclosing scope wins. This is how project-scoped tool files behave: a
+When a file name or invocation matches several documents and every one of them
+lives under a dot-directory, the nearest wins. A candidate's scope is the
+directory holding its first dot-directory (`app` for
+`app/.claude/skills/x/SKILL.md`, the repo root for `.claude/skills/x/SKILL.md`).
+Candidates whose scope does not enclose the origin are discarded, and the
+deepest enclosing scope wins. When a plain document is among the candidates
+(`docs/architecture.md` beside `.claude/skills/x/reference/architecture.md`),
+nothing is picked: a tool file must not win over a doc just because tool files
+carry a scope. This is how project-scoped tool files behave: a
 subproject's `.claude/skills/x` shadows the repository's for docs inside that
 subproject. matlatl knows no tool's layout; it only reads the dot-directory
 boundary.
@@ -125,8 +128,8 @@ Each mention then gets a health:
   reading of the path, or the file name as written.
 - Dropped: any other mention that names nothing (a token without a markdown
   extension, such as `internal/domain/reference`, or an invocation matching no
-  target), and a mention of its own origin, mirroring the projection's
-  self-loop rule. Text that merely looks like a path is too common to keep.
+  target), and a mention of its own origin or of a shared name one of whose
+  candidates is the origin, mirroring the projection's self-loop rule. Text that merely looks like a path is too common to keep.
 
 Duplicates (same target, kind, line, text and health) collapse.
 

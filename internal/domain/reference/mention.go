@@ -113,9 +113,10 @@ func (m *MentionResolver) ResolveAll(raws []RawMention) []Reference {
 }
 
 // Resolve classifies a single mention. ok is false when the mention is dropped:
-// it names its own origin (a self-mention carries no navigational information,
-// mirroring the projection's self-loop rule), or it names nothing and is not
-// markdown-named, or it is an invocation that matches no target.
+// it names its own origin, or is a shared name one of whose candidates is the
+// origin (a self-mention carries no navigational information, mirroring the
+// projection's self-loop rule), or it names nothing and is not markdown-named,
+// or it is an invocation that matches no target.
 func (m *MentionResolver) Resolve(raw RawMention) (Reference, bool) {
 	var res resolution
 	switch raw.Kind {
@@ -144,6 +145,10 @@ func (m *MentionResolver) Resolve(raw RawMention) (Reference, bool) {
 		}
 		return ref(rr, ResolvedTarget{Kind: TargetDocument, DocumentID: res.ids[0]}, Valid), true
 	case len(res.ids) > 1:
+		if slices.Contains(res.ids, raw.Origin) {
+			// A shared name that may be the origin itself most likely is.
+			return Reference{}, false
+		}
 		// The target is the name as written; Candidates lists what it may mean.
 		r := ref(rr, ResolvedTarget{Kind: TargetDocument, DocumentID: identity.DocumentID(raw.Target)}, Ambiguous)
 		r.Candidates = res.ids
@@ -246,20 +251,31 @@ func (m *MentionResolver) invocationCandidates(prefix, name string) []identity.D
 }
 
 // nearest narrows several same-named candidates to the one closest to the
-// origin. A candidate's scope is the directory holding its first dot-directory
+// origin, when every candidate is a project-scoped tool file: one that lives
+// under a dot-directory. Its scope is the directory holding that dot-directory
 // (`enterprise/app` for `enterprise/app/.claude/skills/x/SKILL.md`, the repo
-// root for `.claude/skills/x/SKILL.md`), or its own directory when it has none.
-// Candidates whose scope does not enclose the origin are discarded, and the
-// deepest enclosing scope wins. When no single candidate wins, every candidate
-// is kept and the mention is Ambiguous: a shared name is never guessed at.
+// root for `.claude/skills/x/SKILL.md`). Candidates whose scope does not
+// enclose the origin are discarded, and the deepest enclosing scope wins. A
+// plain document among the candidates (`docs/architecture.md` beside
+// `.claude/skills/x/architecture.md`) has no such scope, so nothing is picked.
+// When no single candidate wins, every candidate is kept and the mention is
+// Ambiguous: a shared name is never guessed at.
 func (m *MentionResolver) nearest(origin identity.DocumentID, ids []identity.DocumentID) resolution {
 	if len(ids) <= 1 {
 		return resolution{ids: ids}
 	}
+	scopes := make([]string, len(ids))
+	for i, id := range ids {
+		scope, ok := mentionScope(id.String())
+		if !ok {
+			return resolution{ids: ids}
+		}
+		scopes[i] = scope
+	}
 	originDir := path.Dir(origin.String())
 	best, bestDepth, tie := identity.DocumentID(""), -1, false
-	for _, id := range ids {
-		scope := mentionScope(id.String())
+	for i, id := range ids {
+		scope := scopes[i]
 		if !encloses(scope, originDir) {
 			continue
 		}
@@ -280,19 +296,16 @@ func (m *MentionResolver) nearest(origin identity.DocumentID, ids []identity.Doc
 	return resolution{ids: []identity.DocumentID{best}}
 }
 
-// mentionScope returns the directory holding p's first dot-directory segment,
-// or p's own directory when it has none. "" is the repo root.
-func mentionScope(p string) string {
+// mentionScope returns the directory holding p's first dot-directory segment
+// ("" is the repo root). ok is false when p has no dot-directory.
+func mentionScope(p string) (string, bool) {
 	segs := strings.Split(p, "/")
 	for i, seg := range segs[:len(segs)-1] {
 		if strings.HasPrefix(seg, ".") {
-			return strings.Join(segs[:i], "/")
+			return strings.Join(segs[:i], "/"), true
 		}
 	}
-	if d := path.Dir(p); d != "." {
-		return d
-	}
-	return ""
+	return "", false
 }
 
 // encloses reports whether dir is scope or lies below it; "" is the repo root.

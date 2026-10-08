@@ -55,7 +55,7 @@ linked docs rather than re-deriving them.
     blocks, non-comment raw HTML and link syntax; resolution in the pure-domain
     `reference.MentionResolver` reuses `resolveInRoot` + the alias index;
     paths try each ancestor dir of the origin, shared names pick the nearest
-    dot-directory scope; stale markdown mentions are Broken and unresolvable
+    dot-directory scope when every candidate has one; stale markdown mentions are Broken and unresolvable
     shared names Ambiguous, both emitted as graph.json mention edges but never
     findings or graph edges; skipped by
     information scent; graph.json v8 lists one `"mention"` edge per occurrence

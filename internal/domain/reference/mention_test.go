@@ -27,6 +27,10 @@ func mentionCatalog() *fakeCatalog {
 		"docs/design/panel-review.md",
 		"app/.claude/rules/local.md",
 		"app/docs/deep/page.md",
+		".claude/rules/rules.md",
+		"app/.claude/rules/rules.md",
+		"app/.claude/rules/notes.md",
+		"app/docs/notes.md",
 	).
 		withAlias("panel-review", ".claude/skills/panel-review/SKILL.md", "docs/design/panel-review.md").
 		withAlias("triage", "docs/design/panel-review.md")
@@ -121,15 +125,22 @@ func TestMentionResolve(t *testing.T) {
 			wantOK: true,
 		},
 		{
-			name:   "shared basename resolves to the one in an enclosing directory",
-			raw:    RawMention{Origin: "docs/guide.md", Kind: MentionFilename, Target: "testing.md"},
-			want:   "docs/testing.md",
+			name:       "basename shared by plain documents is ambiguous",
+			raw:        RawMention{Origin: "docs/guide.md", Kind: MentionFilename, Target: "testing.md"},
+			want:       "testing.md",
+			wantHealth: Ambiguous,
+			wantOK:     true,
+		},
+		{
+			name:   "basename shared by tool files resolves to the nearest project's",
+			raw:    RawMention{Origin: "app/docs/deep/page.md", Kind: MentionFilename, Target: "rules.md"},
+			want:   "app/.claude/rules/rules.md",
 			wantOK: true,
 		},
 		{
-			name:       "shared basename with no enclosing candidate is ambiguous",
-			raw:        RawMention{Origin: "README.md", Kind: MentionFilename, Target: "testing.md"},
-			want:       "testing.md",
+			name:       "basename shared by a tool file and a plain document is ambiguous",
+			raw:        RawMention{Origin: "app/docs/deep/page.md", Kind: MentionFilename, Target: "notes.md"},
+			want:       "notes.md",
 			wantHealth: Ambiguous,
 			wantOK:     true,
 		},
@@ -153,6 +164,10 @@ func TestMentionResolve(t *testing.T) {
 		{
 			name: "invocation with an unconfigured prefix",
 			raw:  RawMention{Origin: "docs/guide.md", Kind: MentionInvocation, Prefix: "@", Target: "panel-review"},
+		},
+		{
+			name: "shared name that may be the origin itself is dropped",
+			raw:  RawMention{Origin: "docs/testing.md", Kind: MentionFilename, Target: "testing.md"},
 		},
 		{
 			name: "self-mention is dropped",
