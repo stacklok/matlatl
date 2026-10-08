@@ -27,7 +27,9 @@ type mentionEdge struct {
 
 // TestIntegration_GraphJSONMentions runs the real CLI over testdata/mentions,
 // whose .matlatl.yml declares a "/" invocation rule, and asserts the typed
-// mention edges a consumer post-processes.
+// mention edges a consumer post-processes. Stale (docs/nope.md, ghost.md) and
+// ambiguous (testing.md) mentions stay in graph.json as mention edges, and an
+// HTML comment's mention (line 25) counts like prose.
 func TestIntegration_GraphJSONMentions(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", "..", "testdata", "mentions"))
 	if err != nil {
@@ -64,8 +66,12 @@ func TestIntegration_GraphJSONMentions(t *testing.T) {
 		{"docs/guide.md", ".claude/skills/panel-review/SKILL.md", "mention", "path", 8, ".claude/skills/panel-review/"},
 		{"docs/guide.md", ".claude/skills/triage-cve/SKILL.md", "mention", "invocation", 13, "/triage-cve"},
 		{"docs/guide.md", "docs/design/frontdoor.md", "mention", "filename", 6, "frontdoor.md"},
+		{"docs/guide.md", "docs/nope.md", "mention", "path", 15, "docs/nope.md"},
 		{"docs/guide.md", "docs/reference.md", "mention", "path", 4, "docs/reference.md"},
 		{"docs/guide.md", "docs/sibling.md", "mention", "path", 5, "./sibling.md"},
+		{"docs/guide.md", "docs/sibling.md", "mention", "path", 25, "docs/sibling.md"},
+		{"docs/guide.md", "ghost.md", "mention", "filename", 15, "ghost.md"},
+		{"docs/guide.md", "testing.md", "mention", "filename", 7, "testing.md"},
 	}
 	if !slices.Equal(mentions, want) {
 		t.Errorf("mention edges\n got: %+v\nwant: %+v", mentions, want)
