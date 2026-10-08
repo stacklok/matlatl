@@ -266,6 +266,8 @@ type Edge struct {
 	Kind   string `json:"kind,omitempty"`
 	Line   int    `json:"line,omitempty"`
 	Text   string `json:"text,omitempty"`
+	// Candidates is set only on an ambiguous mention edge.
+	Candidates []string `json:"candidates,omitempty"`
 }
 
 // Edge type values.
@@ -570,13 +572,14 @@ func edgesFrom(g *graphmodel.ReferenceGraph, mentions []emit.MentionEdge) []Edge
 	}
 	for _, m := range mentions {
 		out = append(out, Edge{
-			From:   m.From.String(),
-			To:     m.To.String(),
-			Type:   edgeTypeMention,
-			Health: m.Health.String(),
-			Kind:   m.Kind.String(),
-			Line:   m.Line,
-			Text:   m.Text,
+			From:       m.From.String(),
+			To:         m.To.String(),
+			Type:       edgeTypeMention,
+			Health:     m.Health.String(),
+			Kind:       m.Kind.String(),
+			Line:       m.Line,
+			Text:       m.Text,
+			Candidates: docIDStrings(m.Candidates),
 		})
 	}
 	slices.SortFunc(out, func(a, b Edge) int {
@@ -589,6 +592,18 @@ func edgesFrom(g *graphmodel.ReferenceGraph, mentions []emit.MentionEdge) []Edge
 			cmp.Compare(a.Text, b.Text),
 		)
 	})
+	return out
+}
+
+// docIDStrings returns ids as strings, or nil when there are none.
+func docIDStrings(ids []identity.DocumentID) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = id.String()
+	}
 	return out
 }
 

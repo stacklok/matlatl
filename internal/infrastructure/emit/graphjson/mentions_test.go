@@ -71,8 +71,7 @@ func TestJSON_MentionEdges(t *testing.T) {
 		{"docs/guide.md", "docs/reference.md", "reference", "", "valid", 0}:                             "",
 		{"docs/guide.md", "docs/sibling.md", "mention", "path", "valid", 5}:                             "./sibling.md",
 		{"docs/guide.md", "docs/design/frontdoor.md", "mention", "filename", "valid", 6}:                "frontdoor.md",
-		{"docs/guide.md", "docs/a/testing.md", "mention", "filename", "ambiguous", 7}:                   "testing.md",
-		{"docs/guide.md", "docs/b/testing.md", "mention", "filename", "ambiguous", 7}:                   "testing.md",
+		{"docs/guide.md", "testing.md", "mention", "filename", "ambiguous", 7}:                          "testing.md",
 		{"docs/guide.md", ".claude/skills/panel-review/SKILL.md", "mention", "path", "valid", 8}:        ".claude/skills/panel-review/",
 		{"docs/guide.md", ".claude/skills/panel-review/SKILL.md", "mention", "invocation", "valid", 12}: "/panel-review",
 		{"docs/guide.md", ".claude/skills/triage-cve/SKILL.md", "mention", "invocation", "valid", 13}:   "/triage-cve",
@@ -91,11 +90,19 @@ func TestJSON_MentionEdges(t *testing.T) {
 		}
 	}
 	// Fenced blocks, URL/path-prefixed invocations and out-of-glob
-	// front-matter names never become edges.
+	// front-matter names never become edges, and an ambiguous mention is one
+	// edge listing its candidates rather than one edge per candidate.
 	for _, e := range doc.Edges {
 		switch e.To {
-		case "docs/fenced.md", "docs/design/panel-review.md":
+		case "docs/fenced.md", "docs/design/panel-review.md", "docs/a/testing.md", "docs/b/testing.md":
 			t.Errorf("unexpected edge to %s: %+v", e.To, e)
+		}
+		wantCandidates := e.Health == "ambiguous"
+		if wantCandidates != (len(e.Candidates) > 0) {
+			t.Errorf("edge %+v: candidates must be set exactly on ambiguous edges", e)
+		}
+		if e.To == "testing.md" && !slices.Equal(e.Candidates, []string{"docs/a/testing.md", "docs/b/testing.md"}) {
+			t.Errorf("testing.md candidates = %v", e.Candidates)
 		}
 	}
 	if doc.Summary.Mentions != mentions || doc.Summary.Edges+doc.Summary.Mentions != len(doc.Edges) {

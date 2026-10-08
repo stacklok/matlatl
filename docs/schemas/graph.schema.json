@@ -130,7 +130,7 @@
       }
     },
     "edges": {
-      "description": "Document-to-document edges sorted by (from, to, type, kind, line, text). A \"reference\" edge is one explicit-link document-projection pair. A \"mention\" edge (ADR 0026) is one unlinked mention occurrence and carries kind, line and text; its health is valid, broken (a markdown-named target that does not exist) or ambiguous (one edge per candidate). Reference edges and valid mention edges count in every graph metric.",
+      "description": "Document-to-document edges sorted by (from, to, type, kind, line, text). A \"reference\" edge is one explicit-link document-projection pair. A \"mention\" edge (ADR 0026) is one unlinked mention occurrence and carries kind, line and text; its health is valid, broken (a markdown-named target that does not exist) or ambiguous (to is the name as written and candidates lists the documents it may name). Reference edges and valid mention edges count in every graph metric.",
       "type": "array",
       "items": {
         "type": "object",
@@ -143,7 +143,8 @@
           "health": { "description": "Reference edges are always valid. Mention edges are valid, broken or ambiguous.", "type": "string" },
           "kind": { "description": "Mention edges only: the textual form of the mention.", "type": "string", "enum": ["path", "filename", "invocation"] },
           "line": { "description": "Mention edges only: 1-based source line in the from document.", "type": "integer", "minimum": 1 },
-          "text": { "description": "Mention edges only: the token as written (an invocation includes its prefix).", "type": "string" }
+          "text": { "description": "Mention edges only: the token as written (an invocation includes its prefix).", "type": "string" },
+          "candidates": { "description": "Ambiguous mention edges only: the sorted documents the name may refer to.", "type": "array", "items": { "type": "string" }, "minItems": 2 }
         },
         "allOf": [
           {
