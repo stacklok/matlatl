@@ -934,7 +934,7 @@
       },
       {
         "name": "github.com/stacklok/matlatl/internal/infrastructure/mdparser",
-        "sha256": "00e4522c9d1f605eae899cf8c35f3a68dde59351d64c1decb3b99627fb0d9174"
+        "sha256": "d5112ae2ae2e27175a10a080d3f17cd1853c561e59cedf2c0dfba211b31a071c"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/platform",
@@ -1536,7 +1536,7 @@
     "staticBinaries": [
       {
         "name": "eval-supervisor",
-        "sha256": "7c5541c7e1579217696cd3c435f8661b0645789ee81daa402b31c5a5043928fe"
+        "sha256": "893af4421a959d90dcb5d7cc2089750be981bf92edf2182fc8eccf235a07899a"
       },
       {
         "name": "fake-opencode",
