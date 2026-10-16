@@ -32,6 +32,12 @@ const (
 	FrontmatterRelated
 	// External is a link to an off-corpus resource (http/https/mailto/etc.).
 	External
+	// Mention is an unlinked mention (ADR 0026): a reference to another
+	// document written as text (a path, a bare file name, or a configured
+	// name-prefixed invocation) rather than as link syntax. Only resolved
+	// mentions are ever materialized; an unresolved one is dropped, never a
+	// broken-link finding. RawReference.MentionKind says which form it took.
+	Mention
 )
 
 // String returns the canonical name of the link type.
@@ -51,6 +57,8 @@ func (t LinkType) String() string {
 		return "frontmatter-related"
 	case External:
 		return "external"
+	case Mention:
+		return "mention"
 	default:
 		return "unknown"
 	}
@@ -58,7 +66,48 @@ func (t LinkType) String() string {
 
 // Valid reports whether t is a defined LinkType.
 func (t LinkType) Valid() bool {
-	return t >= RelativeLink && t <= External
+	return t >= RelativeLink && t <= Mention
+}
+
+// MentionKind classifies the textual form of an unlinked mention (ADR 0026).
+// The zero value MentionNone is carried by every non-mention reference.
+type MentionKind int
+
+const (
+	// MentionNone is the zero value: the reference is not a mention.
+	MentionNone MentionKind = iota
+	// MentionPath is a path-shaped token (e.g. `.claude/rules/metrics.md` or
+	// `docs/adr/`), resolved doc-relative, then repo-root-relative.
+	MentionPath
+	// MentionFilename is a bare file name (e.g. `metrics.md`), resolved by
+	// basename only when exactly one in-corpus document carries it.
+	MentionFilename
+	// MentionInvocation is a configured prefix plus a name (e.g. `/panel-review`),
+	// resolved through the front-matter name/aliases index, restricted to the
+	// documents the invocation rule's target globs admit.
+	MentionInvocation
+)
+
+// String returns the canonical name of the mention kind (the graph.json
+// `kind` value).
+func (k MentionKind) String() string {
+	switch k {
+	case MentionNone:
+		return "none"
+	case MentionPath:
+		return "path"
+	case MentionFilename:
+		return "filename"
+	case MentionInvocation:
+		return "invocation"
+	default:
+		return "unknown"
+	}
+}
+
+// Valid reports whether k is a defined MentionKind.
+func (k MentionKind) Valid() bool {
+	return k >= MentionNone && k <= MentionInvocation
 }
 
 // LinkHealth classifies the resolution outcome of a reference.
@@ -214,8 +263,12 @@ type RawReference struct {
 	// the resolver ignores (ADR 0001 keys identity on the target, never the label);
 	// it is carried through to the graph edge so the information-scent analysis can
 	// score a link's label against its target's title (ADR 0016). Empty when the
-	// link has no display text.
+	// link has no display text. For a Mention it is the token as written
+	// (including an invocation's prefix).
 	AnchorText string
+	// MentionKind is set only when Type is Mention (ADR 0026): the textual form
+	// the mention took. MentionNone for every other reference.
+	MentionKind MentionKind
 }
 
 // ResolvedTarget is the (tagged-union) outcome of resolving a RawReference.

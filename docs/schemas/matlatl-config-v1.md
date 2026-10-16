@@ -74,6 +74,18 @@ okf: false
 # (effective mode = flag OR this key). No-op when the scan root is not a git
 # work tree. Must be a boolean; any other type is a hard error.
 respectGitignore: false
+
+# Name-prefixed invocations for unlinked mentions (ADR 0026). Path and bare
+# file-name mentions are always on and need no configuration; this block only
+# declares invocation forms. A token made of `prefix` plus a name resolves to the
+# document whose front-matter `name:` or `aliases:` equals that name, if that
+# document matches one of `targets` (globs; `**` crosses directories).
+mentions:
+  invocations:
+    - prefix: "/"
+      targets: ["**/.claude/skills/*/SKILL.md"]
+    - prefix: "@"
+      targets: [".claude/agents/*.md"]
 ```
 
 ## Fields
@@ -243,6 +255,43 @@ and unions it with `.matlatlignore`, so local-only working files
 - Enabling it can only **shrink** the corpus, never grow it — so `check` only
   softens, matching a clean CI checkout.
 
+### `mentions` (mapping, optional)
+
+Configures unlinked-mention extraction
+([ADR 0026](../adr/0026-unlinked-mentions.md)). Path mentions
+(`.claude/rules/metrics.md`, `docs/adr/`) and bare file-name mentions
+(`metrics.md`) are always on and are not configured here. The only understood
+key is `invocations`.
+
+#### `mentions.invocations` (list of mappings, optional)
+
+Each entry declares one invocation form:
+
+- `prefix` (string, required): 1 to 4 ASCII punctuation characters, such as `/`
+  or `@`. Letters, digits and whitespace are a hard error.
+- `targets` (list of strings, required, non-empty): globs matched against
+  document IDs. `**` matches zero or more whole path segments; every other
+  segment uses `path.Match`, so a single `*` does not cross `/`. Globs must be
+  repository-relative (no leading `/`). A malformed glob is a hard error.
+
+A token made of `prefix` plus a name (`[A-Za-z0-9._:-]`) resolves to the document
+whose front-matter `name:` or `aliases:` equals that name, among documents
+matching `targets`. When several match and all live under a dot-directory, the
+one whose scope (the directory holding its first dot-directory) most closely
+encloses the mentioning document wins; with no single winner the mention is
+ambiguous. Zero matches resolve to
+nothing. The prefix must not follow a path, word or URL character, so
+`https://host/panel-review` and `docs/x/panel-review` never match. Rules sharing
+a prefix merge their targets.
+
+- Absent, `mentions:` with no value, or no `invocations`: invocation matching is
+  off.
+- `mentions` that is not a mapping, `invocations` that is not a list, or an
+  entry that is not a mapping is a hard error.
+- Unknown keys inside `mentions` or inside an entry are ignored with a notice.
+- Like `roots`, `targets` are only string-matched against in-corpus document
+  IDs, never a filesystem read.
+
 ## What v1 does NOT configure
 
 - **Ignoring files** — `.matlatlignore` remains the sole ignore mechanism. The
@@ -275,6 +324,10 @@ would introduce them.
 | `emitExclude` matches a reachability root | notice (renders nothing for it; reachability unaffected) | run continues |
 | `okf` / `respectGitignore` wrong type | hard error | 2 (usage) |
 | `respectGitignore: true` on a non-git root | fail-open + `gitignore` notice (`.matlatlignore` only) | run continues |
+| `mentions` / `mentions.invocations` / an entry wrong type | hard error | 2 (usage) |
+| invocation `prefix` empty, longer than 4, or not ASCII punctuation | hard error | 2 (usage) |
+| invocation `targets` missing, empty, non-string, absolute or malformed | hard error | 2 (usage) |
+| Unknown key inside `mentions` or an invocation entry | ignored + notice | run continues |
 | Unknown non-version key (typo / future key) | ignored + notice | run continues |
 | Bad glob in `roots` | notice (matches nothing) | run continues |
 
@@ -285,6 +338,6 @@ would introduce them.
 - A file larger than **1 MiB** is skipped without being read into memory (ADR
   0003 resource-cap invariant). That cap plus YAML's alias-expansion budget bound
   the decode against "billion laughs" alias bombs.
-- The globs in `roots` are only **string-matched** against document IDs already
+- The globs in `roots` and `mentions.invocations[].targets` are only **string-matched** against document IDs already
   in the corpus — they never trigger a filesystem read, so a hostile
   `roots: ["/etc/**"]` is inert.

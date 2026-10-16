@@ -3,8 +3,9 @@
 // third-party AST are quarantined here, so the domain stays pure.
 //
 // It turns markdown bytes into a pure-domain corpus.Document: typed front matter
-// (YAML/TOML), a nested Section tree, and the standard-markdown raw references
-// (relative links, anchors, images, external links). Wikilink extraction is P2.
+// (YAML/TOML), a nested Section tree, the standard-markdown raw references
+// (relative links, anchors, images, external links, wikilinks), and the
+// unlinked mentions in prose and code spans (ADR 0026, mention.go).
 //
 // Slug dialect: the parser is configured with parser.WithAutoHeadingID(), whose
 // GitHub-compatible algorithm is the canonical, validated slug dialect of ADR
@@ -43,6 +44,10 @@ const DefaultMaxFrontMatterBytes = 64 << 10 // 64 KiB
 type Config struct {
 	// MaxFrontMatterBytes caps the decodable front-matter block size.
 	MaxFrontMatterBytes int
+	// InvocationPrefixes are the repo-configured invocation prefixes (ADR 0026,
+	// `.matlatl.yml mentions.invocations[].prefix`). Path and bare-file-name
+	// mentions are always extracted; invocation tokens only for these prefixes.
+	InvocationPrefixes []string
 }
 
 // Parser parses markdown into corpus.Documents.
@@ -204,6 +209,7 @@ func (p *Parser) ParseBytes(ctx context.Context, id identity.DocumentID, src []b
 		AnchorIDs:          staticHeadingAnchorIDs(src),
 	}
 	doc.RawReferences = extractReferences(root, src, id, lines)
+	doc.RawMentions = extractMentions(root, src, id, lines, p.cfg.InvocationPrefixes)
 
 	// Title fallback: if front matter gave no title, use the first H1's text.
 	if doc.FrontMatter.Title == "" {

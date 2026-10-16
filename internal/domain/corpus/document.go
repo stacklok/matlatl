@@ -88,6 +88,10 @@ type Document struct {
 	// RawReferences are the outbound link edges extracted from the document,
 	// before resolution.
 	RawReferences []reference.RawReference
+	// RawMentions are the unlinked mentions extracted from the document's text
+	// (ADR 0026): path, bare file-name and configured-invocation tokens outside
+	// link syntax and code blocks, before resolution.
+	RawMentions []reference.RawMention
 	// AnchorIDs are static literal anchors that are valid link targets but do not
 	// define sections (for example Docusaurus MDX <Heading id="..."> components).
 	// Source order is preserved; the corpus indexes them with section slugs.

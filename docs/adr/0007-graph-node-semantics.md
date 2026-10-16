@@ -154,3 +154,11 @@ analysis.
   with an explicit truncation notice (mirroring the scanner's `MaxFiles`
   truncation), and gaps are labeled **Info** severity so they never fail a
   build.
+
+## Amendment (2026-10-08, ADR 0026: unlinked mentions)
+
+The default navigational set gains `Mention`: a resolved unlinked mention (a
+path, bare file name, or configured invocation written as text) is a REFERENCE
+edge like any link and counts in every analysis above. Only resolved mentions
+become edges, so the "only `Health == Valid` in-corpus references" rule is
+unchanged. See [ADR 0026](0026-unlinked-mentions.md).

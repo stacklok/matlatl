@@ -48,9 +48,22 @@ linked docs rather than re-deriving them.
     `GIT_CONFIG_NOSYSTEM=1`, 30 s + 64 MiB caps, fail-open with one `gitignore`
     notice on a non-git root — and prepends it to the `.matlatlignore` lines so
     the committed file stays the final word; off by default, corpus only
-    shrinks, no schema change).
+    shrinks, no schema change); 0026 unlinked mentions (always on: path,
+    bare-filename and config-declared `mentions.invocations` tokens in prose,
+    code spans and HTML comments become `reference.Mention` edges that join the navigational set
+    and count in EVERY metric; extraction in `mdparser/mention.go` skips code
+    blocks, non-comment raw HTML and link syntax; resolution in the pure-domain
+    `reference.MentionResolver` reuses `resolveInRoot` + the alias index;
+    paths try each ancestor dir of the origin, shared names pick the nearest
+    dot-directory scope when every candidate has one; stale markdown mentions are Broken and unresolvable
+    shared names Ambiguous, both emitted as graph.json mention edges but never
+    findings or graph edges; skipped by
+    information scent; graph.json v8 lists one `"mention"` edge per occurrence
+    with `kind`/`line`/`text`, `"reference"` edges come from
+    `LinkProjectionOut`; naming a file in prose now links it, so fixtures that
+    describe docs as unlinked must use titles, not file names).
 - **docs/schemas/** — published JSON Schemas for the three machine artifacts:
-  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 7),
+  [graph.schema.json](docs/schemas/graph.schema.json) (graph schema version 8),
   [findings.schema.json](docs/schemas/findings.schema.json) (findings schema
   version 8), and [trails.schema.json](docs/schemas/trails.schema.json) (trails
   schema version 1). The emitter types are kept in lockstep and validated by
@@ -92,7 +105,8 @@ and exposes read-only tools (`what-links-to`, `list-orphans`, `path-between`,
 length, clustering, diameter), per-node `betweenness`/`isArticulation`, the
 top-level `betweenness`/`articulationPoints`/`bridges`, per-node/top-level
 `pageRank`, and per-node `hopsFromRoot` (distance from the nearest root, `-1` =
-unreachable or when `reachability.indeterminate`) + top-level `farFromRoot` (schema v7);
+unreachable or when `reachability.indeterminate`) + top-level `farFromRoot`, and
+the typed `"mention"` edges (ADR 0026; schema v8);
 `list-orphans` also returns the `farFromRoot` docs (ADR 0021);
 `critical-docs` returns just the critical-path structure (top load-bearing docs
 by betweenness + articulation points + bridges). Prefer these for live graph

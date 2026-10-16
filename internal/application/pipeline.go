@@ -76,7 +76,9 @@ type Result struct {
 	DocumentCount int
 	// HeadingCount is the total number of heading slugs indexed.
 	HeadingCount int
-	// ReferenceCount is the total number of references resolved.
+	// ReferenceCount is the total number of references resolved. Broken and
+	// Ambiguous unlinked mentions are not counted: they never resolved, and
+	// surface only as graph.json mention edges (ADR 0026).
 	ReferenceCount int
 	// BrokenLinkCount / BrokenAnchorCount / AmbiguousCount / OrphanCount /
 	// UnreachableCount / KnowledgeGapCount are convenience tallies for the human
@@ -209,9 +211,15 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	// (the resolver itself is pure: it only does path arithmetic + catalog
 	// lookups, never filesystem access).
 	resolver := reference.NewResolverWithContentRoots(c, newAssetExistence(p.cfg.RootPath), p.cfg.ResolutionPolicy, p.cfg.ContentRoots)
+	// Unlinked mentions (ADR 0026) resolve through the same path arithmetic and
+	// alias index as links. Only mentions that name an in-corpus document come
+	// back (an unresolved mention is never a finding), so they join refs as Valid
+	// Mention edges and count toward every graph analysis like a link does.
+	mentions := reference.NewMentionResolver(resolver, p.cfg.MentionInvocations)
 	var refs []reference.Reference
 	for _, doc := range c.Documents() {
 		refs = append(refs, resolver.ResolveAll(doc.RawReferences)...)
+		refs = append(refs, mentions.ResolveAll(doc.RawMentions)...)
 	}
 
 	// Stage 4: Build the reference graph (documents + sections, contains +
@@ -310,7 +318,7 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	res := Result{
 		DocumentCount:     c.Len(),
 		HeadingCount:      c.HeadingCount(),
-		ReferenceCount:    len(refs),
+		ReferenceCount:    countReferences(refs),
 		BrokenLinkCount:   report.CountByKind(analysis.BrokenLink),
 		BrokenAnchorCount: report.CountByKind(analysis.BrokenAnchor),
 		AmbiguousCount:    report.CountByKind(analysis.Ambiguous),
@@ -351,6 +359,19 @@ func (p *Pipeline) Run(ctx context.Context) (platform.ExitCode, Result, error) {
 	return platform.ExitOK, res, nil
 }
 
+// countReferences counts refs, leaving out unlinked mentions that did not
+// resolve.
+func countReferences(refs []reference.Reference) int {
+	n := 0
+	for _, r := range refs {
+		if r.Type == reference.Mention && r.Health != reference.Valid {
+			continue
+		}
+		n++
+	}
+	return n
+}
+
 // brokenEdgesFromReferences extracts the origin→target pairs of references that
 // did not resolve to an in-corpus document (Health==Broken), sorted (Origin,
 // Target) and de-duplicated, for the diagram emitters' red placeholder nodes.
@@ -358,7 +379,7 @@ func brokenEdgesFromReferences(refs []reference.Reference) []BrokenEdge {
 	seen := make(map[BrokenEdge]struct{})
 	var out []BrokenEdge
 	for _, r := range refs {
-		if r.Health != reference.Broken {
+		if r.Health != reference.Broken || r.Type == reference.Mention {
 			continue
 		}
 		e := BrokenEdge{Origin: r.Origin, Target: rawTargetText(r)}
