@@ -886,11 +886,11 @@
       },
       {
         "name": "github.com/stacklok/matlatl/eval/internal/fakeopencode",
-        "sha256": "321993f438c2b714c75128e1cb516bebec8dca54dc915303591059df620e0a46"
+        "sha256": "9a35383064c921caffa095e2f5cb7738830d6d2a882381519f0ebce7d9570371"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/application",
-        "sha256": "86c7f330c82da6680ae28cfcd459e4cc0321a9e121cb3a6c5677d1e05632af4f"
+        "sha256": "b80f08cc8dffd617f61a65eafc3ea900e546e6b323ad15e5d726fa3c6fa30c58"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/analysis",
@@ -898,11 +898,11 @@
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/corpus",
-        "sha256": "227c2d4883fd7b18229744b17228f125de51d9a2aabc7401ab46c99ff4da928d"
+        "sha256": "2edf9168c1cc9c04380deb1582fd13958ee9e582ab4337597db418e89ae3007f"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/graphmodel",
-        "sha256": "0b186cb009a9611b02c1bd3cd8d51b7f680578189b6cabbb037de270582b8847"
+        "sha256": "feff88856cb0b6642e8700b64303ba4d22146357506513d5a7dd5f31232ea533"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/identity",
@@ -914,15 +914,15 @@
       },
       {
         "name": "github.com/stacklok/matlatl/internal/domain/reference",
-        "sha256": "ba552402b545d028d036d673fb5beefa01b7ac70fb77e9b15ced6e9f7eb25556"
+        "sha256": "29773d31188a5c050bd1556c7e0c7ea49d2e12962ae9eab0d3dfeadcb93e173f"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/infrastructure/emit",
-        "sha256": "261717dd8ac504b0c2b562fc4ebe0b3bb5e7ee36c4325fbbea6a8cc7717f00d2"
+        "sha256": "132ef510c4adf9ba9380d3fb94cd76730e57f64096524b8d893f921924ec86a8"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/infrastructure/emit/graphjson",
-        "sha256": "6f2b933dc46bf5de51fb11181e6a88906586584e99eb6cce7afdb803208c29cc"
+        "sha256": "b9ad926d8e707d5306b9fd4ea23527a7a52b226ae450ef86ab9137277fd05912"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/infrastructure/fsscanner",
@@ -934,7 +934,7 @@
       },
       {
         "name": "github.com/stacklok/matlatl/internal/infrastructure/mdparser",
-        "sha256": "d5112ae2ae2e27175a10a080d3f17cd1853c561e59cedf2c0dfba211b31a071c"
+        "sha256": "233918f3c3b5c2da356b5c18da5eda3c4e8e4a5a3c7dc29a30374cf90845ca00"
       },
       {
         "name": "github.com/stacklok/matlatl/internal/platform",
@@ -1536,11 +1536,11 @@
     "staticBinaries": [
       {
         "name": "eval-supervisor",
-        "sha256": "893af4421a959d90dcb5d7cc2089750be981bf92edf2182fc8eccf235a07899a"
+        "sha256": "09e58a3601e9b2c7b99c60d3b3f89be1207a134c215f83a2168497216ff2bdfa"
       },
       {
         "name": "fake-opencode",
-        "sha256": "2c74ca424d698f084c61642ef2f60b94c1e47cd9dd7805091f75090b5bbde543"
+        "sha256": "16916397768384b67d5d62b6c51f108ff0fe8d30d4c9ca6496873e897d5deade"
       }
     ],
     "runtimeImages": [
